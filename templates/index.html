@@ -18,9 +18,9 @@
         }
       };
     </script>
-    <link rel="stylesheet" href="/static/css/app.css" />
+    <link rel="stylesheet" href="/static/css/app.css?v=4" />
   </head>
-  <body class="bg-slate-50 text-slate-950 antialiased">
+  <body class="bg-white text-slate-950 antialiased">
     <div id="loader" class="fixed inset-0 z-50 grid place-items-center overflow-hidden bg-brand-900 text-white">
       <div class="loader-grid"></div>
       <div class="speed-line speed-line-a"></div>
@@ -68,16 +68,12 @@
           </div>
         </div>
         <!-- Navigation Bar -->
-        <div class="border-t border-slate-100 bg-slate-50/50">
+        <div class="bg-white">
           <div class="mx-auto max-w-7xl px-5 h-12 flex items-center justify-between">
             <div class="flex items-center gap-8">
               <!-- Desktop Main Nav -->
-              <nav id="desktop-nav" class="flex gap-6 text-sm font-bold text-slate-600"></nav>
+              <nav id="desktop-nav" class="flex gap-6 text-sm font-bold text-slate-600 pl-3"></nav>
             </div>
-            <!-- Create Meeting Button -->
-            <a href="#board" class="flex items-center gap-2 rounded bg-brand-500 hover:bg-brand-600 px-4 py-2 text-xs font-black text-white">
-              <i data-lucide="plus" class="h-4 w-4"></i>모임 만들기
-            </a>
           </div>
         </div>
       </header>
@@ -98,8 +94,17 @@
       <!-- Mobile Bottom Nav -->
       <nav id="mobile-nav" class="fixed inset-x-0 bottom-0 z-20 grid h-16 grid-cols-4 border-t border-slate-200 bg-white text-xs font-bold text-slate-500 lg:hidden"></nav>
 
+      <!-- Profile Calendar Modal -->
+      <div id="profile-calendar-modal" class="schedule-modal" aria-hidden="true">
+        <div class="schedule-modal-panel" style="width: min(100%, 1350px); max-height: min(96vh, 850px); overflow: hidden; padding: 20px;">
+          <button class="schedule-modal-close" type="button" onclick="closeProfileCalendarModal()"><i data-lucide="x"></i></button>
+          <h2 class="schedule-modal-title text-lg font-black text-slate-800">이번 달 운동 일정</h2>
+          <div id="profile-calendar-modal-body" class="mt-4"></div>
+        </div>
+      </div>
+
       <!-- Schedule Modal -->
-      <div id="schedule-modal" class="schedule-modal" aria-hidden="true">
+      <div id="schedule-modal" class="schedule-modal" aria-hidden="true" style="z-index: 70;">
         <div class="schedule-modal-panel">
           <button class="schedule-modal-close" type="button" onclick="closeScheduleModal()"><i data-lucide="x"></i></button>
           <h2 class="schedule-modal-title">일정</h2>
@@ -129,6 +134,47 @@
       window.toggleProfileEdit = function toggleProfileEdit(show) {
         window.isProfileEditMode = show;
         render();
+      };
+
+      window.openProfileCalendarModal = function openProfileCalendarModal() {
+        const modal = document.getElementById("profile-calendar-modal");
+        const body = document.getElementById("profile-calendar-modal-body");
+        if (!modal || !body) return;
+
+        body.innerHTML = `
+          <div class="calendar-head flex items-center justify-between mb-4 pb-3 border-b">
+            <button class="p-1.5 rounded hover:bg-slate-100"><i data-lucide="chevron-left" class="h-5 w-5"></i></button>
+            <div class="text-center">
+              <p class="text-sm text-slate-500 font-bold">2025년 5월</p>
+            </div>
+            <button class="p-1.5 rounded hover:bg-slate-100"><i data-lucide="chevron-right" class="h-5 w-5"></i></button>
+          </div>
+          <div class="calendar-week grid grid-cols-7 text-center text-sm font-bold text-slate-400 mb-3">
+            <span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span>
+          </div>
+          <div class="calendar-grid grid grid-cols-7 gap-2">
+            ${Array.from({ length: 35 }, (_, idx) => {
+              const day = idx - 2;
+              const items = day > 0 && day <= 31 ? meetingsOnDay(day) : [];
+              const first = items[0];
+              return `
+                <button type="button" ${day > 0 && day <= 31 ? `onclick="showScheduleDay(${day})"` : ""} class="calendar-day min-h-[95px] sm:min-h-[112px] p-2 sm:p-3 border border-slate-100 rounded-xl flex flex-col justify-between hover:bg-slate-50 transition ${items.length ? "bg-brand-50/50 border-brand-200 shadow-sm" : ""} ${items.some((m) => m.state === "host") ? "bg-amber-50/50 border-amber-200" : ""}">
+                  <b class="text-sm font-bold text-slate-700">${day > 0 && day <= 31 ? day : ""}</b>
+                  ${first ? `
+                    <span class="text-[10px] bg-brand-500 text-white rounded px-2 py-1 truncate w-full text-left mt-1.5 font-bold shadow-sm">${first.title}</span>
+                    ${items.length > 1 ? `<span class="text-[10px] text-brand-600 font-bold self-end mt-0.5">+${items.length - 1}개 더보기</span>` : ""}
+                  ` : ""}
+                </button>
+              `;
+            }).join("")}
+          </div>
+        `;
+        modal.classList.add("is-open");
+        if (window.lucide) window.lucide.createIcons();
+      };
+
+      window.closeProfileCalendarModal = function closeProfileCalendarModal() {
+        document.getElementById("profile-calendar-modal")?.classList.remove("is-open");
       };
 
       window.saveProfileData = function saveProfileData() {
@@ -219,7 +265,7 @@
       ];
 
       const navItems = [
-        ["home", "home", "홈"], ["board", "list", "모임게시판"], ["chat", "message-circle", "내 톡"], ["profile", "user", "내 정보"]
+        ["home", "home", "홈"], ["board", "list", "모임게시판"], ["chat", "message-circle", "내 채팅"], ["profile", "user", "내 정보"]
       ];
 
       const view = document.getElementById("view");
@@ -402,8 +448,8 @@
         return `<a href="${detailHash(item)}" class="meeting-card"><img src="${item.img}" alt="${item.title}" /><span class="tag">${item.sport}</span><b>${item.title}</b><small>${item.place}<br>${item.time}</small><footer><span>${item.member}</span><strong>★ ${item.rating}</strong></footer></a>`;
       }
 
-      function pageTitle(title, desc) {
-        return `<div class="screen-title"><div><p>Sportsmate Flow</p><h1>${title}</h1><span>${desc}</span></div><a href="#home" class="ghost-btn"><i data-lucide="home"></i>홈으로</a></div>`;
+      function pageTitle(title, desc, showHomeBtn = true) {
+        return `<div class="screen-title"><div><h1>${title}</h1><span>${desc}</span></div>${showHomeBtn ? `<a href="#home" class="ghost-btn"><i data-lucide="home"></i>홈으로</a>` : ''}</div>`;
       }
 
       function detailPage(item) {
@@ -418,8 +464,18 @@
       }
 
       function meetingsOnDay(day) {
-        return meetings.filter((item) => meetingDay(item) === day);
+        return meetings.filter((item) => meetingDay(item) === day && joinedStates.has(item.state));
       }
+
+      window.getDday = function getDday(timeStr) {
+        const match = timeStr.match(/05\.(\d{2})/);
+        if (!match) return "";
+        const day = Number(match[1]);
+        const diff = day - 24; // Mock today is May 24th
+        if (diff === 0) return "D-Day";
+        if (diff > 0) return `D-${diff}`;
+        return `D+${Math.abs(diff)}`;
+      };
 
       window.showScheduleDay = function showScheduleDay(day) {
         const modal = document.getElementById("schedule-modal");
@@ -428,7 +484,7 @@
         const body = modal.querySelector(".schedule-modal-body");
         const title = modal.querySelector(".schedule-modal-title");
         title.textContent = `5월 ${day}일 일정`;
-        body.innerHTML = items.length ? items.map((m) => `<article class="schedule-modal-item"><img src="${m.img}" alt="${m.title}"><div><span>${m.time}</span><h3>${m.title}</h3><p>${m.place} · ${m.member}</p>${stateBadge(m)}<footer><a class="ghost-btn" href="${detailHash(m)}">상세 보기</a>${joinedStates.has(m.state) ? `<a class="ghost-btn" href="#chat-${m.id}">톡방</a>` : '<a class="primary-small" href="#mymeetings">참가 신청</a>'}${m.state === 'host' ? '<a class="primary-small" href="#host">관리</a>' : ''}</footer></div></article>`).join("") : `<p class="empty-schedule">등록된 일정이 없습니다.</p>`;
+        body.innerHTML = items.length ? items.map((m) => `<article class="schedule-modal-item"><img src="${m.img}" alt="${m.title}"><div><div class="mb-1.5">${stateBadge(m)}</div><span>${m.time}</span><h3>${m.title}</h3><p>${m.place} · ${m.member}</p><footer><a class="ghost-btn" href="${detailHash(m)}" onclick="closeScheduleModal(); closeProfileCalendarModal();">상세 보기</a>${joinedStates.has(m.state) ? `<a class="ghost-btn" href="#chat-${m.id}" onclick="closeScheduleModal(); closeProfileCalendarModal();">톡방</a>` : '<a class="primary-small" href="#mymeetings" onclick="closeScheduleModal(); closeProfileCalendarModal();">참가 신청</a>'}${m.state === 'host' ? '<a class="primary-small" href="#host" onclick="closeScheduleModal(); closeProfileCalendarModal();">관리</a>' : ''}</footer></div></article>`).join("") : `<p class="empty-schedule">등록된 일정이 없습니다.</p>`;
         modal.classList.add("is-open");
         if (window.lucide) window.lucide.createIcons();
       };
@@ -448,8 +504,8 @@
           <section class="home-recommend"><div class="section-head"><h2>추천 모임</h2><a href="#board">전체 보기</a></div><div class="home-card-grid">${meetings.slice(0, 4).map(meetingCard).join("")}</div></section>`,
         board: () => `${pageTitle("모임 게시판", "모임 상태를 확인하고 각 게시글 상세로 들어갑니다.")}<div class="page-card"><div class="filter-bar"><button class="tab-on">전체</button><button>모집중</button><button>러닝</button><button>농구</button><select><option>전체 지역</option></select><select><option>최신순</option></select></div><div class="board-table"><div class="board-head"><span>모임 정보</span><span>상태</span><span>지역</span><span>일시</span><span>참여/정원</span><span>평점</span></div>${meetings.map((m) => `<a href="${detailHash(m)}" class="board-row board-row-state"><span><img src="${m.img}" alt=""><b>${m.title}</b><small>${m.place}</small></span><span>${stateBadge(m)}</span><span>${m.place}</span><span>${m.time}</span><span>${m.member}</span><strong>★ ${m.rating}</strong></a>`).join("")}</div></div>`,
         detail: () => detailPage(meetings[0]),
-        chat: (selectedId = null) => { const chatMeetings = meetings.filter((m) => joinedStates.has(m.state)); const selected = selectedId === null ? null : chatMeetings.find((m) => m.id === Number(selectedId)); return `${pageTitle("내 톡", "참여 중인 모임 톡방을 한곳에서 확인합니다.")}<div class="talk-layout"><aside class="page-card talk-list"><div class="talk-list-head"><h2>참여중인 톡방</h2><span>${chatMeetings.length}</span></div>${chatMeetings.map((m, i) => `<button type="button" class="talk-room-item ${selected?.id === m.id ? 'selected' : ''}" data-chat-id="${m.id}" onclick="previewTalkRoom(${m.id})" ondblclick="openTalkRoom(${m.id})"><img src="${m.img}" alt="${m.title}"><span><b>${m.title}</b><small>${m.place} · ${memberCount(m)}</small></span><em>${i === 0 ? '방금' : '14:' + (30 - i * 4)}</em></button>`).join("")}</aside>${selected ? talkRoomPanel(selected) : talkEmptyPanel()}</div>`; },        map: () => `${pageTitle("지도 검색", "내 주변 모임을 지도와 결과 목록으로 훑어보는 화면입니다.")}<div class="map-layout"><section class="mock-map page-card"><div class="map-pin p1"><i data-lucide="footprints"></i></div><div class="map-pin p2"><i data-lucide="bike"></i></div><div class="map-pin p3"><i data-lucide="mountain"></i></div><div class="map-center"></div></section><aside class="page-card"><div class="section-head"><h2>검색 결과</h2><span>${meetings.length}개</span></div>${meetings.map((m)=>`<a href="${detailHash(m)}" class="map-result"><img src="${m.img}" alt=""><span><b>${m.title}</b><small>${m.place} · ${m.member}</small></span></a>`).join("")}</aside></div>`,
-        mymeetings: () => `${pageTitle("내 일정", "참여 예정인 모임과 내가 방장인 모임을 캘린더로 확인합니다.")}<div class="schedule-layout"><section class="page-card calendar-card"><div class="calendar-head"><button><i data-lucide="chevron-left"></i></button><div><p>2025년 5월</p><h2>이번 달 운동 일정</h2></div><button><i data-lucide="chevron-right"></i></button></div><div class="calendar-week"><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span></div><div class="calendar-grid">${Array.from({ length: 35 }, (_, idx) => { const day = idx - 2; const items = day > 0 && day <= 31 ? meetingsOnDay(day) : []; const first = items[0]; return `<button type="button" ${day > 0 && day <= 31 ? `onclick="showScheduleDay(${day})"` : ''} class="calendar-day ${items.length ? 'has-event' : ''} ${items.some((m) => m.state === 'host') ? 'host-day' : ''}"><b>${day > 0 && day <= 31 ? day : ''}</b>${first ? `<small>${first.title}</small><em>${items.length > 1 ? `+${items.length - 1}개 더` : first.state === 'host' ? '방장' : first.state === 'joined' ? '참여' : '모집'}</em>` : ''}</button>`; }).join("")}</div></section><aside class="page-card schedule-list"><div class="section-head"><h2>다가오는 일정</h2><span>${meetings.filter((m) => joinedStates.has(m.state)).length}개</span></div>${meetings.filter((m) => joinedStates.has(m.state)).map((m) => `<article class="schedule-item"><img src="${m.img}" alt="${m.title}"><div><span class="schedule-date">${m.time}</span><h3>${m.title}</h3><p>${m.place} · ${m.member}</p><div>${m.state === 'host' ? '<span class="host-badge"><i data-lucide="crown"></i>내가 방장</span>' : '<span class="member-badge">참여중</span>'}</div><footer><a class="ghost-btn" href="${detailHash(m)}"><i data-lucide="file-text"></i>상세</a><a class="ghost-btn" href="#chat-${m.id}"><i data-lucide="message-circle"></i>톡방</a>${m.state === 'host' ? '<a class="primary-small" href="#host"><i data-lucide="layout-dashboard"></i>관리</a>' : ''}</footer></div></article>`).join("")}</aside></div><div id="schedule-modal" class="schedule-modal" aria-hidden="true"><div class="schedule-modal-panel"><button class="schedule-modal-close" type="button" onclick="closeScheduleModal()"><i data-lucide="x"></i></button><h2 class="schedule-modal-title">일정</h2><div class="schedule-modal-body"></div></div></div>`,        profile: () => {
+        chat: (selectedId = null) => { const chatMeetings = meetings.filter((m) => joinedStates.has(m.state)); const selected = selectedId === null ? null : chatMeetings.find((m) => m.id === Number(selectedId)); return `${pageTitle("내 채팅", "참여중인 모임 채팅방을 한 곳에서 확인합니다.", false)}<div class="talk-layout"><aside class="page-card talk-list"><div class="talk-list-head"><h2>참여중인 채팅방</h2><span>${chatMeetings.length}</span></div><div class="talk-list-items">${chatMeetings.map((m, i) => `<button type="button" class="talk-room-item ${selected?.id === m.id ? 'selected' : ''}" data-chat-id="${m.id}" onclick="previewTalkRoom(${m.id})" ondblclick="openTalkRoom(${m.id})"><img src="${m.img}" alt="${m.title}"><span><b>${m.title}</b><small>${m.place} · ${memberCount(m)}</small></span><em>${i === 0 ? '방금' : '14:' + (30 - i * 4)}</em></button>`).join("")}</div></aside>${selected ? talkRoomPanel(selected) : talkEmptyPanel()}</div>`; },        map: () => `${pageTitle("지도 검색", "내 주변 모임을 지도와 결과 목록으로 훑어보는 화면입니다.")}<div class="map-layout"><section class="mock-map page-card"><div class="map-pin p1"><i data-lucide="footprints"></i></div><div class="map-pin p2"><i data-lucide="bike"></i></div><div class="map-pin p3"><i data-lucide="mountain"></i></div><div class="map-center"></div></section><aside class="page-card"><div class="section-head"><h2>검색 결과</h2><span>${meetings.length}개</span></div>${meetings.map((m)=>`<a href="${detailHash(m)}" class="map-result"><img src="${m.img}" alt=""><span><b>${m.title}</b><small>${m.place} · ${m.member}</small></span></a>`).join("")}</aside></div>`,
+        mymeetings: () => `${pageTitle("내 일정", "참여 예정인 모임과 내가 방장인 모임을 캘린더로 확인합니다.")}<div class="schedule-layout"><section class="page-card calendar-card"><div class="calendar-head"><button><i data-lucide="chevron-left"></i></button><div><p>2025년 5월</p><h2>이번 달 운동 일정</h2></div><button><i data-lucide="chevron-right"></i></button></div><div class="calendar-week"><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span></div><div class="calendar-grid">${Array.from({ length: 35 }, (_, idx) => { const day = idx - 2; const items = day > 0 && day <= 31 ? meetingsOnDay(day) : []; const first = items[0]; return `<button type="button" ${day > 0 && day <= 31 ? `onclick="showScheduleDay(${day})"` : ''} class="calendar-day ${items.length ? 'has-event' : ''} ${items.some((m) => m.state === 'host') ? 'host-day' : ''}"><b>${day > 0 && day <= 31 ? day : ''}</b>${first ? `<small>${first.title}</small><em>${items.length > 1 ? `+${items.length - 1}개 더보기` : first.state === 'host' ? '방장' : first.state === 'joined' ? '참여' : '모집'}</em>` : ''}</button>`; }).join("")}</div></section><aside class="page-card schedule-list"><div class="section-head"><h2>다가오는 일정</h2><span>${meetings.filter((m) => joinedStates.has(m.state)).length}개</span></div>${meetings.filter((m) => joinedStates.has(m.state)).map((m) => `<article class="schedule-item"><img src="${m.img}" alt="${m.title}"><div><span class="schedule-date">${m.time}</span><h3>${m.title}</h3><p>${m.place} · ${m.member}</p><div>${m.state === 'host' ? '<span class="host-badge"><i data-lucide="crown"></i>내가 방장</span>' : '<span class="member-badge">참여중</span>'}</div><footer><a class="ghost-btn" href="${detailHash(m)}"><i data-lucide="file-text"></i>상세</a><a class="ghost-btn" href="#chat-${m.id}"><i data-lucide="message-circle"></i>톡방</a>${m.state === 'host' ? '<a class="primary-small" href="#host"><i data-lucide="layout-dashboard"></i>관리</a>' : ''}</footer></div></article>`).join("")}</aside></div><div id="schedule-modal" class="schedule-modal" aria-hidden="true"><div class="schedule-modal-panel"><button class="schedule-modal-close" type="button" onclick="closeScheduleModal()"><i data-lucide="x"></i></button><h2 class="schedule-modal-title">일정</h2><div class="schedule-modal-body"></div></div></div>`,        profile: () => {
         const upcomingCount = meetings.filter((m) => joinedStates.has(m.state)).length;
         
         // 에디트 모드인지 뷰 모드인지에 따라 왼쪽 카드 컴포넌트 분기
@@ -482,11 +538,11 @@
                 </label>
               </div>
               <div class="flex gap-2 mt-6">
-                <button onclick="saveProfileData()" class="flex-1 bg-brand-500 hover:bg-brand-600 text-white rounded-lg py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5" type="button">
-                  <i data-lucide="save" class="h-4 w-4"></i>저장
-                </button>
                 <button onclick="toggleProfileEdit(false)" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5" type="button">
                   취소
+                </button>
+                <button onclick="saveProfileData()" class="flex-1 bg-brand-500 hover:bg-brand-600 text-white rounded-lg py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5" type="button">
+                  <i data-lucide="save" class="h-4 w-4"></i>저장
                 </button>
               </div>
             </section>
@@ -534,7 +590,6 @@
         return `
           <div class="screen-title mb-6">
             <div>
-              <p class="text-xs text-brand-500 font-semibold tracking-wider">My Profile</p>
               <h1 class="text-2xl font-black text-slate-800">내 정보</h1>
               <span class="text-xs text-slate-500">프로필을 관리하고 이번 달 나의 운동 일정을 모니터링합니다.</span>
             </div>
@@ -547,66 +602,51 @@
 
             <!-- Right Side: Calendar & Scheduled Meetings (lg:col-span-2) -->
             <div class="flex flex-col gap-6 lg:col-span-2">
-              <!-- Calendar Card (달력 크기 확대) -->
-              <section class="page-card calendar-card bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                <div class="calendar-head flex items-center justify-between mb-4 pb-3 border-b">
-                  <button class="p-1.5 rounded hover:bg-slate-100"><i data-lucide="chevron-left" class="h-4 w-4"></i></button>
-                  <div class="text-center">
-                    <p class="text-[10px] text-slate-400 font-semibold">2025년 5월</p>
-                    <h2 class="text-base font-bold text-slate-800">이번 달 운동 일정</h2>
-                  </div>
-                  <button class="p-1.5 rounded hover:bg-slate-100"><i data-lucide="chevron-right" class="h-4 w-4"></i></button>
-                </div>
-                <div class="calendar-week grid grid-cols-7 text-center text-xs font-bold text-slate-400 mb-3">
-                  <span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span>
-                </div>
-                <div class="calendar-grid grid grid-cols-7 gap-1.5">
-                  ${Array.from({ length: 35 }, (_, idx) => {
-                    const day = idx - 2;
-                    const items = day > 0 && day <= 31 ? meetingsOnDay(day) : [];
-                    const first = items[0];
-                    return `
-                      <button type="button" ${day > 0 && day <= 31 ? `onclick="showScheduleDay(${day})"` : ""} class="calendar-day min-h-[85px] sm:min-h-[100px] p-2 border border-slate-100 rounded-xl flex flex-col justify-between hover:bg-slate-50 transition ${items.length ? "bg-brand-50/50 border-brand-200" : ""} ${items.some((m) => m.state === "host") ? "bg-amber-50/50 border-amber-200" : ""}">
-                        <b class="text-xs font-bold text-slate-600">${day > 0 && day <= 31 ? day : ""}</b>
-                        ${first ? `
-                          <span class="text-[8px] bg-brand-500 text-white rounded px-1.5 py-0.5 truncate w-full text-left scale-90 origin-left mt-1 font-semibold">${first.title}</span>
-                          ${items.length > 1 ? `<span class="text-[8px] text-brand-600 font-bold self-end mt-0.5">+${items.length - 1}개</span>` : ""}
-                        ` : ""}
-                      </button>
-                    `;
-                  }).join("")}
-                </div>
-              </section>
-
               <!-- Upcoming Schedule List -->
               <section class="page-card schedule-list bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                 <div class="section-head flex justify-between items-center border-b pb-3 mb-4">
-                  <h2 class="font-bold text-slate-800 text-sm">다가오는 일정</h2>
-                  <span class="text-xs text-brand-500 font-bold">${upcomingCount}개</span>
+                  <div class="flex items-center gap-2">
+                    <h2 class="font-bold text-slate-800 text-sm">다가오는 일정</h2>
+                    <span class="text-xs text-brand-500 font-bold">${upcomingCount}개</span>
+                  </div>
+                  <button onclick="window.openProfileCalendarModal()" class="text-xs bg-slate-50 hover:bg-slate-100 text-slate-600 px-3 py-1.5 border border-slate-200 rounded-lg transition font-bold flex items-center gap-1">
+                    <i data-lucide="calendar" class="h-3.5 w-3.5"></i>달력으로 보기
+                  </button>
                 </div>
                 <div class="flex flex-col gap-4">
-                  ${meetings.filter((m) => joinedStates.has(m.state)).map((m) => `
-                    <article class="schedule-item flex gap-4 p-4 bg-slate-50 rounded-2xl hover:shadow-sm transition border border-slate-100">
-                      <img src="${m.img}" alt="${m.title}" class="w-20 h-20 rounded-xl object-cover">
-                      <div class="flex-1 flex flex-col justify-between min-w-0">
-                        <div>
-                          <span class="schedule-date text-[10px] text-brand-500 font-bold block">${m.time}</span>
-                          <h3 class="text-xs font-bold text-slate-800 truncate mt-1">${m.title}</h3>
-                          <p class="text-[10px] text-slate-500 mt-0.5 truncate">${m.place} · ${m.member}</p>
-                        </div>
-                        <div class="flex justify-between items-center mt-2">
-                          <div>
-                            ${m.state === "host" ? '<span class="host-badge text-[9px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full"><i data-lucide="crown" class="h-3 w-3 inline mr-0.5 -mt-0.5"></i>내가 방장</span>' : '<span class="member-badge text-[9px] bg-indigo-100 text-brand-800 font-bold px-2 py-0.5 rounded-full">참여중</span>'}
+                  ${meetings.filter((m) => joinedStates.has(m.state)).map((m) => {
+                    const isHost = m.state === "host";
+                    const manageButton = isHost
+                      ? `<a class="primary-small text-[10px] px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-bold flex items-center gap-0.5" href="#host"><i data-lucide="layout-dashboard" class="h-3 w-3"></i>관리</a>`
+                      : `<span class="text-[10px] px-3 py-1.5 rounded-lg bg-slate-100 text-slate-400 border border-slate-200 font-bold flex items-center gap-0.5 cursor-not-allowed"><i data-lucide="layout-dashboard" class="h-3 w-3 text-slate-400"></i>관리</span>`;
+                    return `
+                      <article class="schedule-item flex gap-4 p-4 bg-slate-50 rounded-2xl hover:shadow-sm transition border border-slate-100">
+                        <img src="${m.img}" alt="${m.title}" class="w-20 h-20 rounded-xl object-cover">
+                        <div class="flex-1 flex flex-col justify-between min-w-0">
+                          <div class="flex justify-between items-start gap-4">
+                            <div>
+                              <div class="mb-1.5">
+                                ${isHost ? '<span class="host-badge text-[9px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full"><i data-lucide="crown" class="h-3 w-3 inline mr-0.5 -mt-0.5"></i>내가 방장</span>' : '<span class="member-badge text-[9px] bg-indigo-100 text-brand-800 font-bold px-2 py-0.5 rounded-full">참여중</span>'}
+                              </div>
+                              <div class="flex items-center gap-2">
+                                <span class="schedule-date text-[13px] text-brand-500 font-bold block">${m.time}</span>
+                                <span class="text-[13px] text-red-500/90 font-extrabold ml-1">${window.getDday(m.time)}</span>
+                              </div>
+                              <h3 class="text-xs font-bold text-slate-800 truncate mt-1">${m.title}</h3>
+                              <p class="text-[10px] text-slate-500 mt-0.5 truncate">${m.place} · ${m.member}</p>
+                            </div>
+                            ${manageButton}
                           </div>
-                          <div class="flex gap-1.5">
-                            <a class="ghost-btn text-[10px] px-3 py-1.5 border rounded-lg bg-white hover:bg-slate-50 font-bold flex items-center gap-0.5" href="${detailHash(m)}"><i data-lucide="file-text" class="h-3 w-3"></i>상세</a>
-                            <a class="ghost-btn text-[10px] px-3 py-1.5 border rounded-lg bg-white hover:bg-slate-50 font-bold flex items-center gap-0.5" href="#chat-${m.id}"><i data-lucide="message-circle" class="h-3 w-3"></i>톡방</a>
-                            ${m.state === "host" ? '<a class="primary-small text-[10px] px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-bold flex items-center gap-0.5" href="#host"><i data-lucide="layout-dashboard" class="h-3 w-3"></i>관리</a>' : ""}
+                          <div class="flex justify-end items-center mt-2">
+                            <div class="flex gap-1.5">
+                              <a class="ghost-btn text-[10px] px-3 py-1.5 border rounded-lg bg-white hover:bg-slate-50 font-bold flex items-center gap-0.5" href="${detailHash(m)}"><i data-lucide="file-text" class="h-3 w-3"></i>상세</a>
+                              <a class="ghost-btn text-[10px] px-3 py-1.5 border rounded-lg bg-white hover:bg-slate-50 font-bold flex items-center gap-0.5" href="#chat-${m.id}"><i data-lucide="message-circle" class="h-3 w-3"></i>톡방</a>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </article>
-                  `).join("")}
+                      </article>
+                    `;
+                  }).join("")}
                 </div>
               </section>
             </div>
@@ -628,8 +668,8 @@
               <h1 class="text-3xl sm:text-4xl font-black text-slate-800 leading-tight mb-4">가볍게 찾고<br>함께 운동하는 하루</h1>
               <p class="text-xs sm:text-sm text-slate-500 font-semibold leading-relaxed mb-6 max-w-sm">추천 모임과 신규 모임을 먼저 둘러보고, 자세한 조건은 모임 찾기에서 설정하세요.</p>
               <div class="flex items-center gap-3">
-                <a href="#board" class="bg-brand-500 hover:bg-brand-600 text-white rounded-xl px-6 py-2.5 text-xs font-bold shadow-sm transition-all duration-200 flex items-center gap-1"><i data-lucide="search" class="h-3.5 w-3.5"></i>모임 찾기</a>
-                <a href="#board" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl px-6 py-2.5 text-xs font-bold shadow-sm transition-all duration-200 flex items-center gap-1"><i data-lucide="plus" class="h-3.5 w-3.5"></i>모임 만들기</a>
+                <a href="#board" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl px-6 py-2.5 text-xs font-bold shadow-sm transition-all duration-200 flex items-center gap-1"><i data-lucide="search" class="h-3.5 w-3.5"></i>모임 찾기</a>
+                <a href="#board" class="bg-brand-500 hover:bg-brand-600 text-white rounded-xl px-6 py-2.5 text-xs font-bold shadow-sm transition-all duration-200 flex items-center gap-1"><i data-lucide="plus" class="h-3.5 w-3.5"></i>모임 만들기</a>
               </div>
             </div>
             <!-- Right Silhouette Image -->
@@ -641,14 +681,12 @@
           </section>
 
           <!-- Sport Icons Fixed Section (기존 종목 바로가기) -->
-          <section class="page-card bg-white p-6 rounded-2xl border border-slate-100 mb-8 shadow-sm">
-            <div class="home-categories flex justify-around items-center flex-wrap gap-4 py-2">
+          <section class="mb-8 py-4">
+            <div class="home-categories flex justify-center items-center flex-wrap gap-6 sm:gap-10 py-2 max-w-4xl mx-auto">
               ${[["circle-dot","농구","농구"],["goal","축구","축구"],["footprints","러닝","러닝"],["dumbbell","헬스","헬스"],["mountain","등산","등산"],["bike","자전거","자전거"]].map(([icon,label,sport]) => `
-                <a href="#board${sport ? `?sport=${encodeURIComponent(sport)}` : ""}" class="flex flex-col items-center gap-2 hover:text-brand-500 transition group">
-                  <div class="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100 group-hover:bg-brand-50 group-hover:border-brand-100 transition shadow-inner">
-                    <i data-lucide="${icon}" class="h-5 w-5 text-slate-500 group-hover:text-brand-500 transition"></i>
-                  </div>
-                  <span class="text-xs font-bold text-slate-600 group-hover:text-brand-500 transition">${label}</span>
+                <a href="#board${sport ? `?sport=${encodeURIComponent(sport)}` : ""}" class="flex flex-col items-center gap-3 transition group">
+                  <i data-lucide="${icon}"></i>
+                  <span class="text-sm sm:text-base font-black text-slate-700 group-hover:text-brand-500 transition">${label}</span>
                 </a>
               `).join("")}
             </div>
@@ -683,14 +721,13 @@
         const selectedRegionsList = (params.get("regions") || "").split(",").filter(Boolean);
 
         const toggleButton = isMap 
-          ? `<a href="#board?${getToggleViewParams('list')}" class="flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-xs font-bold transition"><i data-lucide="list"></i>리스트로 보기</a>`
-          : `<a href="#board?${getToggleViewParams('map')}" class="flex items-center gap-2 px-4 py-2 bg-skyline hover:bg-sky-600 text-white rounded-lg text-xs font-bold transition"><i data-lucide="map"></i>지도로 보기</a>`;
+          ? `<a href="#board?${getToggleViewParams('list')}" class="flex items-center justify-center gap-2 w-[130px] py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-xs font-bold transition"><i data-lucide="list" class="h-4 w-4"></i>리스트로 보기</a>`
+          : `<a href="#board?${getToggleViewParams('map')}" class="flex items-center justify-center gap-2 w-[130px] py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-xs font-bold transition"><i data-lucide="map" class="h-4 w-4"></i>지도로 보기</a>`;
 
         const titleSection = `
           <div class="screen-title flex items-center justify-between mb-6">
             <div>
-              <p class="text-xs text-brand-500 font-semibold tracking-wider">Sportsmate Board</p>
-              <h1 class="text-2xl font-black text-slate-800">모임 게시판</h1>
+              <h1 class="font-black text-slate-800">모임 게시판</h1>
               <span class="text-xs text-slate-500">필터와 검색을 사용하여 메이트 모집글을 찾아보세요.</span>
             </div>
             ${toggleButton}
@@ -850,7 +887,7 @@
       }
 
       function appleWatermark() {
-        return `<div class="talk-empty-apple"><img src="/img/test3.png" alt="Sportsmate 사과 로고"><p>톡방을 더블클릭하면 대화가 열립니다.</p></div>`;
+        return `<div class="talk-empty-apple"><img src="/img/test3.png" alt="Sportsmate 사과 로고"><p>채팅방을 더블클릭하면 대화가 열립니다.</p></div>`;
       }
 
       function talkEmptyPanel() {
@@ -939,23 +976,30 @@
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
 
-      window.addEventListener("load", () => {
-        renderNav();
-        render();
-        window.addEventListener("hashchange", render);
-        document.addEventListener("click", (event) => {
-          const actionButton = event.target.closest("[data-action]");
-          if (!actionButton) return;
-          const action = actionButton.dataset.action;
-          if (action === "talk-close") closeTalkRoom();
-          if (action === "talk-search") toggleTalkSearch();
-          if (action === "talk-info") toggleTalkInfo();
-        });
-        if (window.lucide) window.lucide.createIcons();
-        window.setTimeout(() => {
-          document.getElementById("loader")?.classList.add("loader-out");
-          document.getElementById("app")?.classList.add("app-ready");
-        }, 900);
+      document.addEventListener("DOMContentLoaded", () => {
+        try {
+          renderNav();
+          render();
+          window.addEventListener("hashchange", render);
+          document.addEventListener("click", (event) => {
+            const actionButton = event.target.closest("[data-action]");
+            if (!actionButton) return;
+            const action = actionButton.dataset.action;
+            if (action === "talk-close") closeTalkRoom();
+            if (action === "talk-search") toggleTalkSearch();
+            if (action === "talk-info") toggleTalkInfo();
+          });
+          if (window.lucide) window.lucide.createIcons();
+        } catch (e) {
+          console.error("Initialization error:", e);
+        } finally {
+          window.setTimeout(() => {
+            const loader = document.getElementById("loader");
+            const app = document.getElementById("app");
+            if (loader) loader.classList.add("loader-out");
+            if (app) app.classList.add("app-ready");
+          }, 900);
+        }
       });
     </script>
   </body>
