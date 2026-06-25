@@ -7,9 +7,11 @@ ROOT = Path(__file__).resolve().parent
 
 class SportsmateHandler(SimpleHTTPRequestHandler):
     def translate_path(self, path):
-        if path == "/":
-            path = "/templates/index.html"
-        return str(ROOT / path.lstrip("/"))
+        # Strip query parameters (e.g., ?v=2)
+        clean_path = path.split("?")[0]
+        if clean_path == "/":
+            clean_path = "/templates/index.html"
+        return str(ROOT / clean_path.lstrip("/"))
 
 
 def run(host="127.0.0.1", port=8000):

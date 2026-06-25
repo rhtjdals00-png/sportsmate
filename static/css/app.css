@@ -474,7 +474,7 @@ nav.fixed a {
 
 .screen-title h1 {
   margin-top: 5px;
-  font-size: 30px;
+  font-size: 22px;
   font-weight: 950;
   color: #0f172a;
 }
@@ -1205,7 +1205,7 @@ nav.fixed a {
   }
 
   .screen-title h1 {
-    font-size: 24px;
+    font-size: 18px;
   }
 
   .page-card {
@@ -1529,21 +1529,36 @@ nav.fixed a {
 .home-categories a {
   display: grid;
   place-items: center;
-  gap: 9px;
+  gap: 12px;
   color: #312e81;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 950;
 }
 
 .home-categories i,
 .home-categories svg {
-  width: 44px;
-  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
   border-radius: 999px;
   background: #eef2ff;
-  padding: 11px;
+  padding: 20px;
   color: #4f46e5;
+  transition: all 0.2s ease-in-out;
 }
+
+.home-categories a:hover i,
+.home-categories a:hover svg {
+  background: #e0e7ff;
+  color: #4f46e5;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px -4px rgba(79, 70, 229, 0.2);
+}
+
 
 .home-recommend {
   margin-top: 24px;
@@ -2064,12 +2079,26 @@ nav.fixed a {
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);
   gap: 24px;
-  min-height: 680px;
+  height: calc(100vh - 340px);
+  min-height: 480px;
 }
 
-.talk-list,
+.talk-list {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .talk-room {
-  min-height: 680px;
+  height: 100%;
+}
+
+.talk-list-items {
+  flex: 1;
+  overflow-y: auto;
+  margin-right: -6px;
+  padding-right: 6px;
 }
 
 .talk-list-head {
@@ -2303,11 +2332,14 @@ nav.fixed a {
 @media (max-width: 1024px) {
   .talk-layout {
     grid-template-columns: 1fr;
+    height: auto;
+    min-height: auto;
   }
 
   .talk-list,
   .talk-room {
     min-height: auto;
+    height: auto;
   }
 }
 
@@ -2324,7 +2356,7 @@ nav.fixed a {
 
 .talk-room-empty {
   display: grid;
-  min-height: 680px;
+  height: 100%;
   place-items: center;
   background: linear-gradient(180deg, #ffffff, #f8fafc);
 }

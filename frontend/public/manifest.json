@@ -1,0 +1,19 @@
+{
+  "name": "SportsMate",
+  "short_name": "SportsMate",
+  "description": "함께 운동할 사람을 찾고 모임을 관리하는 스포츠 커뮤니티",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#4F46E5",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/images/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
+
