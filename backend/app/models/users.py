@@ -1,18 +1,22 @@
-import json
+﻿import json
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.extensions import db
 from .common import TimestampMixin
 
+
 class User(db.Model, TimestampMixin):
     __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
+    auth_user_id = db.Column(db.String(120), unique=True, nullable=True, index=True)
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
-    password_hash = db.Column(db.String(255), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=True)
     provider = db.Column(db.String(40), default="email", nullable=False)
     provider_id = db.Column(db.String(120))
-    nickname = db.Column(db.String(80), nullable=False)
+    name = db.Column(db.String(80), nullable=False)
+    phone_number = db.Column(db.String(30), nullable=True)
+    nickname = db.Column(db.String(80), unique=True, nullable=False, index=True)
     profile_image_url = db.Column(db.Text)
     role = db.Column(db.String(30), default="user", nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
@@ -30,13 +34,17 @@ class User(db.Model, TimestampMixin):
         profile = self.profile
         return {
             "id": self.id,
+            "auth_user_id": self.auth_user_id,
             "email": self.email,
+            "name": self.name,
+            "phone_number": self.phone_number,
             "nickname": self.nickname,
             "profile_image_url": self.profile_image_url,
             "role": self.role,
             "is_active": self.is_active,
             "profile": {
                 "region": profile.region if profile else "",
+                "bio": profile.bio if profile else "",
                 "exercise_level": profile.exercise_level if profile else "",
                 "preferred_sports": profile.preferred_sports if profile else "",
                 "preferred_sport_levels": profile.preferred_sport_levels_dict() if profile else {},
@@ -45,12 +53,14 @@ class User(db.Model, TimestampMixin):
             }
         }
 
+
 class UserProfile(db.Model):
     __tablename__ = "user_profiles"
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, unique=True)
     region = db.Column(db.String(120), default="서울")
+    bio = db.Column(db.String(160), default="")
     exercise_level = db.Column(db.String(40), default="beginner")
     preferred_sports = db.Column(db.String(255), default="")
     preferred_sport_levels = db.Column(db.Text, default="{}")
@@ -64,3 +74,5 @@ class UserProfile(db.Model):
             return json.loads(self.preferred_sport_levels or "{}")
         except (TypeError, json.JSONDecodeError):
             return {}
+
+

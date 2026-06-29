@@ -1,11 +1,11 @@
-from app.extensions import db
+﻿from app.extensions import db
 
 class SportCategory(db.Model):
     __tablename__ = "sport_categories"
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), nullable=False, unique=True)
-    purpose = db.Column(db.String(120), nullable=False, default="파트너 모집")
+    purpose = db.Column(db.String(120), nullable=False, default="?뚰듃??紐⑥쭛")
     sports = db.relationship("Sport", back_populates="category", cascade="all, delete-orphan")
 
     def to_dict(self):
@@ -25,9 +25,10 @@ class Sport(db.Model):
 
 class Region(db.Model):
     __tablename__ = "regions"
+    __table_args__ = (db.UniqueConstraint("code", name="uq_regions_code"),)
 
     id = db.Column(db.Integer, primary_key=True)
-    code = db.Column(db.String(20), unique=True, nullable=False, index=True)
+    code = db.Column(db.String(20), nullable=False, index=True)
     name = db.Column(db.String(80), nullable=False)
     level = db.Column(db.String(20), nullable=False)
     parent_code = db.Column(db.String(20), db.ForeignKey("regions.code"))
@@ -48,3 +49,4 @@ class Region(db.Model):
             "latitude": self.latitude,
             "longitude": self.longitude
         }
+

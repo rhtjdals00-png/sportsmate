@@ -1,4 +1,4 @@
-import json
+﻿import json
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
@@ -7,6 +7,17 @@ from app.extensions import db
 from app.models import Participant, Review, User
 
 user_bp = Blueprint("users", __name__)
+
+
+def normalize_phone_number(value):
+    digits = "".join(ch for ch in (value or "") if ch.isdigit())[:11]
+    if not digits:
+        return None
+    if len(digits) <= 3:
+        return digits
+    if len(digits) <= 7:
+        return f"{digits[:3]}-{digits[3:]}"
+    return f"{digits[:3]}-{digits[3:7]}-{digits[7:]}"
 
 
 @user_bp.get("/me")
@@ -21,15 +32,18 @@ def get_me():
 def update_me():
     user = User.query.get_or_404(int(get_jwt_identity()))
     data = request.get_json() or {}
-    for field in ["nickname", "profile_image_url"]:
+
+    for field in ["name", "phone_number", "nickname", "profile_image_url"]:
         if field in data:
-            setattr(user, field, data[field])
+            setattr(user, field, normalize_phone_number(data[field]) if field == "phone_number" else data[field])
+
     if user.profile:
-        for field in ["region", "exercise_level", "preferred_sports"]:
+        for field in ["region", "bio", "exercise_level", "preferred_sports"]:
             if field in data:
                 setattr(user.profile, field, data[field])
         if "preferred_sport_levels" in data:
-            user.profile.preferred_sport_levels = json.dumps(data["preferred_sport_levels"], ensure_ascii=False)
+            user.profile.preferred_sport_levels = json.dumps(data["preferred_sport_levels"] or {}, ensure_ascii=False)
+
     db.session.commit()
     return jsonify({"user": user.to_dict()})
 
