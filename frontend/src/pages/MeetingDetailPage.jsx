@@ -1,10 +1,9 @@
-import { useResponsive } from "../hooks/useResponsive";
+import ResponsivePage from "../components/common/ResponsivePage.jsx";
 import MobileMeetingDetail from "../components/meeting/mobile/MobileMeetingDetail.jsx";
 import DesktopMeetingDetail from "../components/meeting/desktop/DesktopMeetingDetail.jsx";
 
 function MeetingDetailPage() {
-  const { isMobile } = useResponsive();
-  return isMobile ? <MobileMeetingDetail /> : <DesktopMeetingDetail />;
+  return <ResponsivePage mobile={MobileMeetingDetail} desktop={DesktopMeetingDetail} />;
 }
 
 export default MeetingDetailPage;

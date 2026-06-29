@@ -4,14 +4,19 @@ import Button from "../components/common/Button.jsx";
 import EmptyState from "../components/common/EmptyState.jsx";
 import LoadingCards from "../components/common/LoadingCards.jsx";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
+import DesktopHostApplicants from "../components/host/desktop/DesktopHostApplicants.jsx";
 import { meetingApi } from "../api/meetingApi";
 import { useAsync } from "../hooks/useAsync";
+import { useResponsive } from "../hooks/useResponsive";
 import { formatExerciseLevel } from "../utils/formatters";
 
 function HostApplicantsPage() {
+  const { isMobile } = useResponsive();
   const { meetingId } = useParams();
   const [refreshKey, setRefreshKey] = useState(0);
   const applicants = useAsync(() => meetingApi.applicants(meetingId), [meetingId, refreshKey]);
+
+  if (!isMobile) return <DesktopHostApplicants />;
 
   const decide = async (userId, action) => {
     if (action === "approve") await meetingApi.approve(meetingId, userId);

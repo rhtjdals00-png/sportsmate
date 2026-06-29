@@ -1,8 +1,7 @@
-import MobileHostDashboard from "../mobile/MobileHostDashboard.jsx";
+import DesktopPrototype from "../../desktopPrototype/DesktopPrototype.jsx";
 
 function DesktopHostDashboard() {
-  return <div className="desktop-content"><MobileHostDashboard /></div>;
+  return <DesktopPrototype page="host" />;
 }
 
 export default DesktopHostDashboard;
-

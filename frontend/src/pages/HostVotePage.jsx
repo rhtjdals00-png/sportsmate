@@ -3,14 +3,19 @@ import { useParams } from "react-router-dom";
 import Button from "../components/common/Button.jsx";
 import LoadingCards from "../components/common/LoadingCards.jsx";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
+import DesktopHostVote from "../components/host/desktop/DesktopHostVote.jsx";
 import { meetingApi } from "../api/meetingApi";
 import { useAsync } from "../hooks/useAsync";
+import { useResponsive } from "../hooks/useResponsive";
 
 function HostVotePage() {
+  const { isMobile } = useResponsive();
   const { meetingId } = useParams();
   const [refreshKey, setRefreshKey] = useState(0);
   const [form, setForm] = useState({ title: "", options: "찬성, 반대" });
   const votes = useAsync(() => meetingApi.votes(meetingId), [meetingId, refreshKey]);
+
+  if (!isMobile) return <DesktopHostVote />;
 
   const submit = async (event) => {
     event.preventDefault();

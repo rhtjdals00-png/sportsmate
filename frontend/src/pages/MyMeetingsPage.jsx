@@ -2,11 +2,16 @@ import MeetingCard from "../components/meeting/shared/MeetingCard.jsx";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
 import EmptyState from "../components/common/EmptyState.jsx";
 import LoadingCards from "../components/common/LoadingCards.jsx";
+import DesktopMyMeetings from "../components/profile/desktop/DesktopMyMeetings.jsx";
 import { useAsync } from "../hooks/useAsync";
+import { useResponsive } from "../hooks/useResponsive";
 import { userApi } from "../api/userApi";
 
 function MyMeetingsPage() {
+  const { isMobile } = useResponsive();
   const meetings = useAsync(() => userApi.myMeetings(), []);
+
+  if (!isMobile) return <DesktopMyMeetings />;
 
   return (
     <>

@@ -1,8 +1,7 @@
-import MobileChatRoom from "../mobile/MobileChatRoom.jsx";
+import DesktopPrototype from "../../desktopPrototype/DesktopPrototype.jsx";
 
 function DesktopChatRoom() {
-  return <div className="desktop-content"><MobileChatRoom /></div>;
+  return <DesktopPrototype page="chat" />;
 }
 
 export default DesktopChatRoom;
-

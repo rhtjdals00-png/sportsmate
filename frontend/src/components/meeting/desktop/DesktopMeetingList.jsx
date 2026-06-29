@@ -1,12 +1,7 @@
-import MobileMeetingList from "../mobile/MobileMeetingList.jsx";
+import DesktopPrototype from "../../desktopPrototype/DesktopPrototype.jsx";
 
 function DesktopMeetingList() {
-  return (
-    <div className="desktop-content desktop-grid-preview">
-      <MobileMeetingList />
-    </div>
-  );
+  return <DesktopPrototype page="board" />;
 }
 
 export default DesktopMeetingList;
-

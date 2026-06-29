@@ -9,4 +9,3 @@ function LoadingCards({ count = 3 }) {
 }
 
 export default LoadingCards;
-

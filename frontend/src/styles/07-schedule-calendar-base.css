@@ -1,0 +1,133 @@
+﻿.schedule-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) 420px;
+  gap: 24px;
+}
+
+.calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.calendar-head button {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.calendar-head p {
+  margin: 0;
+  color: #4f46e5;
+  font-size: 13px;
+  font-weight: 950;
+  text-align: center;
+}
+
+.calendar-head h2 {
+  margin: 4px 0 0;
+  color: #0f172a;
+  font-size: 21px;
+}
+
+.calendar-week,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.calendar-week {
+  margin-bottom: 8px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 950;
+  text-align: center;
+}
+
+.calendar-day {
+  display: flex;
+  min-height: 96px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
+  text-align: left;
+}
+
+.calendar-day.has-event {
+  border-color: #c7d2fe;
+  background: #eef2ff;
+}
+
+.calendar-day.host-day {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.calendar-day small {
+  width: 100%;
+  overflow: hidden;
+  color: #312e81;
+  font-size: 11px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-day em {
+  color: #64748b;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.schedule-item--rich {
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+.schedule-item--rich > img {
+  width: 82px;
+  height: 82px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.schedule-item--rich > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.host-badge,
+.member-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.host-badge {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.member-badge {
+  background: #eef2ff;
+  color: #3730a3;
+}
+

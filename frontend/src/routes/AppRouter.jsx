@@ -25,6 +25,7 @@ import AdminMeetingsPage from "../pages/AdminMeetingsPage.jsx";
 import AdminReportsPage from "../pages/AdminReportsPage.jsx";
 import NotFoundPage from "../pages/NotFoundPage.jsx";
 import NotificationsPage from "../pages/NotificationsPage.jsx";
+import MapPage from "../pages/MapPage.jsx";
 import ProtectedRoute from "../components/common/ProtectedRoute.jsx";
 
 const protect = (element) => <ProtectedRoute>{element}</ProtectedRoute>;
@@ -43,6 +44,7 @@ function AppRouter() {
         <Route path="/chats" element={protect(<ChatListPage />)} />
         <Route path="/chats/:chatRoomId" element={protect(<ChatRoomPage />)} />
         <Route path="/notifications" element={protect(<NotificationsPage />)} />
+        <Route path="/map" element={<MapPage />} />
         <Route path="/mypage" element={protect(<MyPage />)} />
         <Route path="/mypage/profile" element={protect(<ProfileEditPage />)} />
         <Route path="/mypage/meetings" element={protect(<MyMeetingsPage />)} />

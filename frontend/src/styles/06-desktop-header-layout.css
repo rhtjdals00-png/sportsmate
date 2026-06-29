@@ -1,0 +1,151 @@
+﻿.desktop-header__top,
+.desktop-header__nav-row,
+.desktop-main__inner {
+  width: min(100% - 40px, 1280px);
+  margin: 0 auto;
+}
+
+.desktop-header__top {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 0;
+}
+
+.desktop-header__brand,
+.desktop-header__actions,
+.desktop-header__login,
+.desktop-header__nav a {
+  display: inline-flex;
+  align-items: center;
+}
+
+.desktop-header__brand {
+  gap: 12px;
+  color: #4338ca;
+  font-size: 21px;
+  font-weight: 900;
+}
+
+.brand-logo-box {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #eef2ff;
+  padding: 5px;
+}
+
+.brand-logo-box img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.desktop-header__search {
+  display: flex;
+  width: 384px;
+  max-width: 100%;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #64748b;
+  justify-self: center;
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.desktop-header__search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #0f172a;
+  font-weight: 400;
+}
+
+.desktop-header__search input::placeholder {
+  color: #94a3b8;
+}
+
+.desktop-header__search button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #94a3b8;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.desktop-header__search button:hover {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.desktop-header__actions {
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.desktop-header__actions > a {
+  min-height: 38px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #475569;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.desktop-header__login {
+  gap: 6px;
+}
+
+.desktop-header__nav-row {
+  display: flex;
+  height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.desktop-header__nav {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+}
+
+.desktop-header__nav a {
+  gap: 7px;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.desktop-header__nav a.active {
+  color: #4f46e5;
+}
+
+.desktop-main {
+  min-width: 0;
+  background: #ffffff;
+  padding: 0;
+}
+
+.desktop-main__inner {
+  padding: 28px 0 48px;
+}
+

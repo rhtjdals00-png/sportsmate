@@ -1,8 +1,7 @@
-import MobileChatList from "../mobile/MobileChatList.jsx";
+import DesktopPrototype from "../../desktopPrototype/DesktopPrototype.jsx";
 
 function DesktopChatList() {
-  return <div className="desktop-content"><MobileChatList /></div>;
+  return <DesktopPrototype page="chat" />;
 }
 
 export default DesktopChatList;
-

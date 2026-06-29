@@ -1,12 +1,7 @@
-import MobileMeetingDetail from "../mobile/MobileMeetingDetail.jsx";
+import DesktopPrototype from "../../desktopPrototype/DesktopPrototype.jsx";
 
 function DesktopMeetingDetail() {
-  return (
-    <div className="desktop-content">
-      <MobileMeetingDetail />
-    </div>
-  );
+  return <DesktopPrototype page="detail" />;
 }
 
 export default DesktopMeetingDetail;
-

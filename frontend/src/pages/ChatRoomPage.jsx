@@ -1,10 +1,9 @@
-import { useResponsive } from "../hooks/useResponsive";
+import ResponsivePage from "../components/common/ResponsivePage.jsx";
 import MobileChatRoom from "../components/chat/mobile/MobileChatRoom.jsx";
 import DesktopChatRoom from "../components/chat/desktop/DesktopChatRoom.jsx";
 
 function ChatRoomPage() {
-  const { isMobile } = useResponsive();
-  return isMobile ? <MobileChatRoom /> : <DesktopChatRoom />;
+  return <ResponsivePage mobile={MobileChatRoom} desktop={DesktopChatRoom} />;
 }
 
 export default ChatRoomPage;

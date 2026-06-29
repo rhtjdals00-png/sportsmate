@@ -1,10 +1,9 @@
-import { useResponsive } from "../hooks/useResponsive";
+import ResponsivePage from "../components/common/ResponsivePage.jsx";
 import MobileMyPage from "../components/profile/mobile/MobileMyPage.jsx";
 import DesktopMyPage from "../components/profile/desktop/DesktopMyPage.jsx";
 
 function MyPage() {
-  const { isMobile } = useResponsive();
-  return isMobile ? <MobileMyPage /> : <DesktopMyPage />;
+  return <ResponsivePage mobile={MobileMyPage} desktop={DesktopMyPage} />;
 }
 
 export default MyPage;

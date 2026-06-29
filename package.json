@@ -1,0 +1,15 @@
+{
+  "name": "sportsmate",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "concurrently -k -n backend,frontend -c cyan,green \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && if exist .venv\\Scripts\\python.exe (.venv\\Scripts\\python.exe -m flask --app run.py run --port 5001) else (py -3.12 -m flask --app run.py run --port 5001)",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "install:frontend": "npm --prefix frontend install",
+    "build": "npm --prefix frontend run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

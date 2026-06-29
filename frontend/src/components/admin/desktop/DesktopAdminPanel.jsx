@@ -1,4 +1,3 @@
-import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import { adminApi } from "../../../api/adminApi";
 import { useAsync } from "../../../hooks/useAsync";
@@ -10,8 +9,13 @@ function DesktopAdminPanel({ title = "관리자" }) {
   const loading = users.loading || meetings.loading || reports.loading;
 
   return (
-    <>
-      <MobileHeader title={title} />
+    <div className="desktop-page">
+      <div className="screen-title">
+        <div>
+          <h1>{title}</h1>
+          <span>회원, 모임, 신고 현황을 PC 화면에서 확인합니다.</span>
+        </div>
+      </div>
       {loading ? (
         <LoadingCards count={2} />
       ) : (
@@ -34,7 +38,7 @@ function DesktopAdminPanel({ title = "관리자" }) {
           </section>
         </>
       )}
-    </>
+    </div>
   );
 }
 

@@ -1,8 +1,7 @@
-import MobileMyPage from "../mobile/MobileMyPage.jsx";
+import DesktopPrototype from "../../desktopPrototype/DesktopPrototype.jsx";
 
 function DesktopMyPage() {
-  return <div className="desktop-content"><MobileMyPage /></div>;
+  return <DesktopPrototype page="profile" />;
 }
 
 export default DesktopMyPage;
-

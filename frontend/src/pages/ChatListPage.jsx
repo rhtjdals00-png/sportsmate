@@ -1,10 +1,9 @@
-import { useResponsive } from "../hooks/useResponsive";
+import ResponsivePage from "../components/common/ResponsivePage.jsx";
 import MobileChatList from "../components/chat/mobile/MobileChatList.jsx";
 import DesktopChatList from "../components/chat/desktop/DesktopChatList.jsx";
 
 function ChatListPage() {
-  const { isMobile } = useResponsive();
-  return isMobile ? <MobileChatList /> : <DesktopChatList />;
+  return <ResponsivePage mobile={MobileChatList} desktop={DesktopChatList} />;
 }
 
 export default ChatListPage;

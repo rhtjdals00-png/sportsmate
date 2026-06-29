@@ -1,0 +1,289 @@
+﻿.board-control-card {
+  margin-bottom: 20px;
+}
+
+.board-search-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 90px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  padding: 6px 8px 6px 12px;
+}
+
+.board-search-row svg {
+  color: #64748b;
+}
+
+.board-search-row input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.board-search-row button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: #4f46e5;
+  color: #fff;
+  font-weight: 900;
+}
+
+.filter-bar {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.filter-bar button,
+.filter-bar select,
+.filter-bar input {
+  min-height: 38px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 0 13px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.filter-bar .tab-on {
+  border-color: #4f46e5;
+  background: #4f46e5;
+  color: #fff;
+}
+
+.board-table-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.board-table {
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.board-head,
+.board-row {
+  display: grid;
+  grid-template-columns: minmax(250px, 1.45fr) 0.78fr 1fr 1fr 0.85fr 0.65fr;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+}
+
+.board-head {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.board-row {
+  border-top: 1px solid #e2e8f0;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.board-row:hover {
+  background: #eef2ff;
+}
+
+.board-row img,
+.board-thumb-fallback {
+  float: left;
+  width: 56px;
+  height: 46px;
+  margin-right: 12px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.board-thumb-fallback {
+  display: inline-grid;
+  place-items: center;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.board-row b,
+.board-row small {
+  display: block;
+}
+
+.board-row small {
+  margin-top: 4px;
+  color: #64748b;
+}
+
+.board-badge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 6px 11px;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.board-badge.open {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.board-badge.joined {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.detail-grid,
+.profile-grid {
+  display: grid;
+  gap: 24px;
+}
+
+.detail-grid {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.host-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.host-line img {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.host-line b,
+.host-line small {
+  display: block;
+}
+
+.host-line small {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.detail-cover {
+  width: 100%;
+  max-height: 340px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.detail-cover--fallback {
+  display: grid;
+  min-height: 240px;
+  place-items: center;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-weight: 950;
+}
+
+.detail-tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 12px;
+}
+
+.detail-tabs button {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px 12px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.detail-tabs .tab-on {
+  border-color: #4f46e5;
+  background: #4f46e5;
+  color: #fff;
+}
+
+.detail-copy {
+  margin-top: 18px;
+  color: #334155;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.7;
+}
+
+.chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 18px 0;
+}
+
+.detail-sub-card {
+  margin-top: 18px;
+}
+
+.side-info h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.side-info p {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  padding: 10px 0;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.side-info svg {
+  width: 17px;
+  height: 17px;
+  color: #4f46e5;
+}
+
+.primary-btn.full,
+.ghost-btn.full {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.primary-btn {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #4f46e5;
+  color: #fff;
+  font-weight: 950;
+}
+
+.side-section {
+  margin-top: 22px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 18px;
+}
+

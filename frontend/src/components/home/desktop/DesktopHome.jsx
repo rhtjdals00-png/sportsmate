@@ -1,12 +1,7 @@
-import MobileHome from "../mobile/MobileHome.jsx";
+import DesktopPrototype from "../../desktopPrototype/DesktopPrototype.jsx";
 
 function DesktopHome() {
-  return (
-    <div className="desktop-content">
-      <MobileHome />
-    </div>
-  );
+  return <DesktopPrototype page="home" />;
 }
 
 export default DesktopHome;
-
