@@ -166,7 +166,17 @@ function MobileMeetingCreate() {
     <>
       <MobileHeader title="모임 만들기" />
       <form className="mobile-form" onSubmit={submit}>
-        <div className="form-progress">단계 {step}/3</div>
+        <div className="meeting-create-hero">
+          <span>SportsMate</span>
+          <h1>{form.meeting_type === "regular" ? "장기 모임 만들기" : "단기 모임 만들기"}</h1>
+          <p>운동 종목, 일정, 장소 정보를 순서대로 입력합니다.</p>
+        </div>
+        <div className="form-progress">
+          <span>단계 {step}/3</span>
+          <div aria-hidden="true">
+            {[1, 2, 3].map((item) => <i key={item} className={item <= step ? "active" : ""} />)}
+          </div>
+        </div>
         {step === 1 && (
           <section>
             <label>
@@ -203,13 +213,10 @@ function MobileMeetingCreate() {
                 ))}
               </div>
             )}
-            <label>
-              모임 유형
-              <select value={form.meeting_type} onChange={(event) => update("meeting_type", event.target.value)}>
-                <option value="one_time">단발 모임</option>
-                <option value="regular">정기 모임</option>
-              </select>
-            </label>
+            <div className="meeting-type-segment" role="group" aria-label="모임 유형">
+              <button type="button" className={form.meeting_type === "one_time" ? "active" : ""} onClick={() => update("meeting_type", "one_time")}>단기 모임</button>
+              <button type="button" className={form.meeting_type === "regular" ? "active" : ""} onClick={() => update("meeting_type", "regular")}>장기 모임</button>
+            </div>
             <label>
               모집 목적
               <input value={form.purpose} onChange={(event) => update("purpose", event.target.value)} />

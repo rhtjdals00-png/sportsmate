@@ -1,4 +1,4 @@
-﻿@import "./styles/00-base.css";
+@import "./styles/00-base.css";
 @import "./styles/01-desktop-foundation.css";
 @import "./styles/02-home.css";
 @import "./styles/03-board-detail.css";
@@ -15,3 +15,4 @@
 @import "./styles/14-calendar-modals.css";
 @import "./styles/15-legacy-overrides.css";
 @import "./styles/16-prototype-keyframes.css";
+@import "./styles/17-mobile-stitch.css";

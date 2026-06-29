@@ -3,6 +3,7 @@ import ResponsiveLayout from "../layouts/ResponsiveLayout.jsx";
 import HomePage from "../pages/HomePage.jsx";
 import LoginPage from "../pages/LoginPage.jsx";
 import RegisterPage from "../pages/RegisterPage.jsx";
+import AuthCallbackPage from "../pages/AuthCallbackPage.jsx";
 import MeetingListPage from "../pages/MeetingListPage.jsx";
 import MeetingDetailPage from "../pages/MeetingDetailPage.jsx";
 import MeetingCreatePage from "../pages/MeetingCreatePage.jsx";
@@ -37,6 +38,7 @@ function AppRouter() {
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="/meetings" element={<MeetingListPage />} />
         <Route path="/meetings/create" element={protect(<MeetingCreatePage />)} />
         <Route path="/meetings/:meetingId" element={<MeetingDetailPage />} />

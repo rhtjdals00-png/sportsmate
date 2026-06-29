@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { CalendarPlus, MapPinned, Search, Sparkles } from "lucide-react";
+import { Bike, CalendarPlus, Dumbbell, Footprints, MapPinned, Mountain, Search, Sparkles, Trophy, Waves } from "lucide-react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import MeetingCard from "../../meeting/shared/MeetingCard.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
@@ -10,6 +10,15 @@ import { useAsync } from "../../../hooks/useAsync";
 function MobileHome() {
   const meetings = useAsync(() => meetingApi.list({ limit: 5 }), []);
   const categories = useAsync(() => sportApi.categories(), []);
+  const sportShortcuts = [
+    { label: "농구", icon: Trophy },
+    { label: "축구", icon: Footprints },
+    { label: "러닝", icon: Footprints },
+    { label: "헬스", icon: Dumbbell },
+    { label: "등산", icon: Mountain },
+    { label: "자전거", icon: Bike },
+    { label: "수영", icon: Waves }
+  ];
 
   return (
     <>
@@ -33,6 +42,18 @@ function MobileHome() {
           모임 만들기
         </Link>
       </div>
+
+      <section className="home-sport-shortcuts" aria-label="인기 종목 바로가기">
+        {sportShortcuts.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Link key={item.label} to={`/meetings?keyword=${encodeURIComponent(item.label)}`}>
+              <Icon size={22} />
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+      </section>
 
       <section className="section">
         <div className="section-title">
@@ -68,4 +89,3 @@ function MobileHome() {
 }
 
 export default MobileHome;
-

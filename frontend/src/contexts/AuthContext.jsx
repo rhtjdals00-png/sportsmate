@@ -34,6 +34,12 @@ export function AuthProvider({ children }) {
         setUser(data.user);
         return data;
       },
+      async socialLogin(payload) {
+        const data = await authApi.socialLogin(payload);
+        localStorage.setItem("sportsmate_token", data.access_token);
+        setUser(data.user);
+        return data;
+      },
       logout() {
         localStorage.removeItem("sportsmate_token");
         setUser(null);

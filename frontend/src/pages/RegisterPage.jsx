@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Button from "../components/common/Button.jsx";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
+import SocialLoginButtons from "../components/auth/SocialLoginButtons.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 
 function RegisterPage() {
@@ -23,10 +24,10 @@ function RegisterPage() {
         <label>이메일<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
         <label>비밀번호<input required type="password" minLength="8" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></label>
         <Button type="submit">가입하기</Button>
+        <SocialLoginButtons />
       </form>
     </>
   );
 }
 
 export default RegisterPage;
-

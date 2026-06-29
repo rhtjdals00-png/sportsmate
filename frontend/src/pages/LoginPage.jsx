@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Button from "../components/common/Button.jsx";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
+import SocialLoginButtons from "../components/auth/SocialLoginButtons.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 
 function LoginPage() {
@@ -29,6 +30,7 @@ function LoginPage() {
           <input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
         </label>
         <Button type="submit">로그인</Button>
+        <SocialLoginButtons />
         <Link to="/register">계정 만들기</Link>
       </form>
     </>

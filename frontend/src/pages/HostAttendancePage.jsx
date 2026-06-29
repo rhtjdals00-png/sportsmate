@@ -18,8 +18,11 @@ function HostAttendancePage() {
         <div className="attendance-list">
           {(attendance.data?.approved_participants || []).map((participant) => (
             <article key={participant.id}>
-              <strong>{participant.user.nickname}</strong>
-              <span>{checkedIds.has(participant.user.id) ? "출석 완료" : "미출석"}</span>
+              <div>
+                <img src={participant.user.profile_image_url || "/images/logo.png"} alt="" />
+                <strong>{participant.user.nickname}</strong>
+              </div>
+              <span className={checkedIds.has(participant.user.id) ? "checked" : ""}>{checkedIds.has(participant.user.id) ? "출석 완료" : "미출석"}</span>
             </article>
           ))}
         </div>

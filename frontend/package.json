@@ -10,13 +10,14 @@
     "lint": "eslint src --ext .js,.jsx"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.108.2",
     "@vitejs/plugin-react": "^4.3.4",
     "axios": "^1.7.9",
     "lucide-react": "^0.468.0",
-    "vite": "^6.0.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.1"
+    "react-router-dom": "^6.28.1",
+    "vite": "^6.0.7"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.20",
@@ -26,4 +27,3 @@
     "tailwindcss": "^3.4.17"
   }
 }
-

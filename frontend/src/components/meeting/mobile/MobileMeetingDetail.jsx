@@ -98,9 +98,12 @@ function MobileMeetingDetail() {
     <>
       <MobileHeader title="모임 상세" />
       <article className="detail-page">
-        <div className="detail-cover">
-          <span>{meeting.sport?.name}</span>
-          <strong>{meeting.title}</strong>
+        <div className="detail-cover" style={meeting.cover_image_url ? { backgroundImage: `linear-gradient(180deg, rgba(15, 23, 42, 0.14), rgba(15, 23, 42, 0.76)), url(${meeting.cover_image_url})` } : undefined}>
+          <div>
+            <span>{meeting.sport?.name}</span>
+            <strong>{meeting.title}</strong>
+            <p>{meeting.location_name}</p>
+          </div>
         </div>
         <div className="detail-card">
           <div className="meeting-card__top">
