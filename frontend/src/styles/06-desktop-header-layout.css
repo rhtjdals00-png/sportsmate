@@ -99,7 +99,8 @@
   gap: 10px;
 }
 
-.desktop-header__actions > a {
+.desktop-header__actions > a,
+.desktop-header__actions > button {
   min-height: 38px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -112,6 +113,11 @@
 
 .desktop-header__login {
   gap: 6px;
+}
+
+.desktop-header__actions > button {
+  cursor: pointer;
+  font: inherit;
 }
 
 .desktop-header__nav-row {
@@ -149,3 +155,56 @@
   padding: 28px 0 48px;
 }
 
+.desktop-logout-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.34);
+  padding: 20px;
+}
+
+.desktop-logout-modal__panel {
+  width: min(100%, 360px);
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 22px;
+  box-shadow: 0 22px 55px rgba(15, 23, 42, 0.22);
+}
+
+.desktop-logout-modal__panel h2 {
+  margin: 0;
+  color: #172554;
+  font-size: 19px;
+  letter-spacing: 0;
+}
+
+.desktop-logout-modal__panel p {
+  margin: 9px 0 20px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.desktop-logout-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.desktop-logout-modal__actions button {
+  min-height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #475569;
+  padding: 0 14px;
+  font-weight: 800;
+}
+
+.desktop-logout-modal__actions button.is-primary {
+  border-color: #4f46e5;
+  background: #4f46e5;
+  color: #fff;
+}

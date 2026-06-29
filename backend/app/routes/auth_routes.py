@@ -1,10 +1,74 @@
-from flask import Blueprint, jsonify, request
+﻿from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.models import User
-from app.services.auth_service import login_user, register_user
+from app.services.auth_service import login_user, register_user, sync_supabase_user
 
 auth_bp = Blueprint("auth", __name__)
+
+CHECKABLE_FIELDS = {
+    "email": User.email,
+    "nickname": User.nickname,
+    "phone_number": User.phone_number,
+}
+
+FIELD_LABELS = {
+    "email": "이메일",
+    "nickname": "닉네임",
+    "phone_number": "핸드폰 번호",
+}
+
+
+def normalize_phone_number(value):
+    digits = "".join(ch for ch in (value or "") if ch.isdigit())[:11]
+    if not digits:
+        return ""
+    if len(digits) <= 3:
+        return digits
+    if len(digits) <= 7:
+        return f"{digits[:3]}-{digits[3:]}"
+    return f"{digits[:3]}-{digits[3:7]}-{digits[7:]}"
+
+
+@auth_bp.get("/availability")
+def availability():
+    field = (request.args.get("field") or "").strip()
+    value = (request.args.get("value") or "").strip()
+
+    if field not in CHECKABLE_FIELDS:
+        return jsonify({"message": "확인할 수 없는 항목입니다."}), 400
+    if not value:
+        return jsonify({"available": True, "message": ""})
+
+    if field == "email":
+        value = value.lower()
+    if field == "phone_number":
+        value = normalize_phone_number(value)
+
+    exists = User.query.filter(CHECKABLE_FIELDS[field] == value).first() is not None
+    label = FIELD_LABELS[field]
+    return jsonify({
+        "available": not exists,
+        "message": f"이미 사용 중인 {label}입니다." if exists else f"사용 가능한 {label}입니다."
+    })
+
+
+@auth_bp.post("/email-verification")
+def request_email_verification():
+    email = ((request.get_json() or {}).get("email") or "").strip().lower()
+    if not email:
+        return jsonify({"message": "이메일을 입력해주세요."}), 400
+    if User.query.filter_by(email=email).first():
+        return jsonify({"message": "이미 가입된 이메일입니다."}), 400
+    return jsonify({"message": "Supabase Auth에서 인증 메일을 발송합니다."})
+
+
+@auth_bp.post("/sync")
+def sync_user():
+    try:
+        return jsonify(sync_supabase_user(request.get_json() or {}))
+    except ValueError as error:
+        return jsonify({"message": str(error)}), 400
 
 
 @auth_bp.post("/register")
@@ -33,4 +97,3 @@ def logout():
 def me():
     user = User.query.get_or_404(int(get_jwt_identity()))
     return jsonify({"user": user.to_dict()})
-
