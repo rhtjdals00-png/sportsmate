@@ -44,6 +44,7 @@ function DesktopAuthPage({
   availability = {},
   onChange,
   onSubmit,
+  onCheckPhoneNumber,
   onCheckNickname,
   onEmailVerification,
   emailVerified = false,
@@ -114,7 +115,7 @@ function DesktopAuthPage({
 
               <label>
                 핸드폰 번호
-                <span>
+                <span className="desktop-auth-inline-action">
                   <Phone size={18} />
                   <input
                     type="tel"
@@ -124,6 +125,7 @@ function DesktopAuthPage({
                     onChange={(event) => onChange({ ...form, phone_number: event.target.value })}
                     placeholder="선택 입력"
                   />
+                  <button type="button" onClick={onCheckPhoneNumber}>중복확인</button>
                 </span>
                 <AvailabilityMessage state={availability.phone_number} />
               </label>
