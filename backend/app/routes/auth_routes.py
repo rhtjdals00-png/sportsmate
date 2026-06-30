@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.models import User
-from app.services.auth_service import login_user, register_user, sync_supabase_user
+from app.services.auth_service import login_user, login_with_supabase, register_user, sync_supabase_user
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -39,6 +39,9 @@ def availability():
         return jsonify({"message": "확인할 수 없는 항목입니다."}), 400
     if not value:
         return jsonify({"available": True, "message": ""})
+
+    if field == "nickname":
+        return jsonify({"available": True, "message": "사용 가능한 닉네임입니다."})
 
     if field == "email":
         value = value.lower()

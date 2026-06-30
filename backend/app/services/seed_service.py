@@ -54,13 +54,13 @@ def seed_database():
             db.session.add(sport)
             sports.append(sport)
 
-    demo = User(email="demo@sportsmate.kr", nickname="스포츠메이트")
+    demo = User(email="demo@sportsmate.kr", nickname="스포츠메이트", user_tag="D001")
     demo.set_password("password123")
     demo.profile = UserProfile(region="서울 강남구", exercise_level="intermediate", preferred_sports="러닝, 배드민턴")
     db.session.add(demo)
     db.session.flush()
 
-    applicant = User(email="mate@sportsmate.kr", nickname="운동메이트")
+    applicant = User(email="mate@sportsmate.kr", nickname="운동메이트", user_tag="D002")
     applicant.set_password("password123")
     applicant.profile = UserProfile(region="서울 송파구", exercise_level="beginner", preferred_sports="러닝, 배드민턴")
     db.session.add(applicant)

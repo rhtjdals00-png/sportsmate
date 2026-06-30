@@ -1,4 +1,4 @@
-﻿import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import ResponsiveLayout from "../layouts/ResponsiveLayout.jsx";
 import HomePage from "../pages/HomePage.jsx";
 import LoginPage from "../pages/LoginPage.jsx";
@@ -14,6 +14,8 @@ import ChatListPage from "../pages/ChatListPage.jsx";
 import ChatRoomPage from "../pages/ChatRoomPage.jsx";
 import MyPage from "../pages/MyPage.jsx";
 import ProfileEditPage from "../pages/ProfileEditPage.jsx";
+import ProfileIntroPage from "../pages/ProfileIntroPage.jsx";
+import ProfileSetupPage from "../pages/ProfileSetupPage.jsx";
 import MyMeetingsPage from "../pages/MyMeetingsPage.jsx";
 import MyReviewsPage from "../pages/MyReviewsPage.jsx";
 import HostDashboardPage from "../pages/HostDashboardPage.jsx";
@@ -53,6 +55,8 @@ function AppRouter() {
         <Route path="/map" element={<MapPage />} />
         <Route path="/mypage" element={protect(<MyPage />)} />
         <Route path="/mypage/profile" element={protect(<ProfileEditPage />)} />
+        <Route path="/profile/intro" element={protect(<ProfileIntroPage />)} />
+        <Route path="/profile/setup" element={protect(<ProfileSetupPage />)} />
         <Route path="/mypage/meetings" element={protect(<MyMeetingsPage />)} />
         <Route path="/mypage/reviews" element={protect(<MyReviewsPage />)} />
         <Route path="/host" element={protect(<HostDashboardPage />)} />
