@@ -9,6 +9,7 @@ import { userApi } from "../api/userApi";
 import { sportApi } from "../api/sportApi";
 import { locationApi } from "../api/locationApi";
 import { koreaRegions } from "../data/koreaRegions";
+import { useResponsive } from "../hooks/useResponsive";
 
 const T = {
   title: "\ud504\ub85c\ud544 \uc124\uc815",
@@ -61,7 +62,7 @@ const fallbackSportGroups = [
 ];
 
 
-// 모바일 프로필 설정 화면에서 사용하는 기본 종목 데이터입니다.
+// 筌뤴뫀而???袁⑥쨮????쇱젟 ?遺얇늺?癒?퐣 ?????롫뮉 疫꿸퀡???ル굝???怨쀬뵠?怨쀬뿯??덈뼄.
 const fallbackCategories = fallbackSportGroups.map((group) => group.category);
 const fallbackSports = fallbackSportGroups.flatMap((group) =>
   group.sports.map((name, index) => ({
@@ -91,8 +92,9 @@ function splitSports(value) {
     .filter(Boolean);
 }
 
-// 모바일 전용 프로필 설정 컴포넌트입니다. PC 화면은 아래 ProfileEditPage 분기에서 DesktopProfileEdit을 사용합니다.
+// 筌뤴뫀而???袁⑹뒠 ?袁⑥쨮????쇱젟 ?뚮똾猷??곕뱜??낅빍?? PC ?遺얇늺?? ?袁⑥삋 ProfileEditPage ?브쑨由?癒?퐣 DesktopProfileEdit???????몃빍??
 function MobileProfileEditPage() {
+  const { isMobile } = useResponsive();
   const navigate = useNavigate();
   const { user, setCurrentUser } = useAuth();
   const initialSports = useMemo(() => splitSports(user?.profile?.preferred_sports), [user?.profile?.preferred_sports]);
@@ -282,7 +284,7 @@ function MobileProfileEditPage() {
 
   return (
     <>
-      <MobileHeader title={T.title} />
+      {isMobile ? <MobileHeader title={T.title} /> : null}
       <main className="profile-setup-page">
         <form className="profile-setup" onSubmit={submit}>
           <section className="profile-setup__intro">
@@ -471,7 +473,11 @@ function MobileProfileEditPage() {
   );
 }
 
-// PC와 모바일 프로필 설정 화면을 접속 기기 기준으로 분기합니다.
+export function ProfileSetupPage() {
+  return <MobileProfileEditPage />;
+}
+
+// PC와 모바일 프로필 수정 화면을 접속 기기 기준으로 분기합니다.
 function ProfileEditPage() {
   const { isMobile } = useResponsive();
   return isMobile ? <MobileProfileEditPage /> : <DesktopProfileEdit />;

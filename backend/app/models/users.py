@@ -16,7 +16,8 @@ class User(db.Model, TimestampMixin):
     provider_id = db.Column(db.String(120))
     name = db.Column(db.String(80), nullable=False)
     phone_number = db.Column(db.String(30), nullable=True)
-    nickname = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    nickname = db.Column(db.String(80), nullable=False, index=True)
+    user_tag = db.Column(db.String(4), unique=True, nullable=False, index=True)
     profile_image_url = db.Column(db.Text)
     role = db.Column(db.String(30), default="user", nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
@@ -39,6 +40,9 @@ class User(db.Model, TimestampMixin):
             "name": self.name,
             "phone_number": self.phone_number,
             "nickname": self.nickname,
+            "user_tag": self.user_tag,
+            "user_tag_display": f"[{self.user_tag}]" if self.user_tag else "",
+            "nickname_with_tag": f"{self.nickname} [{self.user_tag}]" if self.user_tag else self.nickname,
             "profile_image_url": self.profile_image_url,
             "role": self.role,
             "is_active": self.is_active,

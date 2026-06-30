@@ -1,7 +1,11 @@
-
 import json
 import re
+import secrets
+import string
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
+from flask import current_app
 from flask_jwt_extended import create_access_token
 
 from app.extensions import db
@@ -34,10 +38,20 @@ def validate_password(password):
 
 def normalize_profile_payload(data):
     email = (data.get("email") or "").strip().lower()
+    email_name = email.split("@")[0] if email else ""
     name = (data.get("name") or data.get("full_name") or "").strip()
     phone_number = normalize_phone_number(data.get("phone_number"))
-    nickname = (data.get("nickname") or name or email.split("@")[0]).strip()
+    nickname = (data.get("nickname") or name or email_name).strip()
     return email, name, phone_number, nickname
+
+
+def generate_user_tag():
+    alphabet = string.ascii_letters + string.digits
+    for _ in range(100):
+        candidate = "".join(secrets.choice(alphabet) for _ in range(4))
+        if not User.query.filter_by(user_tag=candidate).first():
+            return candidate
+    raise ValueError("사용자 태그를 생성하지 못했습니다. 다시 시도해주세요.")
 
 
 def sync_supabase_user(data):
@@ -61,15 +75,9 @@ def sync_supabase_user(data):
         user = User.query.filter_by(email=email).first()
     is_new_user = user is None
 
-    nickname_owner = User.query.filter_by(nickname=nickname).first()
-    if nickname_owner and (not user or nickname_owner.id != user.id):
-        if data.get("allow_nickname_suffix"):
-            nickname = f"{nickname}#{auth_user_id[:6]}"
-        else:
-            raise ValueError("이미 사용 중인 닉네임입니다.")
 
     if not user:
-        user = User(email=email, auth_user_id=auth_user_id, name=name, phone_number=phone_number, nickname=nickname)
+        user = User(email=email, auth_user_id=auth_user_id, name=name, phone_number=phone_number, nickname=nickname, user_tag=generate_user_tag())
         db.session.add(user)
     else:
         user.auth_user_id = user.auth_user_id or auth_user_id
@@ -77,6 +85,7 @@ def sync_supabase_user(data):
         user.name = name or user.name
         user.phone_number = phone_number if phone_number is not None else user.phone_number
         user.nickname = nickname or user.nickname
+        user.user_tag = user.user_tag or generate_user_tag()
 
     user.provider = provider
     user.provider_id = provider_id
@@ -114,16 +123,13 @@ def register_user(data):
     validate_password(password)
     if User.query.filter_by(email=email).first():
         raise ValueError("이미 가입된 이메일입니다.")
-    if User.query.filter_by(nickname=nickname).first():
-        raise ValueError("이미 사용 중인 닉네임입니다.")
-
     preferred_sports = data.get("preferred_sports") or []
     if isinstance(preferred_sports, list):
         preferred_sports_value = ",".join(str(item).strip() for item in preferred_sports if str(item).strip())
     else:
         preferred_sports_value = str(preferred_sports)
 
-    user = User(email=email, name=name, phone_number=phone_number, nickname=nickname)
+    user = User(email=email, name=name, phone_number=phone_number, nickname=nickname, user_tag=generate_user_tag())
     user.set_password(password)
     user.profile = UserProfile(
         region=(data.get("region") or "").strip() or "서울",
@@ -156,12 +162,13 @@ def login_with_supabase(data):
     app_metadata = supabase_user.get("app_metadata") or {}
     provider = app_metadata.get("provider") or data.get("provider") or "supabase"
     provider_id = supabase_user.get("id")
-    nickname = metadata.get("name") or metadata.get("full_name") or metadata.get("nickname") or email.split("@")[0]
+    nickname = metadata.get("nickname") or metadata.get("name") or metadata.get("full_name") or email.split("@")[0]
+    name = metadata.get("name") or metadata.get("full_name") or nickname
     avatar_url = metadata.get("avatar_url") or metadata.get("picture")
 
     user = User.query.filter_by(email=email).first()
     if not user:
-        user = User(email=email, nickname=nickname, provider=provider, provider_id=provider_id, profile_image_url=avatar_url)
+        user = User(email=email, name=name, nickname=nickname, user_tag=generate_user_tag(), provider=provider, provider_id=provider_id, profile_image_url=avatar_url)
         user.set_password(f"supabase:{provider}:{provider_id}")
         user.profile = UserProfile()
         db.session.add(user)
@@ -169,6 +176,7 @@ def login_with_supabase(data):
         user.provider = provider
         user.provider_id = provider_id or user.provider_id
         user.nickname = user.nickname or nickname
+        user.user_tag = user.user_tag or generate_user_tag()
         user.profile_image_url = user.profile_image_url or avatar_url
         if not user.profile:
             user.profile = UserProfile()

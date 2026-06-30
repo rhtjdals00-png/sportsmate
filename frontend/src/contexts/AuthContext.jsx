@@ -24,11 +24,12 @@ function metadataFromSupabaseUser(user, fallback = {}) {
   const email = user?.email || metadata.email || fallback.email || `${providerId}@${provider}.sportsmate.local`;
   const emailName = email.split("@")[0];
   const displayName = fallback.name || metadata.name || metadata.full_name || metadata.nickname || metadata.preferred_username || emailName;
+  const defaultNickname = fallback.nickname || metadata.nickname || metadata.name || metadata.full_name || metadata.preferred_username || emailName;
   return {
     auth_user_id: user?.id,
     email,
     name: displayName,
-    nickname: fallback.nickname || metadata.nickname || metadata.name || metadata.full_name || metadata.preferred_username || emailName,
+    nickname: defaultNickname,
     phone_number: fallback.phone_number || metadata.phone_number || user?.phone || "",
     provider,
     provider_id: providerId,
@@ -50,9 +51,10 @@ export function AuthProvider({ children }) {
     }
     if (typeof data.is_new_user === "boolean") {
       const currentRedirect = localStorage.getItem("sportsmate_post_auth_redirect");
-      if (data.is_new_user) {
-        localStorage.setItem("sportsmate_post_auth_redirect", "/mypage/profile");
-      } else if (currentRedirect !== "/mypage/profile") {
+      const needsProfile = data.is_new_user || data.profile_complete === false;
+      if (needsProfile) {
+        localStorage.setItem("sportsmate_post_auth_redirect", "/profile/intro");
+      } else if (currentRedirect !== "/profile/intro" && currentRedirect !== "/profile/setup") {
         localStorage.setItem("sportsmate_post_auth_redirect", "/");
       }
     }

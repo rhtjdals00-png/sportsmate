@@ -1,4 +1,4 @@
-﻿import { Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   ArrowRight,
   CheckCircle2,
@@ -75,7 +75,7 @@ function DesktopAuthPage({
             <p>이제 선호 종목, 운동 강도, 활동 지역을 설정하면 나에게 맞는 모임을 추천받을 수 있습니다.</p>
           </div>
           <div className="desktop-auth-complete__actions">
-            <Link className="desktop-auth-primary-link" to="/mypage/profile">
+            <Link className="desktop-auth-primary-link" to="/profile/intro">
               <Sparkles size={18} /> 맞춤 정보 추천받기
             </Link>
             <Link className="desktop-auth-secondary-link" to="/">
