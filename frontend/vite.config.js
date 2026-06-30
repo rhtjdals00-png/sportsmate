@@ -1,4 +1,4 @@
-// 내일 통합해보고 확인해볼 곳
+// Previous local Vite setup kept for merge/reference.
 // import { defineConfig, loadEnv } from "vite";
 // import react from "@vitejs/plugin-react";
 
@@ -21,7 +21,7 @@
 // });
 ////////////////////////////////////////////////////
 
-﻿// import { defineConfig, loadEnv } from "vite";
+// import { defineConfig, loadEnv } from "vite";
 // import react from "@vitejs/plugin-react";
 
 // function requiredEnv(env, name) {
@@ -34,19 +34,15 @@
 
 // export default defineConfig(({ mode }) => {
 //   const env = loadEnv(mode, process.cwd(), "");
-//   const devHost = env.VITE_DEV_HOST || "0.0.0.0";
-//   const devPort = Number(requiredEnv(env, "VITE_DEV_PORT"));
-//   const proxyTarget = requiredEnv(env, "VITE_API_PROXY_TARGET");
-
+//   const apiProxyTarget = env.VITE_API_PROXY_TARGET || "http://localhost:5001";
+//
 //   return {
 //     plugins: [react()],
 //     server: {
-//       host: devHost,
-//       port: devPort,
-//       strictPort: true,
+//       port: 5173,
 //       proxy: {
 //         "/api": {
-//           target: proxyTarget,
+//           target: apiProxyTarget,
 //           changeOrigin: true
 //         }
 //       }
@@ -55,22 +51,27 @@
 // });
 
 
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 
-const devPort = Number(process.env.VITE_DEV_PORT || 5173);
-const apiProxyTarget = process.env.VITE_API_PROXY_TARGET || "http://localhost:5001";
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  const devHost = env.VITE_DEV_HOST || "0.0.0.0";
+  const devPort = Number(env.VITE_DEV_PORT || 5173);
+  const apiProxyTarget = env.VITE_API_PROXY_TARGET || "http://127.0.0.1:5002";
 
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    port: devPort,
-    strictPort: true,
-    proxy: {
-      "/api": {
-        target: apiProxyTarget,
-        changeOrigin: true
+  return {
+    plugins: [react()],
+    server: {
+      host: devHost,
+      port: devPort,
+      strictPort: true,
+      proxy: {
+        "/api": {
+          target: apiProxyTarget,
+          changeOrigin: true
+        }
       }
     }
-  }
+  };
 });

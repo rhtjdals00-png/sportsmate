@@ -1,4 +1,4 @@
-﻿from app.extensions import db
+from app.extensions import db
 
 class SportCategory(db.Model):
     __tablename__ = "sport_categories"

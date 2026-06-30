@@ -1,4 +1,4 @@
-﻿# SportsMate
+# SportsMate
 
 SportsMate는 위치 기반 운동 메이트 모집 및 스포츠 커뮤니티 서비스입니다.
 PC와 모바일을 하나의 React 앱에서 반응형으로 분기하고, Flask API와 PostgreSQL/Supabase 기반 데이터베이스를 사용합니다.
@@ -75,3 +75,12 @@ backend/
 
 - `app.py`는 이전 정적 HTML 확인용 서버입니다. 필요한 경우 `STATIC_RUN_HOST`, `STATIC_RUN_PORT` env 값을 사용합니다.
 - 현재 개발 실행은 `npm run dev` 기준입니다.
+
+## 작업 기록
+
+### 2026-06-30
+
+- `ProfileEditPage.jsx`의 모바일/PC 분기 구조를 복구하고 모바일 전용 영역 주석을 추가했습니다.
+- 모바일 입력창 포커스 시 iOS 자동 확대가 발생하지 않도록 모바일 폼 컨트롤 글자 크기를 보정했습니다.
+- Vite 개발 서버가 `frontend/.env`의 `VITE_API_PROXY_TARGET`을 읽도록 프록시 설정을 정리했습니다.
+- 백엔드 Python 파일에 포함된 BOM 문자를 제거해 Flask import 오류를 방지했습니다.

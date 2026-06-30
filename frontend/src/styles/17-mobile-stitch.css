@@ -2266,3 +2266,10 @@
 .mobile-shell .message-bubble.mine time {
   color: rgba(255, 255, 255, 0.72);
 }
+
+/* iOS Safari에서 입력창 포커스 시 자동 확대되지 않도록 모바일 폼 컨트롤은 16px 이상을 유지합니다. */
+.mobile-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.mobile-shell select,
+.mobile-shell textarea {
+  font-size: 16px;
+}
