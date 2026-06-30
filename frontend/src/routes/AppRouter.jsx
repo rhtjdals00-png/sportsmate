@@ -24,10 +24,14 @@ import HostApplicantsPage from "../pages/HostApplicantsPage.jsx";
 import HostAttendancePage from "../pages/HostAttendancePage.jsx";
 import HostVotePage from "../pages/HostVotePage.jsx";
 import HostStatsPage from "../pages/HostStatsPage.jsx";
+import AdminLayout from "../layouts/AdminLayout.jsx";
 import AdminPage from "../pages/AdminPage.jsx";
 import AdminUsersPage from "../pages/AdminUsersPage.jsx";
+import AdminUserDetailPage from "../pages/AdminUserDetailPage.jsx";
 import AdminMeetingsPage from "../pages/AdminMeetingsPage.jsx";
+import AdminMeetingDetailPage from "../pages/AdminMeetingDetailPage.jsx";
 import AdminReportsPage from "../pages/AdminReportsPage.jsx";
+import AdminAnalyticsPage from "../pages/AdminAnalyticsPage.jsx";
 import NotFoundPage from "../pages/NotFoundPage.jsx";
 import NotificationsPage from "../pages/NotificationsPage.jsx";
 import MapPage from "../pages/MapPage.jsx";
@@ -65,13 +69,20 @@ function AppRouter() {
         <Route path="/host/meetings/:meetingId/attendance" element={protect(<HostAttendancePage />)} />
         <Route path="/host/meetings/:meetingId/vote" element={protect(<HostVotePage />)} />
         <Route path="/host/meetings/:meetingId/stats" element={protect(<HostStatsPage />)} />
-        <Route path="/admin" element={protect(<AdminPage />)} />
-        <Route path="/admin/users" element={protect(<AdminUsersPage />)} />
-        <Route path="/admin/meetings" element={protect(<AdminMeetingsPage />)} />
-        <Route path="/admin/reports" element={protect(<AdminReportsPage />)} />
         <Route path="/mobile/*" element={<Navigate to="/" replace />} />
         <Route path="/desktop/*" element={<Navigate to="/" replace />} />
         <Route path="*" element={<NotFoundPage />} />
+      </Route>
+
+      {/* 관리자 라우트 - 독립된 AdminLayout 적용 및 임시 Protect 해제 */}
+      <Route path="/admin" element={<AdminLayout />}>
+        <Route index element={<AdminPage />} />
+        <Route path="users" element={<AdminUsersPage />} />
+        <Route path="users/:userId" element={<AdminUserDetailPage />} />
+        <Route path="meetings" element={<AdminMeetingsPage />} />
+        <Route path="meetings/:meetingId" element={<AdminMeetingDetailPage />} />
+        <Route path="reports" element={<AdminReportsPage />} />
+        <Route path="analytics" element={<AdminAnalyticsPage />} />
       </Route>
     </Routes>
   );

@@ -238,7 +238,7 @@ function RegisterPage() {
       <form className="mobile-form auth-form" onSubmit={submit}>
         <label>이름<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
         <label>핸드폰 번호<input type="tel" value={form.phone_number} onChange={(event) => setForm({ ...form, phone_number: event.target.value })} /></label>
-        <label>닉네임<input required value={form.nickname} onChange={(event) => setForm({ ...form, nickname: event.target.value })} /></label>
+        <label>닉네임<input required maxLength={12} value={form.nickname} onChange={(event) => setForm({ ...form, nickname: event.target.value.slice(0, 12) })} /></label>
         <label>이메일<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
         <label>비밀번호<input required type="password" minLength="8" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></label>
 

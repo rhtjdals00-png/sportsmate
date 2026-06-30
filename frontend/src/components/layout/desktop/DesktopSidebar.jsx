@@ -1,4 +1,4 @@
-import { Bell, Home, MessageCircle, Shield, Trophy, User, UsersRound } from "lucide-react";
+import { Bell, Home, MessageCircle, Shield, User, UsersRound } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 const items = [
@@ -7,7 +7,6 @@ const items = [
   { to: "/chats", label: "채팅", icon: MessageCircle },
   { to: "/notifications", label: "알림", icon: Bell },
   { to: "/mypage", label: "마이페이지", icon: User },
-  { to: "/host", label: "방장 관리", icon: Trophy },
   { to: "/admin", label: "관리자", icon: Shield }
 ];
 

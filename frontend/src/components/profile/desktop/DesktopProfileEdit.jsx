@@ -11,6 +11,8 @@ const levelOptions = [
   { value: "advanced", label: "상급" }
 ];
 
+const NICKNAME_MAX_LENGTH = 12;
+
 const defaultSportCategories = [
   { id: "ball", name: "구기 종목", sports: ["축구", "풋살", "농구", "배구", "야구", "족구"] },
   { id: "racket", name: "라켓 스포츠", sports: ["배드민턴", "탁구", "테니스", "스쿼시"] },
@@ -20,6 +22,8 @@ const defaultSportCategories = [
 ];
 
 const desktopProfileFallback = {
+  name: "김강한",
+  phone_number: "010-1234-5678",
   nickname: "김강한",
   profile_image_url: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=200&q=80",
   region: "서울특별시 영등포구",
@@ -71,7 +75,9 @@ function DesktopProfileEdit() {
   const initialRegions = parseRegions(initialRegion);
   // 2026-06-29: PC 프로토타입에서도 기존 마이페이지 표시값을 보며 수정할 수 있도록 fallback 값을 채움.
   const [form, setForm] = useState({
-    nickname: user?.nickname || desktopProfileFallback.nickname,
+    name: user?.name || desktopProfileFallback.name,
+    phone_number: user?.phone_number || desktopProfileFallback.phone_number,
+    nickname: (user?.nickname || desktopProfileFallback.nickname).slice(0, NICKNAME_MAX_LENGTH),
     profile_image_url: user?.profile_image_url || desktopProfileFallback.profile_image_url,
     region: initialRegion,
     selected_regions: initialRegions.length ? initialRegions : [desktopProfileFallback.region],
@@ -89,6 +95,9 @@ function DesktopProfileEdit() {
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" });
   const [passwordStatus, setPasswordStatus] = useState("idle");
+  const [phoneModalOpen, setPhoneModalOpen] = useState(false);
+  const [phoneForm, setPhoneForm] = useState({ next: "", code: "" });
+  const [phoneStatus, setPhoneStatus] = useState("idle");
   const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
   const [withdrawText, setWithdrawText] = useState("");
   const [withdrawStatus, setWithdrawStatus] = useState("idle");
@@ -141,7 +150,7 @@ function DesktopProfileEdit() {
   };
 
   const updateNickname = (value) => {
-    update("nickname", value);
+    update("nickname", value.slice(0, NICKNAME_MAX_LENGTH));
     setNicknameStatus("idle");
   };
 
@@ -181,6 +190,27 @@ function DesktopProfileEdit() {
       return;
     }
     setPasswordStatus("success");
+  };
+
+  const openPhoneChange = () => {
+    setPhoneForm({ next: form.phone_number, code: "" });
+    setPhoneStatus("idle");
+    setPhoneModalOpen(true);
+  };
+
+  const updatePhoneForm = (key, value) => {
+    setPhoneStatus("idle");
+    setPhoneForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const submitPhoneChange = () => {
+    // 2026-06-30: 실제 휴대폰 인증 API 연결 전까지 번호 변경 모달 흐름만 mock 처리.
+    if (!phoneForm.next.trim() || !phoneForm.code.trim()) {
+      setPhoneStatus("empty");
+      return;
+    }
+    update("phone_number", phoneForm.next.trim());
+    setPhoneStatus("success");
   };
 
   const submitWithdraw = () => {
@@ -240,6 +270,8 @@ function DesktopProfileEdit() {
     }
 
     const data = await userApi.updateMe({
+      name: form.name,
+      phone_number: form.phone_number,
       nickname: form.nickname,
       profile_image_url: form.profile_image_url,
       region: form.region,
@@ -264,39 +296,59 @@ function DesktopProfileEdit() {
         </div>
       </div>
 
-      <div className="desktop-profile-edit__grid">
-        <section className="page-card desktop-profile-preview">
-          <img src={form.profile_image_url || "/images/logo.png"} alt="프로필 미리보기" />
-          <h2>{form.nickname || "닉네임"} {displayTag}</h2>
-          <p>{savedIntro}</p>
-        </section>
+      <section className="page-card desktop-profile-top-card">
+        <div className="section-head">
+          <h2>기본 정보</h2>
+        </div>
+        <div className="desktop-profile-top-content">
+          <div className="desktop-profile-preview">
+            <img src={form.profile_image_url || "/images/logo.png"} alt="프로필 미리보기" />
+            <h2>{form.nickname || "닉네임"}</h2>
+            <p>{savedIntro}</p>
+          </div>
 
-        <section className="page-card desktop-profile-edit-panel">
-          <div className="section-head">
-            <h2>기본 정보</h2>
+          <div className="desktop-profile-basic-panel">
+          {/* 2026-06-30: 읽기 전용 계정 정보, 수정 가능한 닉네임, 인증형 연락처 순서로 기본 정보를 정리. */}
+            <div className="desktop-profile-form-grid desktop-basic-info-grid">
+              <label>
+                이름
+                <div className="desktop-basic-action-row">
+                  <span className="desktop-readonly-field">{form.name}</span>
+                  <span aria-hidden="true" />
+                </div>
+              </label>
+              <label>
+                이메일
+                <div className="desktop-basic-action-row">
+                  <span className="desktop-readonly-field">{user?.email || "demo@sportsmate.kr"}</span>
+                  <span aria-hidden="true" />
+                </div>
+              </label>
+              <label>
+                닉네임
+                <div className="desktop-basic-action-row">
+                  <span className="desktop-edit-input desktop-edit-input--counted">
+                    <input maxLength={NICKNAME_MAX_LENGTH} value={form.nickname} onChange={(event) => updateNickname(event.target.value)} />
+                    <em>{form.nickname.length}/{NICKNAME_MAX_LENGTH}</em>
+                    <Pencil size={15} />
+                  </span>
+                  <button type="button" onClick={checkNickname}>중복 확인</button>
+                </div>
+                {nicknameStatus === "available" && <em className="nickname-check ok">사용 가능한 닉네임입니다.</em>}
+                {nicknameStatus === "duplicate" && <em className="nickname-check warn">이미 사용 중인 닉네임입니다.</em>}
+                {nicknameStatus === "empty" && <em className="nickname-check warn">닉네임을 입력해주세요.</em>}
+              </label>
+              <label>
+                핸드폰 번호
+                <div className="desktop-basic-action-row">
+                  <span className="desktop-readonly-field">{form.phone_number}</span>
+                  <button type="button" onClick={openPhoneChange}>번호 변경</button>
+                </div>
+              </label>
+            </div>
           </div>
-          {/* 2026-06-29: 기본 정보는 닉네임과 이메일을 세로 흐름으로 정리해 수정/확인 성격을 구분. */}
-          <div className="desktop-profile-form-grid desktop-basic-info-grid">
-            <label>
-              닉네임
-              <div className="desktop-nickname-row">
-                <span className="desktop-edit-input">
-                  <input value={form.nickname} onChange={(event) => updateNickname(event.target.value)} />
-                  <Pencil size={15} />
-                </span>
-                <button type="button" onClick={checkNickname}>중복 확인</button>
-              </div>
-              {nicknameStatus === "available" && <em className="nickname-check ok">사용 가능한 닉네임입니다.</em>}
-              {nicknameStatus === "duplicate" && <em className="nickname-check warn">이미 사용 중인 닉네임입니다.</em>}
-              {nicknameStatus === "empty" && <em className="nickname-check warn">닉네임을 입력해주세요.</em>}
-            </label>
-            <label>
-              이메일
-              <span className="desktop-readonly-field">{user?.email || "demo@sportsmate.kr"}</span>
-            </label>
-          </div>
-        </section>
-      </div>
+        </div>
+      </section>
 
       <section className="page-card desktop-profile-edit-panel">
         <div className="section-head">
@@ -309,7 +361,7 @@ function DesktopProfileEdit() {
               <Search size={16} />
               <input
                 value={regionQuery}
-                placeholder="예) 영통구, 잠실동, 수원역 근처"
+                placeholder="운동하고 싶은 지역이나 장소를 검색해보세요"
                 onChange={(event) => setRegionQuery(event.target.value)}
                 onKeyDown={(event) => event.key === "Enter" && (event.preventDefault(), searchRegion())}
               />
@@ -459,6 +511,29 @@ function DesktopProfileEdit() {
             <div>
               <button className="ghost-btn" type="button" onClick={() => setPasswordModalOpen(false)}>취소</button>
               <button className="primary-small" type="button" onClick={submitPasswordChange}>변경하기</button>
+            </div>
+          </section>
+        </div>
+      )}
+      {phoneModalOpen && (
+        <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setPhoneModalOpen(false)}>
+          <section className="profile-auth-modal password-change-modal">
+            <button className="schedule-modal-close" type="button" onClick={() => setPhoneModalOpen(false)}><X size={18} /></button>
+            <h2>핸드폰 번호 변경</h2>
+            <p>새 번호를 입력하고 인증번호 확인까지 완료하면 변경됩니다. 지금은 프론트 확인 흐름만 동작합니다.</p>
+            <label>
+              새 핸드폰 번호
+              <input value={phoneForm.next} onChange={(event) => updatePhoneForm("next", event.target.value)} placeholder="010-0000-0000" />
+            </label>
+            <label>
+              인증번호
+              <input value={phoneForm.code} onChange={(event) => updatePhoneForm("code", event.target.value)} placeholder="인증번호 입력" />
+            </label>
+            {phoneStatus === "empty" && <em className="nickname-check warn">새 번호와 인증번호를 입력해주세요.</em>}
+            {phoneStatus === "success" && <em className="nickname-check ok">핸드폰 번호 변경 흐름이 확인되었습니다.</em>}
+            <div>
+              <button className="ghost-btn" type="button" onClick={() => setPhoneModalOpen(false)}>취소</button>
+              <button className="primary-small" type="button" onClick={submitPhoneChange}>변경 완료</button>
             </div>
           </section>
         </div>

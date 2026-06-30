@@ -323,7 +323,7 @@ function MobileProfileEditPage() {
               </label>
               <label>
                 <span>{T.nickname}</span>
-                <input value={form.nickname} onChange={(event) => updateField("nickname", event.target.value)} placeholder={T.nicknamePlaceholder} required />
+                <input maxLength={12} value={form.nickname} onChange={(event) => updateField("nickname", event.target.value.slice(0, 12))} placeholder={T.nicknamePlaceholder} required />
               </label>
               <label>
                 <span>{T.phone}</span>

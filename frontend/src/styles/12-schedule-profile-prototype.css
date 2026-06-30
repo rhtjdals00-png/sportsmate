@@ -135,6 +135,7 @@
 .desktop-prototype .proto-schedule-item--profile {
   grid-template-columns: 96px minmax(0, 1fr);
   gap: 16px;
+  min-height: 130px;
   border: 1px solid #f1f5f9;
   border-radius: 16px;
   background: #f8fafc;

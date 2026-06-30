@@ -77,6 +77,9 @@ function DesktopHeader() {
             </button>
           </form>
           <div className="desktop-header__actions">
+            <Link to="/admin" className="desktop-header__admin-btn">
+              관리자 대시보드
+            </Link>
             {isAuthenticated ? (
               <button type="button" className="desktop-header__login" onClick={() => setShowLogoutConfirm(true)} title={user?.email || copy.logout}>
                 <LogOut size={16} />

@@ -158,3 +158,421 @@
   font-weight: 950;
 }
 
+/* 2026-06-30: PC 모임게시판을 모바일 기능 흐름과 맞추고, 긴 데이터에도 화면이 흔들리지 않도록 정리 */
+.desktop-meeting-board {
+  display: grid;
+  gap: 24px;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.desktop-meeting-board__title h1 {
+  font-weight: 900;
+}
+
+.desktop-meeting-board__view-toggle,
+.desktop-meeting-board__search button,
+.desktop-meeting-board__quick-filters button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.desktop-meeting-board__view-toggle {
+  min-height: 42px;
+  border: 0;
+  background: #4f46e5;
+  color: #ffffff;
+  padding: 0 18px;
+  box-shadow: 0 12px 24px rgba(79, 70, 229, 0.18);
+}
+
+.desktop-meeting-board__view-toggle:hover,
+.desktop-meeting-board__search button:hover {
+  background: #4338ca;
+  transform: translateY(-1px);
+}
+
+.desktop-meeting-board__filters,
+.desktop-meeting-board__results,
+.desktop-meeting-map__canvas,
+.desktop-meeting-map__list {
+  border: 1px solid #dbe3f0;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.04);
+}
+
+.desktop-meeting-board__filters {
+  display: grid;
+  gap: 20px;
+  padding: 24px;
+}
+
+.desktop-meeting-board__search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  gap: 10px;
+}
+
+.desktop-meeting-board__search label {
+  display: flex;
+  min-width: 0;
+  min-height: 48px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #94a3b8;
+  padding: 0 16px;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.desktop-meeting-board__search label:focus-within {
+  border-color: rgba(79, 70, 229, 0.55);
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+}
+
+.desktop-meeting-board__search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.desktop-meeting-board__search button {
+  border: 0;
+  background: #4f46e5;
+  color: #ffffff;
+}
+
+.desktop-meeting-board__quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.desktop-meeting-board__quick-filters button,
+.desktop-meeting-board__quick-filters select {
+  min-height: 40px;
+  border: 1px solid #dbe3f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.desktop-meeting-board__quick-filters select {
+  min-width: 126px;
+  max-width: 180px;
+  outline: 0;
+}
+
+.desktop-meeting-board__quick-filters button:hover,
+.desktop-meeting-board__quick-filters select:hover {
+  border-color: rgba(79, 70, 229, 0.5);
+  color: #4f46e5;
+}
+
+.desktop-meeting-board__quick-filters button.is-active {
+  border-color: #4f46e5;
+  background: #4f46e5;
+  color: #ffffff;
+}
+
+.desktop-meeting-board__results {
+  padding: 24px;
+}
+
+.desktop-meeting-board__results .desktop-section__head {
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.desktop-meeting-board__results .desktop-section__head h2,
+.desktop-meeting-map__list .desktop-section__head h2 {
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.desktop-meeting-board__results .desktop-section__head span,
+.desktop-meeting-map__list .desktop-section__head span {
+  color: #4f46e5;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.desktop-meeting-list {
+  display: grid;
+  gap: 10px;
+}
+
+.desktop-meeting-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1.5fr) minmax(220px, 0.9fr) 96px;
+  min-height: 112px;
+  align-items: center;
+  gap: 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px 18px;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.desktop-meeting-row:hover {
+  border-color: rgba(79, 70, 229, 0.28);
+  background: #fbfcff;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
+  transform: translateY(-1px);
+}
+
+.desktop-meeting-row__thumb,
+.desktop-meeting-map__thumb {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: linear-gradient(135deg, #4f46e5, #0ea5e9);
+  background-position: center;
+  background-size: cover;
+  color: #ffffff;
+  text-align: center;
+  font-weight: 950;
+}
+
+.desktop-meeting-row__thumb {
+  width: 88px;
+  aspect-ratio: 1 / 0.72;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.desktop-meeting-row__main,
+.desktop-meeting-row__meta,
+.desktop-meeting-row__people,
+.desktop-meeting-map__list a span:last-child {
+  min-width: 0;
+}
+
+.desktop-meeting-row__main {
+  display: grid;
+  gap: 6px;
+}
+
+.desktop-meeting-row__badges {
+  display: flex;
+  min-width: 0;
+  gap: 6px;
+}
+
+.desktop-meeting-row__badges em,
+.desktop-meeting-status {
+  display: inline-flex;
+  max-width: 92px;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  padding: 0 9px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-meeting-row__badges .desktop-meeting-owner-badge {
+  max-width: 108px;
+  gap: 4px;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.desktop-meeting-owner-badge svg {
+  flex: 0 0 auto;
+}
+
+.desktop-meeting-status.is-open {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.desktop-meeting-status.is-joined {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.desktop-meeting-status.is-closed {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.desktop-meeting-row__main strong {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 950;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.desktop-meeting-row__main small,
+.desktop-meeting-map__list small {
+  display: block;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-meeting-row__meta {
+  display: grid;
+  gap: 8px;
+}
+
+.desktop-meeting-row__meta span,
+.desktop-meeting-row__people {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.desktop-meeting-row__meta svg,
+.desktop-meeting-row__people svg {
+  flex: 0 0 auto;
+  color: #4f46e5;
+}
+
+.desktop-meeting-row__meta b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-meeting-row__people {
+  justify-content: flex-end;
+  color: #0f172a;
+}
+
+.desktop-meeting-map {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 24px;
+}
+
+.desktop-meeting-map__canvas {
+  display: grid;
+  min-height: 520px;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  background:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+    linear-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+    #f8fafc;
+  background-size: 36px 36px;
+  color: #475569;
+}
+
+.desktop-meeting-map__canvas svg {
+  color: #4f46e5;
+}
+
+.desktop-meeting-map__canvas strong {
+  color: #0f172a;
+  font-size: 20px;
+  font-weight: 950;
+}
+
+.desktop-meeting-map__canvas span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.desktop-meeting-map__list {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 20px;
+}
+
+.desktop-meeting-map__list .desktop-section__head {
+  padding-bottom: 14px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.desktop-meeting-map__list a {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.desktop-meeting-map__list a:hover {
+  border-color: rgba(79, 70, 229, 0.3);
+  background: #fbfcff;
+}
+
+.desktop-meeting-map__thumb {
+  width: 64px;
+  height: 50px;
+  border-radius: 8px;
+}
+
+.desktop-meeting-map__list strong {
+  display: block;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .desktop-meeting-row {
+    grid-template-columns: 80px minmax(0, 1fr) 92px;
+  }
+
+  .desktop-meeting-row__meta {
+    display: none;
+  }
+
+  .desktop-meeting-map {
+    grid-template-columns: 1fr;
+  }
+}
+

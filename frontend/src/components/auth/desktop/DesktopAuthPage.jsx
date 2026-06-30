@@ -136,8 +136,9 @@ function DesktopAuthPage({
                   <UserRound size={18} />
                   <input
                     required
+                    maxLength={12}
                     value={form.nickname}
-                    onChange={(event) => onChange({ ...form, nickname: event.target.value })}
+                    onChange={(event) => onChange({ ...form, nickname: event.target.value.slice(0, 12) })}
                     placeholder="모임에서 사용할 이름"
                   />
                   <button type="button" onClick={onCheckNickname}>중복확인</button>

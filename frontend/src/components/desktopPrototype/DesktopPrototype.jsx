@@ -1,12 +1,14 @@
 import {
   BarChart3,
   Bike,
+  CalendarCheck,
   CalendarDays,
   Camera,
   Check,
   ChevronLeft,
   ChevronRight,
   CircleDot,
+  ClipboardCheck,
   ClipboardList,
   Crown,
   Dumbbell,
@@ -29,7 +31,9 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   UserRound,
+  UserCheck,
   Users,
+  Vote,
   X
 } from "lucide-react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -722,7 +726,7 @@ function DetailPage({ item }) {
             {joinedStates.has(item.state) ? "채팅방으로 이동" : "참가 신청"}
           </Link>
           {item.state === "host" && (
-            <Link className="ghost-btn full" to="/host">
+            <Link className="ghost-btn full" to={`/host/meetings/${item.id}`}>
               <LayoutDashboard size={15} />
               방장 대시보드
             </Link>
@@ -817,7 +821,7 @@ function TalkRoom({ item, talkSearchOpen, setTalkSearchOpen, talkInfoOpen, setTa
         </div>
         <span>
           {item.state === "host" && (
-            <Link className="host-chat-btn" to="/host">
+            <Link className="host-chat-btn" to={`/host/meetings/${item.id}`}>
               <LayoutDashboard size={15} />
               방장 대시보드
             </Link>
@@ -938,7 +942,7 @@ function ScheduleItem({ item, variant = "" }) {
   const showMemberBadge = !isHost && variant !== "profile";
   return (
     <article className={`proto-schedule-item ${variant ? `proto-schedule-item--${variant}` : ""} ${isHost ? "proto-schedule-item--host" : ""}`}>
-      {isHost && <Link className="schedule-manage-btn is-active" to="/host"><LayoutDashboard size={14} />관리</Link>}
+      {isHost && <Link className="schedule-manage-btn is-active" to={`/host/meetings/${item.id}`}><LayoutDashboard size={14} />관리</Link>}
       <img src={item.img} alt={item.title} />
       <div>
         {isHost && <div className="schedule-item-status"><span className="host-badge"><Crown size={13} />내가 방장</span></div>}
@@ -1040,10 +1044,10 @@ function ProfileContent({ profile, setProfile, setProfileDraft, openCalendarModa
                     </div>
                   </div>
                 ) : (
-                  <button className="profile-intro-quick" type="button" onClick={() => setIntroEdit(true)}>
+                  <div className="profile-intro-quick">
                     <span className={!profile.intro ? "is-empty" : ""}>{profile.intro || PROFILE_INTRO_EMPTY_TEXT}</span>
-                    <Pencil size={13} />
-                  </button>
+                    <button type="button" onClick={() => setIntroEdit(true)}><Pencil size={12} />수정</button>
+                  </div>
                 )}
               </div>
               <div className="profile-stats-row">
@@ -1073,7 +1077,6 @@ function ProfileContent({ profile, setProfile, setProfileDraft, openCalendarModa
               >
                 <Icon size={15} />
                 <span>{label}</span>
-                <em>{activityPanels[key].count}</em>
               </button>
             ))}
           </div>
@@ -1089,20 +1092,22 @@ function ProfileContent({ profile, setProfile, setProfileDraft, openCalendarModa
               )}
             </div>
           </div>
-          {activeActivity === "reviews" ? (
-            reviewItems.map((item) => (
-              <article className="profile-review-item" key={item.id}>
-                <div>
-                  <b>{item.title}</b>
-                  <span>{item.time} · {item.place}</span>
-                </div>
-                <button className="ghost-btn" type="button">후기 작성</button>
-              </article>
-            ))
-          ) : (
-            activePanel.items.map((item) => <ScheduleItem key={item.id} item={item} variant="profile" />)
-          )}
-          {!activePanel.items.length && <p className="empty-schedule">표시할 항목이 없습니다.</p>}
+          <div className="profile-schedule-body">
+            {activeActivity === "reviews" ? (
+              reviewItems.map((item) => (
+                <article className="profile-review-item" key={item.id}>
+                  <div>
+                    <b>{item.title}</b>
+                    <span>{item.time} · {item.place}</span>
+                  </div>
+                  <button className="ghost-btn" type="button">후기 작성</button>
+                </article>
+              ))
+            ) : (
+              activePanel.items.map((item) => <ScheduleItem key={item.id} item={item} variant="profile" />)
+            )}
+            {!activePanel.items.length && <p className="empty-schedule">표시할 항목이 없습니다.</p>}
+          </div>
         </section>
       </div>
       {authOpen && (
@@ -1161,7 +1166,7 @@ function DayModal({ modal, close }) {
                 <footer>
                   <Link className="ghost-btn" to={`/meetings/${item.id}`}>상세 보기</Link>
                   {joinedStates.has(item.state) ? <Link className="ghost-btn" to={`/chats/${item.id}`}>채팅</Link> : <Link className="primary-small" to="/mypage/meetings">참가 신청</Link>}
-                  {item.state === "host" && <Link className="primary-small" to="/host">관리</Link>}
+                  {item.state === "host" && <Link className="primary-small" to={`/host/meetings/${item.id}`}>관리</Link>}
                 </footer>
               </div>
             </article>
@@ -1193,25 +1198,111 @@ function MapPageContent({ params, setBoardParam }) {
 
 function HostContent() {
   const item = meetings[0];
+  const applicants = [
+    {
+      id: 1,
+      name: "김철수",
+      temperature: "36.5°",
+      message: "열심히 뛰겠습니다! 잘 부탁드립니다.",
+      img: "/img/test3.png"
+    },
+    {
+      id: 2,
+      name: "이영희",
+      temperature: "42.1°",
+      message: "매주 참석 가능합니다. 화이팅!",
+      img: "/img/test2.png"
+    }
+  ];
+
   return (
     <>
-      {pageTitle("방장 대시보드", "모임 운영자가 승인, 공지, 투표, QR을 관리하는 시작 화면입니다.")}
-      <section className="host-hero page-card">
-        <img src={item.img} alt="" />
-        <div>
-          <h2>{item.title}</h2>
-          <p>{item.time} · {item.place}</p>
+      {pageTitle("방장 관리", "모임 상태를 확인하고 신청자 승인, 공지, 투표, 출석을 한 화면에서 관리합니다.")}
+      {/* 2026-06-30: 모바일 방장 관리 흐름을 기준으로 PC에서는 신청자 처리와 운영 도구를 한 화면에 배치. */}
+      <div className="host-management-layout">
+        <div className="host-management-main">
+          <section className="page-card host-meeting-summary">
+            <div className="section-head">
+              <div>
+                <h2>내 모임 관리</h2>
+                <span>현재 운영 중인 모임</span>
+              </div>
+              <span className="host-status-pill">모집중</span>
+            </div>
+            <div className="host-meeting-card">
+              <img src={item.img} alt="" />
+              <div>
+                <span className="host-sport-chip">러닝 / 야외</span>
+                <h3>{item.title}</h3>
+                <p><CalendarDays size={15} />{item.time}</p>
+                <p><MapPin size={15} />{item.place}</p>
+              </div>
+              <div className="host-meeting-side">
+                <strong><Users size={17} />8 / 10명</strong>
+                <Link to={`/meetings/${item.id}`}>자세히 보기 <ChevronRight size={15} /></Link>
+              </div>
+            </div>
+          </section>
+
+          <div className="host-management-row">
+            <section className="page-card host-stat-panel">
+              <div className="section-head">
+                <h2>활동 통계</h2>
+              </div>
+              <div className="host-stat-grid">
+                <article>
+                  <CalendarCheck size={22} />
+                  <span>이번 달 모임</span>
+                  <b>4회</b>
+                </article>
+                <article>
+                  <BarChart3 size={22} />
+                  <span>평균 참여율</span>
+                  <b>92%</b>
+                </article>
+              </div>
+            </section>
+
+            <section className="page-card host-tool-panel-pc">
+              <div className="section-head">
+                <h2>모임 운영 도구</h2>
+              </div>
+              <div>
+                <Link to="/host"><Megaphone size={20} /><span>공지 작성</span></Link>
+                <Link to="/host/meetings/0/vote"><Vote size={20} /><span>투표 만들기</span></Link>
+                <Link to="/host/meetings/0/attendance"><ClipboardCheck size={20} /><span>출석 체크</span></Link>
+              </div>
+            </section>
+          </div>
         </div>
-        <Link to={`/meetings/${item.id}`} className="ghost-btn">모임 페이지 보기</Link>
-      </section>
-      <div className="host-stats">
-        {[[item.member + "명", "모집 현황"], ["18명", "대기자"], ["92%", "참여율"]].map(([n, t]) => <article className="page-card" key={t}><b>{n}</b><span>{t}</span></article>)}
-      </div>
-      <div className="host-actions">
-        <Link to="/host/meetings/0/applicants"><Users />참가자 관리</Link>
-        <Link to="/host/meetings/0/vote"><BarChart3 />투표 관리</Link>
-        <Link to="/chats/0"><MessageCircle />채팅방</Link>
-        <Link to="/map"><MapPin />위치 공유</Link>
+
+        <section className="page-card host-applicant-panel-pc">
+          <div className="section-head">
+            <div>
+              <h2>신청자 관리</h2>
+              <span>승인 대기 중인 신청자</span>
+            </div>
+            <span className="host-new-pill">New 2</span>
+          </div>
+          <div className="host-applicant-list-pc">
+            {applicants.map((applicant) => (
+              <article key={applicant.id}>
+                <div className="host-applicant-profile">
+                  <img src={applicant.img} alt="" />
+                  <div>
+                    <strong>{applicant.name} <em>{applicant.temperature}</em></strong>
+                    <p>"{applicant.message}"</p>
+                  </div>
+                </div>
+                <div className="host-applicant-actions">
+                  <button type="button">거절하기</button>
+                  <button type="button">승인하기</button>
+                </div>
+              </article>
+            ))}
+          </div>
+          <Link className="host-applicant-more" to="/host/meetings/0/applicants">신청자 전체 보기 <ChevronRight size={15} /></Link>
+        </section>
       </div>
     </>
   );
