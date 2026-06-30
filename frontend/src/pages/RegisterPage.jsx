@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+﻿import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Button from "../components/common/Button.jsx";
 import DesktopAuthPage from "../components/auth/desktop/DesktopAuthPage.jsx";
@@ -45,11 +45,16 @@ const initialRegisterForm = {
   agreePrivacy: false
 };
 
+const getInitialRegisterForm = () => ({
+  ...initialRegisterForm,
+  email: localStorage.getItem("sportsmate_pending_signup_email") || ""
+});
+
 function RegisterPage() {
   const navigate = useNavigate();
   const { isMobile } = useResponsive();
   const { register, registerVerifiedEmail, requestSignupEmailVerification, socialLogin, session } = useAuth();
-  const [form, setForm] = useState(initialRegisterForm);
+  const [form, setForm] = useState(getInitialRegisterForm);
   const [availability, setAvailability] = useState({
     email: emptyAvailability,
     nickname: emptyAvailability,
@@ -62,75 +67,54 @@ function RegisterPage() {
   const verifiedEmail = session?.user?.email_confirmed_at || session?.user?.confirmed_at ? session?.user?.email || "" : "";
   const isCurrentEmailVerified = Boolean(!isMobile && verifiedEmail && verifiedEmail.toLowerCase() === form.email.trim().toLowerCase());
 
-  useEffect(() => {
-    const timers = availabilityFields.map((field) => {
-      const value = (form[field] || "").trim();
-      if (!value) {
-        setAvailability((current) => ({ ...current, [field]: emptyAvailability }));
-        return null;
+  const setAvailabilityState = (field, state) => {
+    setAvailability((current) => ({ ...current, [field]: state }));
+  };
+
+  const handleFormChange = (nextForm) => {
+    const formatted = updateRegisterForm(form, nextForm);
+    availabilityFields.forEach((field) => {
+      if ((form[field] || "") !== (formatted[field] || "")) {
+        setAvailabilityState(field, emptyAvailability);
       }
-
-      setAvailability((current) => ({
-        ...current,
-        [field]: { status: "checking", message: "확인 중입니다.", available: null }
-      }));
-
-      return window.setTimeout(() => {
-        authApi
-          .availability(field, value)
-          .then((data) => {
-            setAvailability((current) => ({
-              ...current,
-              [field]: {
-                status: data.available ? "available" : "unavailable",
-                message: data.message,
-                available: data.available
-              }
-            }));
-          })
-          .catch(() => {
-            setAvailability((current) => ({
-              ...current,
-              [field]: { status: "error", message: "중복 확인에 실패했습니다.", available: null }
-            }));
-          });
-      }, 350);
     });
+    setForm(formatted);
+  };
 
-    return () => timers.forEach((timer) => timer && window.clearTimeout(timer));
-  }, [form.email, form.nickname, form.phone_number]);
+  const checkAvailability = async (field, rawValue = form[field]) => {
+    const value = (rawValue || "").trim();
+    const fieldMessages = {
+      email: "이메일을 입력해주세요.",
+      nickname: "닉네임을 입력해주세요.",
+      phone_number: "핸드폰 번호를 입력해주세요."
+    };
 
-  const checkNickname = async () => {
-    const value = form.nickname.trim();
     if (!value) {
-      setAvailability((current) => ({
-        ...current,
-        nickname: { status: "unavailable", message: "닉네임을 입력해주세요.", available: false }
-      }));
-      return;
+      const state = { status: "unavailable", message: fieldMessages[field], available: false };
+      setAvailabilityState(field, state);
+      return state;
     }
 
-    setAvailability((current) => ({
-      ...current,
-      nickname: { status: "checking", message: "확인 중입니다.", available: null }
-    }));
+    setAvailabilityState(field, { status: "checking", message: "확인 중입니다.", available: null });
     try {
-      const data = await authApi.availability("nickname", value);
-      setAvailability((current) => ({
-        ...current,
-        nickname: {
-          status: data.available ? "available" : "unavailable",
-          message: data.message,
-          available: data.available
-        }
-      }));
-    } catch {
-      setAvailability((current) => ({
-        ...current,
-        nickname: { status: "error", message: "닉네임 중복 확인에 실패했습니다.", available: null }
-      }));
+      const data = await authApi.availability(field, value);
+      const state = {
+        status: data.available ? "available" : "unavailable",
+        message: data.message,
+        available: data.available
+      };
+      setAvailabilityState(field, state);
+      return state;
+    } catch (availabilityError) {
+      const message = availabilityError.response?.data?.message || "중복 확인에 실패했습니다.";
+      const state = { status: "error", message, available: null };
+      setAvailabilityState(field, state);
+      return state;
     }
   };
+
+  const checkPhoneNumber = () => checkAvailability("phone_number");
+  const checkNickname = () => checkAvailability("nickname");
 
   const requestEmailVerification = async () => {
     setNotice("");
@@ -140,8 +124,18 @@ function RegisterPage() {
       return;
     }
     try {
-      await resendSignupEmail(email);
-      setNotice("인증 메일을 다시 보냈습니다. 메일함을 확인해주세요.");
+      const emailState = await checkAvailability("email", email);
+      if (emailState.available === false) {
+        setError(emailState.message || "이미 사용 중인 이메일입니다.");
+        return;
+      }
+      if (emailState.status === "error") {
+        setError(emailState.message || "이메일 중복 확인에 실패했습니다.");
+        return;
+      }
+      localStorage.setItem("sportsmate_pending_signup_email", email);
+      await requestSignupEmailVerification(email);
+      setNotice("인증 메일을 보냈습니다. 메일함에서 인증을 완료해주세요.");
     } catch (verificationError) {
       setError(verificationError.message || verificationError.response?.data?.message || "이메일 인증 요청에 실패했습니다.");
     }
@@ -158,6 +152,16 @@ function RegisterPage() {
       }
       if (form.password !== form.passwordConfirm) {
         setError("비밀번호와 비밀번호 확인이 일치하지 않습니다.");
+        return;
+      }
+      const requiredChecks = isCurrentEmailVerified ? ["nickname"] : ["email", "nickname"];
+      const unchecked = requiredChecks.find((field) => availability[field]?.available !== true);
+      if (unchecked) {
+        setError("이메일 인증과 닉네임 중복 확인을 완료해주세요.");
+        return;
+      }
+      if (form.phone_number && availability.phone_number?.available !== true) {
+        setError("핸드폰 번호 중복 확인을 완료해주세요.");
         return;
       }
       if (hasAvailabilityError(availability)) {
@@ -188,6 +192,7 @@ function RegisterPage() {
         navigate("/");
       } else {
         await registerVerifiedEmail(payload);
+        localStorage.removeItem("sportsmate_pending_signup_email");
         setCompleted(true);
       }
     } catch (submitError) {
@@ -211,8 +216,9 @@ function RegisterPage() {
         mode="register"
         form={form}
         availability={availability}
-        onChange={(nextForm) => setForm((current) => updateRegisterForm(current, nextForm))}
+        onChange={handleFormChange}
         onSubmit={submit}
+        onCheckPhoneNumber={checkPhoneNumber}
         onCheckNickname={checkNickname}
         onEmailVerification={requestEmailVerification}
         emailVerified={isCurrentEmailVerified}

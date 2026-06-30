@@ -13,8 +13,17 @@ def required_env(name):
     return value
 
 
+def database_uri():
+    uri = required_env("DATABASE_URL")
+    if uri.startswith("postgresql://"):
+        return uri.replace("postgresql://", "postgresql+pg8000://", 1)
+    if uri.startswith("postgres://"):
+        return uri.replace("postgres://", "postgresql+pg8000://", 1)
+    return uri
+
+
 class Config:
-    SQLALCHEMY_DATABASE_URI = required_env("DATABASE_URL")
+    SQLALCHEMY_DATABASE_URI = database_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JWT_SECRET_KEY = required_env("JWT_SECRET_KEY")
     JSON_AS_ASCII = False
