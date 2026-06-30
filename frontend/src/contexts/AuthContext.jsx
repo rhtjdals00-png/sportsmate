@@ -42,9 +42,11 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
 
   const syncProfile = async (supabaseUser, fallback = {}) => {
     if (!supabaseUser) return null;
+    setAuthError("");
     const data = await authApi.sync(metadataFromSupabaseUser(supabaseUser, fallback));
     if (data.access_token) {
       localStorage.setItem("sportsmate_token", data.access_token);
@@ -82,7 +84,8 @@ export function AuthProvider({ children }) {
       if (currentSession?.user) {
         try {
           await syncProfile(currentSession.user, { allow_nickname_suffix: true });
-        } catch {
+        } catch (error) {
+          setAuthError(error?.response?.data?.message || error?.message || "로그인 동기화에 실패했습니다.");
           setUser(null);
         }
       }
@@ -95,10 +98,12 @@ export function AuthProvider({ children }) {
       if (nextSession?.user) {
         try {
           await syncProfile(nextSession.user, { allow_nickname_suffix: true });
-        } catch {
+        } catch (error) {
+          setAuthError(error?.response?.data?.message || error?.message || "로그인 동기화에 실패했습니다.");
           setUser(null);
         }
       } else {
+        setAuthError("");
         setUser(null);
       }
       setLoading(false);
@@ -114,8 +119,9 @@ export function AuthProvider({ children }) {
     () => ({
       user,
       session,
+      authError,
       loading,
-      isAuthenticated: Boolean(session?.user),
+      isAuthenticated: Boolean(user),
       async login(payload) {
         localStorage.removeItem("sportsmate_post_auth_redirect");
         const client = requireSupabase();
@@ -211,6 +217,7 @@ export function AuthProvider({ children }) {
           await supabase.auth.signOut();
         }
         localStorage.removeItem("sportsmate_token");
+        setAuthError("");
         setUser(null);
         setSession(null);
       },
@@ -218,7 +225,7 @@ export function AuthProvider({ children }) {
         setUser(nextUser);
       }
     }),
-    [user, session, loading]
+    [user, session, authError, loading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

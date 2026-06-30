@@ -18,6 +18,14 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    const authError = sessionStorage.getItem("sportsmate_auth_error");
+    if (authError) {
+      setError(authError);
+      sessionStorage.removeItem("sportsmate_auth_error");
+    }
+  }, []);
+
+  useEffect(() => {
     if (!authLoading && isAuthenticated) {
       navigate(location.state?.from || "/");
     }
