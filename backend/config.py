@@ -41,7 +41,7 @@ def database_uri():
     return uri, options
 
 
-DATABASE_URI, DATABASE_ENGINE_OPTIONS = database_config()
+DATABASE_URI, DATABASE_ENGINE_OPTIONS = database_uri()
 
 
 class Config:
