@@ -1,6 +1,8 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
+from sqlalchemy import text
 
+from app.extensions import db
 from app.models import User
 from app.services.auth_service import login_user, login_with_supabase, register_user, sync_supabase_user
 
@@ -30,6 +32,27 @@ def normalize_phone_number(value):
     return f"{digits[:3]}-{digits[3:7]}-{digits[7:]}"
 
 
+def auth_email_exists(email):
+    try:
+        result = db.session.execute(
+            text(
+                """
+                select 1
+                from auth.users
+                where lower(email) = :email
+                  and email_confirmed_at is not null
+                limit 1
+                """
+            ),
+            {"email": email.lower()},
+        )
+        return result.first() is not None
+    except Exception as error:
+        db.session.rollback()
+        current_app.logger.warning("Supabase auth.users email check failed: %s", error)
+        return False
+
+
 @auth_bp.get("/availability")
 def availability():
     field = (request.args.get("field") or "").strip()
@@ -50,6 +73,8 @@ def availability():
         value = normalize_phone_number(value)
 
     exists = User.query.filter(CHECKABLE_FIELDS[field] == value).first() is not None
+    if field == "email":
+        exists = exists or auth_email_exists(value)
     label = FIELD_LABELS[field]
     return jsonify({
         "available": not exists,
@@ -62,7 +87,7 @@ def request_email_verification():
     email = ((request.get_json() or {}).get("email") or "").strip().lower()
     if not email:
         return jsonify({"message": "이메일을 입력해주세요."}), 400
-    if User.query.filter_by(email=email).first():
+    if User.query.filter_by(email=email).first() or auth_email_exists(email):
         return jsonify({"message": "이미 가입된 이메일입니다."}), 400
     return jsonify({"message": "Supabase Auth에서 인증 메일을 발송합니다."})
 

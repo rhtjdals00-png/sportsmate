@@ -45,9 +45,13 @@ function DesktopAuthPage({
   onChange,
   onSubmit,
   onCheckPhoneNumber,
-  onCheckNickname,
   onEmailVerification,
+  onEmailCodeChange,
+  onEmailCodeVerify,
+  emailCode = "",
   emailVerified = false,
+  emailVerificationSent = false,
+  emailVerificationLoading = false,
   verifiedEmail = "",
   loading,
   error,
@@ -132,7 +136,7 @@ function DesktopAuthPage({
 
               <label>
                 닉네임
-                <span className="desktop-auth-inline-action">
+                <span>
                   <UserRound size={18} />
                   <input
                     required
@@ -140,9 +144,7 @@ function DesktopAuthPage({
                     onChange={(event) => onChange({ ...form, nickname: event.target.value })}
                     placeholder="모임에서 사용할 이름"
                   />
-                  <button type="button" onClick={onCheckNickname}>중복확인</button>
                 </span>
-                <AvailabilityMessage state={availability.nickname} />
               </label>
 
               <label>
@@ -159,15 +161,26 @@ function DesktopAuthPage({
                   <button type="button" onClick={onEmailVerification}>인증</button>
                 </span>
                 <AvailabilityMessage state={availability.email} />
-                {emailVerified ? (
-                  <p className="desktop-auth-verified-message">\uc778\uc99d\ub41c \uc774\uba54\uc77c\uc785\ub2c8\ub2e4.</p>
-                ) : form.email ? (
-                  <p className="desktop-auth-verification-hint">\ud68c\uc6d0\uac00\uc785 \uc804 \uc774\uba54\uc77c \uc778\uc99d\uc744 \uc644\ub8cc\ud574 \uc8fc\uc138\uc694.</p>
-                ) : null}
-                {verifiedEmail && !emailVerified ? (
-                  <p className="desktop-auth-verification-hint">\ud604\uc7ac \uc778\uc99d\ub41c \uc774\uba54\uc77c: {verifiedEmail}</p>
-                ) : null}
               </label>
+              {!emailVerified ? (
+                <div className="desktop-auth-code-field">
+                  <span>
+                    <Mail size={18} />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength="8"
+                      disabled={!emailVerificationSent}
+                      value={emailCode}
+                      onChange={(event) => onEmailCodeChange(event.target.value.replace(/\D/g, "").slice(0, 8))}
+                      placeholder="이메일 인증번호 8자리"
+                    />
+                    <button type="button" onClick={onEmailCodeVerify} disabled={!emailVerificationSent || emailVerificationLoading}>
+                      {emailVerificationLoading ? "확인 중" : "인증 확인"}
+                    </button>
+                  </span>
+                </div>
+              ) : null}
 
               <label>
                 비밀번호

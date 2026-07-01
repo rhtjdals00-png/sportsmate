@@ -167,6 +167,24 @@ export function AuthProvider({ children }) {
         if (error) throw error;
         return data;
       },
+      async verifySignupEmailCode(email, token) {
+        const client = requireSupabase();
+        const { data, error } = await client.auth.verifyOtp({
+          email,
+          token,
+          type: "email"
+        });
+        if (error) {
+          const { data: signupData, error: signupError } = await client.auth.verifyOtp({
+            email,
+            token,
+            type: "signup"
+          });
+          if (signupError) throw signupError;
+          return signupData;
+        }
+        return data;
+      },
       async registerVerifiedEmail(payload) {
         const client = requireSupabase();
         const { data: sessionData } = await client.auth.getSession();

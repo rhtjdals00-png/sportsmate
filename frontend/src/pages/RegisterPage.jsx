@@ -16,11 +16,19 @@ const passwordRules = [
   { id: "special", test: (password) => /[^A-Za-z0-9]/.test(password) }
 ];
 
-const availabilityFields = ["email", "nickname", "phone_number"];
+const availabilityFields = ["email", "phone_number"];
 const emptyAvailability = { status: "idle", message: "", available: null };
 
 const isValidPassword = (password) => passwordRules.every((rule) => rule.test(password));
 const hasAvailabilityError = (availability) => availabilityFields.some((field) => availability[field]?.available === false);
+
+const getRegisterErrorMessage = (error) => {
+  const message = error?.message || error?.response?.data?.message || "";
+  if (message.includes("New password should be different from the old password")) {
+    return "이미 가입된 이메일이거나 이전과 같은 비밀번호입니다. 다른 비밀번호를 입력하거나 로그인해주세요.";
+  }
+  return message || "회원가입에 실패했습니다.";
+};
 
 const formatPhoneNumber = (value) => {
   const digits = (value || "").replace(/\D/g, "").slice(0, 11);
@@ -53,13 +61,16 @@ const getInitialRegisterForm = () => ({
 function RegisterPage() {
   const navigate = useNavigate();
   const { isMobile } = useResponsive();
-  const { register, registerVerifiedEmail, requestSignupEmailVerification, socialLogin, session } = useAuth();
+  const { register, registerVerifiedEmail, requestSignupEmailVerification, verifySignupEmailCode, socialLogin, session } = useAuth();
   const [form, setForm] = useState(getInitialRegisterForm);
   const [availability, setAvailability] = useState({
     email: emptyAvailability,
     nickname: emptyAvailability,
     phone_number: emptyAvailability
   });
+  const [emailCode, setEmailCode] = useState("");
+  const [emailVerificationSent, setEmailVerificationSent] = useState(false);
+  const [emailVerificationLoading, setEmailVerificationLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
@@ -78,6 +89,10 @@ function RegisterPage() {
         setAvailabilityState(field, emptyAvailability);
       }
     });
+    if ((form.email || "") !== (formatted.email || "")) {
+      setEmailCode("");
+      setEmailVerificationSent(false);
+    }
     setForm(formatted);
   };
 
@@ -85,7 +100,6 @@ function RegisterPage() {
     const value = (rawValue || "").trim();
     const fieldMessages = {
       email: "이메일을 입력해주세요.",
-      nickname: "닉네임을 입력해주세요.",
       phone_number: "핸드폰 번호를 입력해주세요."
     };
 
@@ -114,10 +128,10 @@ function RegisterPage() {
   };
 
   const checkPhoneNumber = () => checkAvailability("phone_number");
-  const checkNickname = () => checkAvailability("nickname");
 
   const requestEmailVerification = async () => {
     setNotice("");
+    setError("");
     const email = form.email.trim();
     if (!email) {
       setError("이메일을 입력해주세요.");
@@ -135,9 +149,36 @@ function RegisterPage() {
       }
       localStorage.setItem("sportsmate_pending_signup_email", email);
       await requestSignupEmailVerification(email);
-      setNotice("인증 메일을 보냈습니다. 메일함에서 인증을 완료해주세요.");
+      setEmailVerificationSent(true);
+      setEmailCode("");
+      setNotice("인증번호를 보냈습니다. 메일함에서 인증번호를 확인해주세요.");
     } catch (verificationError) {
       setError(verificationError.message || verificationError.response?.data?.message || "이메일 인증 요청에 실패했습니다.");
+    }
+  };
+
+  const verifyEmailCode = async () => {
+    setNotice("");
+    setError("");
+    const email = form.email.trim();
+    const token = emailCode.trim();
+    if (!email) {
+      setError("이메일을 입력해주세요.");
+      return;
+    }
+    if (!token) {
+      setError("인증번호를 입력해주세요.");
+      return;
+    }
+
+    setEmailVerificationLoading(true);
+    try {
+      await verifySignupEmailCode(email, token);
+      setNotice("이메일 인증이 완료되었습니다.");
+    } catch (verificationError) {
+      setError(verificationError.message || "인증번호 확인에 실패했습니다.");
+    } finally {
+      setEmailVerificationLoading(false);
     }
   };
 
@@ -154,10 +195,10 @@ function RegisterPage() {
         setError("비밀번호와 비밀번호 확인이 일치하지 않습니다.");
         return;
       }
-      const requiredChecks = isCurrentEmailVerified ? ["nickname"] : ["email", "nickname"];
+      const requiredChecks = isCurrentEmailVerified ? [] : ["email"];
       const unchecked = requiredChecks.find((field) => availability[field]?.available !== true);
       if (unchecked) {
-        setError("이메일 인증과 닉네임 중복 확인을 완료해주세요.");
+        setError("이메일 인증을 완료해주세요.");
         return;
       }
       if (form.phone_number && availability.phone_number?.available !== true) {
@@ -196,7 +237,7 @@ function RegisterPage() {
         setCompleted(true);
       }
     } catch (submitError) {
-      setError(submitError.message || submitError.response?.data?.message || "회원가입에 실패했습니다.");
+      setError(getRegisterErrorMessage(submitError));
     } finally {
       setLoading(false);
     }
@@ -219,9 +260,13 @@ function RegisterPage() {
         onChange={handleFormChange}
         onSubmit={submit}
         onCheckPhoneNumber={checkPhoneNumber}
-        onCheckNickname={checkNickname}
         onEmailVerification={requestEmailVerification}
+        onEmailCodeChange={setEmailCode}
+        onEmailCodeVerify={verifyEmailCode}
+        emailCode={emailCode}
         emailVerified={isCurrentEmailVerified}
+        emailVerificationSent={emailVerificationSent}
+        emailVerificationLoading={emailVerificationLoading}
         verifiedEmail={verifiedEmail}
         loading={loading}
         error={error}

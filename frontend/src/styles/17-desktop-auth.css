@@ -151,6 +151,55 @@
   color: #0369a1;
 }
 
+.desktop-auth-code-field {
+  display: grid;
+  gap: 8px;
+}
+
+.desktop-auth-code-field > span {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 0 7px 0 13px;
+  color: #94a3b8;
+}
+
+.desktop-auth-code-field > span:focus-within {
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12);
+}
+
+.desktop-auth-code-field input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #111827;
+}
+
+.desktop-auth-code-field button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: #eef2ff;
+  color: #4338ca;
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.desktop-auth-code-field button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
 .desktop-auth-availability {
   display: inline-flex;
   align-items: center;
