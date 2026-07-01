@@ -208,7 +208,7 @@ function AdminPage() {
 
   if (isMobile) {
     return <MobileAdminPanel title="관리자 운영 관리" />;
-
+  }
   if (loading) {
     return (
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "400px", gap: "16px" }}>
