@@ -69,6 +69,14 @@
   gap: 24px;
 }
 
+.legacy-pc .home-card-carousel {
+  gap: 24px;
+}
+
+.legacy-pc .home-card-carousel .meeting-card {
+  flex-basis: calc((100% - 72px) / 4);
+}
+
 .legacy-pc .home-match-panel {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

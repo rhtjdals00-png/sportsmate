@@ -1,6 +1,20 @@
 import { apiClient } from "./client";
 
+const regionCache = new Map();
+
+function regionCacheKey(params = {}) {
+  return JSON.stringify(params);
+}
+
+function cachedRegions(params = {}) {
+  const key = regionCacheKey(params);
+  if (!regionCache.has(key)) {
+    regionCache.set(key, apiClient.get("/regions", { params }).then((res) => res.data));
+  }
+  return regionCache.get(key);
+}
+
 export const locationApi = {
-  regions: (params = {}) => apiClient.get("/regions", { params }).then((res) => res.data),
+  regions: (params = {}) => cachedRegions(params),
   searchPlaces: (params = {}) => apiClient.get("/map/search", { params }).then((res) => res.data)
 };

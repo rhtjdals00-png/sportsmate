@@ -34,8 +34,8 @@ class Meeting(db.Model, TimestampMixin):
     participants = db.relationship("Participant", back_populates="meeting", cascade="all, delete-orphan")
     chat_room = db.relationship("ChatRoom", back_populates="meeting", uselist=False, cascade="all, delete-orphan")
 
-    def to_dict(self):
-        return {
+    def to_dict(self, current_user_id=None):
+        data = {
             "id": self.id,
             "host": self.host.to_dict(),
             "sport": self.sport.to_dict(),
@@ -58,6 +58,15 @@ class Meeting(db.Model, TimestampMixin):
             "cover_image_url": self.cover_image_url,
             "view_count": self.view_count
         }
+        if current_user_id:
+            participant = next((item for item in self.participants if item.user_id == current_user_id), None)
+            data["my_participant"] = {
+                "id": participant.id,
+                "role": participant.role,
+                "status": participant.status,
+                "join_message": participant.join_message
+            } if participant else None
+        return data
 
 class Participant(db.Model):
     __tablename__ = "participants"

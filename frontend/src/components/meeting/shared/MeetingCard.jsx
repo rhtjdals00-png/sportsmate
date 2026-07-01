@@ -5,7 +5,7 @@ import { formatDateTime, formatMeetingType } from "../../../utils/formatters";
 
 function MeetingCard({ meeting, compact = false }) {
   return (
-    <article className={`meeting-card ${compact ? "meeting-card--compact" : ""}`}>
+    <Link to={`/meetings/${meeting.id}`} className={`meeting-card ${compact ? "meeting-card--compact" : ""}`}>
       <div className="meeting-card__body">
         <div className="meeting-card__thumb" style={meeting.cover_image_url ? { backgroundImage: `url(${meeting.cover_image_url})` } : undefined}>
           {!meeting.cover_image_url && <span>{meeting.sport?.name || meeting.sport_name}</span>}
@@ -18,9 +18,9 @@ function MeetingCard({ meeting, compact = false }) {
             <Badge tone="sky">{meeting.sport?.name || meeting.sport_name}</Badge>
             <span>{formatMeetingType(meeting.meeting_type)}</span>
           </div>
-          <Link to={`/meetings/${meeting.id}`} className="meeting-card__title">
+          <span className="meeting-card__title">
             {meeting.title}
-          </Link>
+          </span>
           <p>{meeting.description}</p>
         </div>
       </div>
@@ -44,7 +44,7 @@ function MeetingCard({ meeting, compact = false }) {
           <span>4.{meeting.id % 5 + 5}</span>
         </div>
       </dl>
-    </article>
+    </Link>
   );
 }
 

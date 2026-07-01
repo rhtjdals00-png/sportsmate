@@ -37,96 +37,18 @@ import {
   X
 } from "lucide-react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import DesktopMeetingDetail from "../meeting/desktop/DesktopMeetingDetail.jsx";
+import SharedMeetingCard from "../meeting/shared/MeetingCard.jsx";
+import EmptyState from "../common/EmptyState.jsx";
+import LoadingCards from "../common/LoadingCards.jsx";
+import { meetingApi } from "../../api/meetingApi";
+import { sportApi } from "../../api/sportApi";
+import { useAsync } from "../../hooks/useAsync";
 
 const joinedStates = new Set(["host", "joined"]);
 
-const meetings = [
-  {
-    id: 0,
-    title: "한강 러닝 같이 하실 분!",
-    sport: "러닝",
-    place: "여의도 한강공원",
-    time: "05.25(월) 19:00",
-    member: "12/20",
-    rating: "4.8",
-    state: "host",
-    host: "김강한",
-    desc: "가볍게 5km 뛰고 스트레칭까지 같이 해요. 초보자도 환영합니다.",
-    tags: ["한강러닝", "초보환영", "퇴근러닝"],
-    img: "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?auto=format&fit=crop&w=500&q=80"
-  },
-  {
-    id: 1,
-    title: "초보자 농구 모임",
-    sport: "농구",
-    place: "잠실 실내체육관",
-    time: "05.26(화) 18:00",
-    member: "8/12",
-    rating: "4.7",
-    state: "joined",
-    host: "박지훈",
-    desc: "기초 드리블부터 가볍게 게임까지 진행하는 초보자 중심 농구 모임입니다.",
-    tags: ["초보농구", "실내체육관", "퇴근후"],
-    img: "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=500&q=80"
-  },
-  {
-    id: 2,
-    title: "관악산 등산 가실 분",
-    sport: "등산",
-    place: "관악산 입구",
-    time: "05.26(화) 08:00",
-    member: "8/15",
-    rating: "4.7",
-    state: "joined",
-    host: "이서연",
-    desc: "관악산 초입부터 천천히 올라가는 주말 등산 모임입니다. 간단한 간식만 챙겨오세요.",
-    tags: ["관악산", "아침등산", "천천히"],
-    img: "https://images.unsplash.com/photo-1551632811-561732d1e306?auto=format&fit=crop&w=500&q=80"
-  },
-  {
-    id: 3,
-    title: "자전거 라이딩 모임",
-    sport: "자전거",
-    place: "한강 자전거 도로",
-    time: "05.27(수) 07:00",
-    member: "5/10",
-    rating: "4.7",
-    state: "joined",
-    host: "최도윤",
-    desc: "한강 자전거 도로를 따라 왕복 15km 정도 가볍게 달리는 라이딩입니다.",
-    tags: ["자전거", "한강", "아침라이딩"],
-    img: "https://images.unsplash.com/photo-1507035895480-2b3156c31fc8?auto=format&fit=crop&w=500&q=80"
-  },
-  {
-    id: 4,
-    title: "주말 동네 축구해요",
-    sport: "축구",
-    place: "잠실 풋살장",
-    time: "05.30(토) 20:00",
-    member: "10/14",
-    rating: "4.9",
-    state: "open",
-    host: "오태민",
-    desc: "주말 저녁 가볍게 풋살하실 분들을 모집합니다. 실력 상관없이 신청해주세요.",
-    tags: ["풋살", "주말", "친선경기"],
-    img: "https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?auto=format&fit=crop&w=500&q=80"
-  },
-  {
-    id: 5,
-    title: "퇴근 후 배드민턴",
-    sport: "배드민턴",
-    place: "마포 생활체육관",
-    time: "05.29(금) 19:30",
-    member: "6/12",
-    rating: "4.6",
-    state: "open",
-    host: "정하린",
-    desc: "퇴근 후 2시간 정도 복식 위주로 배드민턴 칩니다. 라켓 대여 가능합니다.",
-    tags: ["배드민턴", "퇴근후", "복식"],
-    img: "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=500&q=80"
-  }
-];
+const meetings = [];
 
 const sportGroups = [
   { group: "구기 종목", items: ["축구", "풋살", "농구", "배구", "야구", "족구"] },
@@ -360,7 +282,7 @@ function DesktopPrototype({ page }) {
         toggleValue={toggleValue}
       />
     ),
-    detail: <DetailPage item={itemById(routeParams.meetingId)} />,
+    detail: <DesktopMeetingDetail />,
     chat: (
       <ChatPage
         selectedChatId={selectedChatId}
@@ -412,6 +334,61 @@ function DesktopPrototype({ page }) {
 }
 
 function HomeContent() {
+  const recommendedMeetings = useAsync(() => meetingApi.list({ limit: 10 }), []);
+  const sports = useAsync(() => sportApi.sports(), []);
+  const recommendedItems = recommendedMeetings.data?.items || [];
+  const carouselRef = useRef(null);
+  const dragStateRef = useRef(null);
+  const dragMovedRef = useRef(false);
+  const sportItems = sports.data?.items || [];
+  const homeSportShortcuts = useMemo(() => {
+    const definitions = [
+      { icon: CircleDot, label: "농구" },
+      { icon: Goal, label: "축구" },
+      { icon: Footprints, label: "러닝" },
+      { icon: Dumbbell, label: "헬스" },
+      { icon: Mountain, label: "등산" },
+      { icon: Bike, label: "자전거" }
+    ];
+    return definitions.map((item) => ({
+      ...item,
+      sport: sportItems.find((sport) => sport.name === item.label)
+    }));
+  }, [sportItems]);
+
+  const startCarouselDrag = (event) => {
+    const target = carouselRef.current;
+    if (!target) return;
+    dragMovedRef.current = false;
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      scrollLeft: target.scrollLeft
+    };
+    target.setPointerCapture?.(event.pointerId);
+  };
+
+  const moveCarouselDrag = (event) => {
+    const target = carouselRef.current;
+    const state = dragStateRef.current;
+    if (!target || !state) return;
+    const deltaX = event.clientX - state.startX;
+    if (Math.abs(deltaX) > 5) dragMovedRef.current = true;
+    target.scrollLeft = state.scrollLeft - deltaX;
+  };
+
+  const endCarouselDrag = (event) => {
+    carouselRef.current?.releasePointerCapture?.(event.pointerId);
+    dragStateRef.current = null;
+  };
+
+  const preventDraggedClick = (event) => {
+    if (!dragMovedRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dragMovedRef.current = false;
+  };
+
   return (
     <>
       <section className="home-banner legacy-home-banner">
@@ -428,7 +405,7 @@ function HomeContent() {
               <Search size={15} />
               모임 찾기
             </Link>
-            <Link to="/meetings" className="primary-small">
+            <Link to="/meetings/create" className="primary-small">
               <Plus size={15} />
               모임 만들기
             </Link>
@@ -441,19 +418,14 @@ function HomeContent() {
 
       <section className="home-categories-wrap">
         <div className="home-categories">
-          {[
-            [CircleDot, "농구"],
-            [Goal, "축구"],
-            [Footprints, "러닝"],
-            [Dumbbell, "헬스"],
-            [Mountain, "등산"],
-            [Bike, "자전거"]
-          ].map(([Icon, label]) => (
-            <Link key={label} to={`/meetings?sport=${encodeURIComponent(label)}`}>
-              <Icon size={24} />
-              <span>{label}</span>
-            </Link>
-          ))}
+          {homeSportShortcuts.map(({ icon: Icon, label, sport }) => {
+            return (
+              <Link key={label} to={`/meetings?sport=${sport?.id || encodeURIComponent(label)}`}>
+                <Icon size={24} />
+                <span>{label}</span>
+              </Link>
+            );
+          })}
         </div>
       </section>
 
@@ -462,7 +434,26 @@ function HomeContent() {
           <h2>오늘의 추천 모임</h2>
           <Link to="/meetings">전체 보기</Link>
         </div>
-        <div className="home-card-grid">{meetings.slice(0, 4).map((item) => <MeetingCard key={item.id} item={item} />)}</div>
+        {recommendedMeetings.loading ? (
+          <LoadingCards count={4} />
+        ) : recommendedMeetings.error ? (
+          <EmptyState title="추천 모임을 불러오지 못했습니다." description="백엔드 서버와 DB 연결 상태를 확인해주세요." actionLabel="모임 게시판" actionTo="/meetings" />
+        ) : recommendedItems.length ? (
+          <div
+            ref={carouselRef}
+            className="home-card-carousel"
+            onClickCapture={preventDraggedClick}
+            onPointerDown={startCarouselDrag}
+            onPointerMove={moveCarouselDrag}
+            onPointerUp={endCarouselDrag}
+            onPointerCancel={endCarouselDrag}
+            onPointerLeave={endCarouselDrag}
+          >
+            {recommendedItems.map((meeting) => <SharedMeetingCard key={meeting.id} meeting={meeting} compact />)}
+          </div>
+        ) : (
+          <EmptyState title="아직 등록된 모임이 없습니다." actionLabel="모임 만들기" actionTo="/meetings/create" />
+        )}
       </section>
     </>
   );
@@ -683,58 +674,6 @@ function MapResults({ items }) {
         ))}
       </aside>
     </div>
-  );
-}
-
-function DetailPage({ item }) {
-  return (
-    <>
-      <div className="screen-title">
-        <div>
-          <h1>
-            {item.title} {stateBadge(item)}
-          </h1>
-          <span>{item.place} · {item.time}</span>
-        </div>
-      </div>
-      <div className="detail-grid">
-        <section className="page-card">
-          <div className="host-line">
-            <img src="/img/test3.png" alt="" />
-            <div>
-              <b>{item.host}</b>
-              <small>{item.sport} 모임장</small>
-            </div>
-          </div>
-          <img className="detail-cover" src={item.img} alt={item.title} />
-          <div className="detail-tabs">
-            <button className="tab-on" type="button">소개</button>
-            <button type="button">오픈 채팅</button>
-            <button type="button">참가자</button>
-            <button type="button">후기</button>
-          </div>
-          <p className="detail-copy">{item.desc}</p>
-          <div className="chip-wrap">{item.tags.map((tag) => <span className="chip" key={tag}>#{tag}</span>)}</div>
-        </section>
-        <aside className="page-card side-info">
-          <h2>모임 정보</h2>
-          <p><MapPin />{item.place}</p>
-          <p><CalendarDays />{item.time}</p>
-          <p><Users />{item.member}명</p>
-          <p><UserRound />{item.host}</p>
-          <Link className="primary-btn full" to={joinedStates.has(item.state) ? `/chats/${item.id}` : "/meetings"}>
-            {joinedStates.has(item.state) ? "채팅방으로 이동" : "참가 신청"}
-          </Link>
-          {item.state === "host" && (
-            <Link className="ghost-btn full" to={`/host/meetings/${item.id}`}>
-              <LayoutDashboard size={15} />
-              방장 대시보드
-            </Link>
-          )}
-          <Link className="ghost-btn full" to="/map">지도에서 보기</Link>
-        </aside>
-      </div>
-    </>
   );
 }
 
@@ -1309,3 +1248,4 @@ function HostContent() {
 }
 
 export default DesktopPrototype;
+

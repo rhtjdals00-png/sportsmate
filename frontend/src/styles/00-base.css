@@ -380,6 +380,13 @@ button {
   transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
 }
 
+.meeting-card {
+  display: block;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+
 .meeting-card:active,
 .host-card:active,
 .applicant-card:active,
@@ -389,11 +396,13 @@ button {
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
 }
 
-.meeting-card__top {
+.meeting-card .meeting-card__top {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  align-content: flex-start;
   gap: 6px;
+  min-height: 54px;
   color: #64748b;
   font-size: 12px;
 }
@@ -421,9 +430,9 @@ button {
   text-align: center;
 }
 
-.meeting-card__title {
+.meeting-card .meeting-card__title {
   display: block;
-  margin-top: 10px;
+  margin-top: 0;
   font-size: 17px;
   font-weight: 800;
   line-height: 1.35;

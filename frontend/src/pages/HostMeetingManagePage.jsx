@@ -12,25 +12,13 @@ import {
   Vote
 } from "lucide-react";
 import Button from "../components/common/Button.jsx";
+import EmptyState from "../components/common/EmptyState.jsx";
 import LoadingCards from "../components/common/LoadingCards.jsx";
 import MeetingCard from "../components/meeting/shared/MeetingCard.jsx";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
 import { meetingApi } from "../api/meetingApi";
 import { useAsync } from "../hooks/useAsync";
 import { useResponsive } from "../hooks/useResponsive";
-
-const fallbackMeetingImage = "https://images.unsplash.com/photo-1575361204480-aadea25e6e68?auto=format&fit=crop&w=700&q=80";
-const fallbackHostMeetings = {
-  "0": {
-    title: "한강 러닝 같이 하실 분!",
-    sport: "러닝",
-    place: "여의도 한강공원",
-    starts_at: "05.25(월) 19:00",
-    current_participants: 12,
-    max_participants: 20,
-    image_url: "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?auto=format&fit=crop&w=700&q=80"
-  }
-};
 
 function HostMeetingManagePage() {
   const { isMobile } = useResponsive();
@@ -41,18 +29,19 @@ function HostMeetingManagePage() {
   const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId]);
   const notices = useAsync(() => meetingApi.notices(meetingId), [meetingId, refreshKey]);
 
-  const fallbackMeeting = {
-    id: meetingId || "0",
-    title: "초보자 환영 풋살 모임",
-    sport: "축구 / 풋살",
-    place: "여의도 풋살장",
-    starts_at: "2026-10-28 19:00",
-    current_participants: 8,
-    max_participants: 10,
-    image_url: fallbackMeetingImage,
-    ...(fallbackHostMeetings[meetingId] || {})
-  };
-  const meeting = detail.data?.meeting || fallbackMeeting;
+  if (detail.loading) return <LoadingCards count={2} />;
+  if (detail.error || !detail.data?.meeting) {
+    return (
+      <EmptyState
+        title="모임을 불러오지 못했습니다."
+        description="방장 관리 화면은 DB에 저장된 모임 정보가 필요합니다."
+        actionLabel="내 모임 보기"
+        actionTo="/mypage/meetings"
+      />
+    );
+  }
+
+  const meeting = detail.data.meeting;
   const noticeItems = notices.data?.items || [];
 
   const cancelMeeting = async () => {
@@ -80,8 +69,6 @@ function HostMeetingManagePage() {
       />
     );
   }
-
-  if (detail.loading) return <LoadingCards count={2} />;
 
   return (
     <>
@@ -125,10 +112,11 @@ function HostMeetingManagePage() {
 }
 
 function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading, setNotice, submitNotice, cancelMeeting }) {
-  const meetingDate = meeting.starts_at || meeting.time || "2026-10-28 19:00";
-  const current = meeting.current_participants ?? 8;
-  const max = meeting.max_participants ?? 10;
-  const thumbnail = meeting.image_url || meeting.thumbnail_url || meeting.img || fallbackMeetingImage;
+  const meetingDate = meeting.start_at || meeting.starts_at || meeting.time || "일정 미정";
+  const current = meeting.current_participants ?? 0;
+  const max = meeting.max_participants ?? "-";
+  const thumbnail = meeting.cover_image_url || meeting.image_url || meeting.thumbnail_url || meeting.img;
+  const place = meeting.location_name || meeting.address || meeting.place || meeting.location || "장소 미정";
 
   return (
     <div className="desktop-page">
@@ -138,18 +126,17 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
           <span>모임 정보와 운영 메뉴, 공지 내용을 관리합니다.</span>
         </div>
       </div>
-      {/* 2026-06-30: 개별 모임 관리 화면은 실제 데이터가 없어도 프론트 작업이 가능하도록 fallback 정보를 표시. */}
       <div className="desktop-host-manage-layout">
         <section className="page-card desktop-host-meeting-card">
           <div className="desktop-host-thumbnail">
-            <img src={thumbnail} alt="" />
+            {thumbnail ? <img src={thumbnail} alt="" /> : <span>등록된 사진 없음</span>}
             <button type="button"><Camera size={15} />사진 변경</button>
           </div>
           <div className="desktop-host-meeting-info">
             <span className="host-status-pill">모집중</span>
             <h2>{meeting.title}</h2>
             <p><CalendarDays size={15} />{meetingDate}</p>
-            <p><MapPin size={15} />{meeting.place || meeting.location || "장소 미정"}</p>
+            <p><MapPin size={15} />{place}</p>
           </div>
           <div className="desktop-host-meeting-meta">
             <strong><Users size={17} />{current} / {max}명</strong>

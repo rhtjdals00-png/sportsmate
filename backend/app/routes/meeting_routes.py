@@ -19,8 +19,9 @@ def current_user_id_optional():
 
 @meeting_bp.get("")
 def index():
-    items = list_meetings(request.args, current_user_id_optional())
-    return jsonify({"items": [meeting.to_dict() for meeting in items]})
+    current_user_id = current_user_id_optional()
+    items = list_meetings(request.args, current_user_id)
+    return jsonify({"items": [meeting.to_dict(current_user_id=current_user_id) for meeting in items]})
 
 
 @meeting_bp.post("")
@@ -35,10 +36,11 @@ def create():
 
 @meeting_bp.get("/<int:meeting_id>")
 def show(meeting_id):
+    current_user_id = current_user_id_optional()
     meeting = Meeting.query.get_or_404(meeting_id)
     meeting.view_count += 1
     db.session.commit()
-    return jsonify({"meeting": meeting.to_dict()})
+    return jsonify({"meeting": meeting.to_dict(current_user_id=current_user_id)})
 
 
 @meeting_bp.patch("/<int:meeting_id>")

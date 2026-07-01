@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from sqlalchemy.orm import joinedload
+
 from app.extensions import db
 from app.models import ChatRoom, Meeting, Notification, Participant, Review, Sport
 
@@ -11,9 +13,17 @@ def parse_datetime(value):
 
 
 def list_meetings(params, current_user_id=None):
-    query = Meeting.query
+    query = Meeting.query.options(
+        joinedload(Meeting.host),
+        joinedload(Meeting.sport).joinedload(Sport.category),
+        joinedload(Meeting.participants),
+    )
     if params.get("sport"):
-      query = query.filter(Meeting.sport_id == int(params["sport"]))
+        sport_value = str(params["sport"]).strip()
+        if sport_value.isdigit():
+            query = query.filter(Meeting.sport_id == int(sport_value))
+        else:
+            query = query.join(Sport, Meeting.sport_id == Sport.id).filter(Sport.name == sport_value)
     if params.get("sido"):
       query = query.filter(Meeting.region_sido_code == params["sido"])
     if params.get("sigungu"):

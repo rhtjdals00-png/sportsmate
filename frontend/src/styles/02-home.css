@@ -211,3 +211,41 @@
   gap: 18px;
 }
 
+.home-card-carousel {
+  display: flex;
+  gap: 18px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 16px;
+  cursor: grab;
+  scroll-behavior: smooth;
+  scroll-padding: 2px;
+  scroll-snap-type: x proximity;
+  user-select: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.home-card-carousel:active {
+  cursor: grabbing;
+}
+
+.home-card-carousel .meeting-card {
+  flex: 0 0 calc((100% - 54px) / 4);
+  min-width: 252px;
+  scroll-snap-align: start;
+}
+
+.home-card-carousel::-webkit-scrollbar {
+  height: 8px;
+}
+
+.home-card-carousel::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #eef2ff;
+}
+
+.home-card-carousel::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #c7d2fe;
+}
+

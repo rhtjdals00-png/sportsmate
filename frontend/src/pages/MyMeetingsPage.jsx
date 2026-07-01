@@ -29,7 +29,7 @@ function MyMeetingsPage() {
             )}
           </section>
           <section className="section">
-            <div className="section-title"><h2>참여 확정 모임</h2></div>
+            <div className="section-title"><h2>참여 중인 모임</h2></div>
             {meetings.data?.joined?.length ? (
               <div className="card-list">{meetings.data.joined.map((meeting) => <MeetingCard key={meeting.id} meeting={meeting} compact />)}</div>
             ) : (
