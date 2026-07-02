@@ -8,6 +8,7 @@ from urllib.request import Request, urlopen
 
 from flask import current_app
 from flask_jwt_extended import create_access_token
+from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models import User, UserProfile
@@ -71,9 +72,9 @@ def sync_supabase_user(data):
     if not nickname:
         raise ValueError("닉네임을 입력해주세요.")
 
-    user = User.query.filter_by(auth_user_id=auth_user_id).first()
+    user = User.query.options(joinedload(User.profile)).filter_by(auth_user_id=auth_user_id).first()
     if not user:
-        user = User.query.filter_by(email=email).first()
+        user = User.query.options(joinedload(User.profile)).filter_by(email=email).first()
     is_new_user = user is None
 
 
@@ -146,7 +147,7 @@ def register_user(data):
 
 def login_user(data):
     email = (data.get("email") or "").strip().lower()
-    user = User.query.filter_by(email=email).first()
+    user = User.query.options(joinedload(User.profile)).filter_by(email=email).first()
     if not user or not user.password_hash or not user.check_password(data.get("password") or ""):
         raise ValueError("이메일 또는 비밀번호가 올바르지 않습니다.")
     if not user.is_active:
@@ -170,9 +171,9 @@ def login_with_supabase(data):
     avatar_url = metadata.get("avatar_url") or metadata.get("picture")
     phone_number = normalize_phone_number(metadata.get("phone_number") or supabase_user.get("phone"))
 
-    user = User.query.filter_by(auth_user_id=provider_id).first() if provider_id else None
+    user = User.query.options(joinedload(User.profile)).filter_by(auth_user_id=provider_id).first() if provider_id else None
     if not user:
-        user = User.query.filter_by(email=email).first()
+        user = User.query.options(joinedload(User.profile)).filter_by(email=email).first()
     if not user:
         is_new_user = True
         user = User(

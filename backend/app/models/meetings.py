@@ -19,7 +19,7 @@ class Meeting(db.Model, TimestampMixin):
     address = db.Column(db.String(255), nullable=False)
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
-    start_at = db.Column(db.DateTime, nullable=False)
+    start_at = db.Column(db.DateTime)
     end_at = db.Column(db.DateTime)
     repeat_rule = db.Column(db.String(120))
     max_participants = db.Column(db.Integer, default=6, nullable=False)
@@ -49,7 +49,7 @@ class Meeting(db.Model, TimestampMixin):
             "address": self.address,
             "latitude": self.latitude,
             "longitude": self.longitude,
-            "start_at": self.start_at.isoformat(),
+            "start_at": self.start_at.isoformat() if self.start_at else None,
             "end_at": self.end_at.isoformat() if self.end_at else None,
             "max_participants": self.max_participants,
             "current_participants": self.current_participants,

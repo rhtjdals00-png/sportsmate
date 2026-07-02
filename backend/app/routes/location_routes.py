@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from flask import Blueprint, jsonify, request
 
 from app.services.location_service import list_regions, search_vworld_places, sync_regions_from_configured_api
@@ -5,15 +7,28 @@ from app.services.location_service import list_regions, search_vworld_places, sy
 location_bp = Blueprint("locations", __name__)
 
 
+@lru_cache(maxsize=128)
+def _cached_regions(level=None, parent_code=None):
+    items = list_regions(level=level or None, parent_code=parent_code or None)
+    return [item.to_dict() for item in items]
+
+
+def _cached_json(payload):
+    response = jsonify(payload)
+    response.headers["Cache-Control"] = "public, max-age=300"
+    return response
+
+
 @location_bp.get("/regions")
 def regions():
-    items = list_regions(level=request.args.get("level"), parent_code=request.args.get("parent_code"))
-    return jsonify({"items": [item.to_dict() for item in items]})
+    items = _cached_regions(request.args.get("level") or "", request.args.get("parent_code") or "")
+    return _cached_json({"items": items})
 
 
 @location_bp.post("/regions/sync")
 def sync_regions():
     result = sync_regions_from_configured_api()
+    _cached_regions.cache_clear()
     return jsonify(result)
 
 

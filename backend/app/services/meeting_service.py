@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import ChatRoom, Meeting, Notification, Participant, Review, Sport
+from app.models import ChatRoom, Meeting, Notification, Participant, Review, Sport, User
 
 
 def parse_datetime(value):
@@ -14,9 +14,10 @@ def parse_datetime(value):
 
 def list_meetings(params, current_user_id=None):
     query = Meeting.query.options(
-        joinedload(Meeting.host),
+        joinedload(Meeting.host).joinedload(User.profile),
         joinedload(Meeting.sport).joinedload(Sport.category),
         joinedload(Meeting.participants),
+        joinedload(Meeting.chat_room),
     )
     if params.get("sport"):
       ######################
@@ -46,7 +47,7 @@ def list_meetings(params, current_user_id=None):
     if params.get("mine") == "joined" and current_user_id:
       query = query.join(Participant).filter(Participant.user_id == current_user_id, Participant.status == "approved")
     limit = min(int(params.get("limit", 20)), 50)
-    return query.order_by(Meeting.start_at.asc()).limit(limit).all()
+    return query.order_by(Meeting.start_at.is_(None), Meeting.start_at.asc()).limit(limit).all()
 
 
 def update_meeting(meeting_id, host_id, data):
@@ -100,7 +101,7 @@ def create_meeting(data, host_id):
         address=data["address"],
         latitude=data.get("latitude"),
         longitude=data.get("longitude"),
-        start_at=parse_datetime(data["start_at"]),
+        start_at=parse_datetime(data.get("start_at")),
         end_at=parse_datetime(data.get("end_at")),
         max_participants=data.get("max_participants", 6),
         approval_required=data.get("approval_required", True),

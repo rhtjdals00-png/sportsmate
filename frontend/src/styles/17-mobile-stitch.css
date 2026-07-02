@@ -2996,3 +2996,14 @@
 .mobile-shell textarea {
   font-size: 16px;
 }
+
+
+.mobile-shell .mobile-schedule-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mobile-shell .mobile-schedule-toggles label {
+  min-height: 42px;
+}
