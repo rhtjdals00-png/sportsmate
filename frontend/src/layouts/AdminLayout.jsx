@@ -10,10 +10,12 @@ import {
   BarChart3,
 } from "lucide-react";
 import { useResponsive } from "../hooks/useResponsive";
+import { useAuth } from "../contexts/AuthContext.jsx";
 
 function AdminLayout() {
   const location = useLocation();
   const { isMobile } = useResponsive();
+  const { user } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
 
   // 현재 관리자 라우트에 맞춰 헤더 제목을 결정합니다.
@@ -132,8 +134,10 @@ function AdminLayout() {
           {showDropdown && (
             <div className="admin-profile-dropdown codex-style">
               <div className="admin-profile-dropdown__header">
-                <span className="admin-profile-dropdown__email">admin@system.com</span>
-                <span className="admin-profile-dropdown__badge">관리자 계정</span>
+                <span className="admin-profile-dropdown__email">{user?.email || "admin@system.com"}</span>
+                <span className="admin-profile-dropdown__badge">
+                  {user?.role === "superadmin" ? "최고관리자" : "관리자 계정"}
+                </span>
               </div>
               <div className="admin-profile-dropdown__divider"></div>
               <Link to="/" className="admin-profile-dropdown__item codex-item" onClick={() => setShowDropdown(false)}>
@@ -148,7 +152,7 @@ function AdminLayout() {
             style={{ cursor: "pointer", userSelect: "none" }}
           >
             <img 
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&q=80" 
+              src={user?.profile_image_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&q=80"} 
               alt="Admin Avatar" 
               className="admin-profile-card__avatar"
               onError={(e) => {
@@ -156,8 +160,8 @@ function AdminLayout() {
               }}
             />
             <div className="admin-profile-card__info">
-              <span className="admin-profile-card__name">Admin</span>
-              <span className="admin-profile-card__email">admin@system.com</span>
+              <span className="admin-profile-card__name">{user?.nickname || user?.name || "Admin"}</span>
+              <span className="admin-profile-card__email">{user?.email || "admin@system.com"}</span>
             </div>
             <ChevronDown 
               size={16} 

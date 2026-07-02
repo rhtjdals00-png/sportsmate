@@ -9,6 +9,9 @@ dist/
 venv/
 env/
 
+# Web Push VAPID private/public key files
+*.pem
+
 __pycache__/
 *.py[cod]
 .pytest_cache/

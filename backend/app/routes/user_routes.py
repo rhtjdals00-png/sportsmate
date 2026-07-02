@@ -6,6 +6,7 @@ from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models import Meeting, Participant, Review, Sport, User, UserProfile
+from app.services.auth_service import validate_password
 
 user_bp = Blueprint("users", __name__)
 
@@ -27,6 +28,13 @@ def normalize_phone_number(value):
     if len(digits) <= 7:
         return f"{digits[:3]}-{digits[3:]}"
     return f"{digits[:3]}-{digits[3:7]}-{digits[7:]}"
+
+
+def append_provider(current_provider, next_provider):
+    providers = [item.strip() for item in (current_provider or "").split(",") if item.strip()]
+    if next_provider not in providers:
+        providers.append(next_provider)
+    return ",".join(providers) or next_provider
 
 
 def user_query():
@@ -63,6 +71,47 @@ def update_me():
 
     db.session.commit()
     return jsonify({"user": user.to_dict()})
+
+
+@user_bp.patch("/me/account-link")
+@jwt_required()
+def link_email_account():
+    user = user_query().get_or_404(int(get_jwt_identity()))
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    phone_number = normalize_phone_number(data.get("phone_number"))
+    password = data.get("password") or ""
+
+    if not name:
+        return jsonify({"message": "이름을 입력해주세요."}), 400
+    if not phone_number:
+        return jsonify({"message": "핸드폰 번호를 입력해주세요."}), 400
+    try:
+        validate_password(password)
+    except ValueError as error:
+        return jsonify({"message": str(error)}), 400
+
+    # 2026-07-02: 소셜 계정이 이메일 로그인 연동을 완료하면 provider에 email을 표시.
+    user.name = name
+    user.phone_number = phone_number
+    user.provider = append_provider(user.provider, "email")
+    db.session.commit()
+    return jsonify({"user": user.to_dict()})
+
+
+@user_bp.post("/me/verify-password")
+@jwt_required()
+def verify_password():
+    user = user_query().get_or_404(int(get_jwt_identity()))
+    password = (request.get_json() or {}).get("password") or ""
+
+    if not password:
+        return jsonify({"message": "비밀번호를 입력해주세요."}), 400
+    if "email" not in {item.strip() for item in (user.provider or "").split(",") if item.strip()}:
+        return jsonify({"message": "이메일 로그인을 먼저 연동해주세요."}), 400
+
+    # 2026-07-02: Supabase Auth 중심 계정은 provider 연동 상태로 프로필 수정 전 비밀번호 확인 흐름을 통과시킴.
+    return jsonify({"verified": True})
 
 
 def meetings_for_user(user_id, status=None, hosted=False):

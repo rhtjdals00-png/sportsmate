@@ -165,6 +165,19 @@ const fallbackSportGroups = [
 
 const fallbackCategories = fallbackSportGroups.map((group) => group.category);
 const fallbackSports = fallbackSportGroups.flatMap((group) => group.sports.map((name, index) => ({ id: `${group.category.id}-${index}`, name, category_id: group.category.id })));
+const mergeSportCategories = (items = []) => {
+  const merged = [...items];
+  fallbackCategories.forEach((fallback) => {
+    if (!merged.some((category) => category.name === fallback.name)) {
+      merged.push(fallback);
+    }
+  });
+  return merged;
+};
+const findFallbackGroup = (category) => {
+  if (!category) return fallbackSportGroups[0];
+  return fallbackSportGroups.find((group) => group.category.name === category.name || group.category.name.includes(category.name) || category.name.includes(group.category.name)) || fallbackSportGroups[0];
+};
 const pad = (value) => String(value).padStart(2, "0");
 const toDateInputValue = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 const toTimeInputValue = (date) => `${pad(date.getHours())}:${pad(date.getMinutes())}`;
@@ -189,27 +202,33 @@ function MobileMeetingCreate() {
   const today = toDateInputValue(new Date());
   const nowTime = toTimeInputValue(new Date());
   const selectedRegion = koreaRegions.find((region) => region.name === form.region_sido);
-  const displayCategories = useMemo(() => categories.data?.items?.length ? categories.data.items : fallbackCategories, [categories.data?.items]);
-  const displaySports = useMemo(() => sports.data?.items?.length ? sports.data.items : fallbackSports.filter((sport) => String(sport.category_id) === String(form.category_id || displayCategories[0]?.id)), [displayCategories, form.category_id, sports.data?.items]);
-  const usingFallbackSports = !categories.data?.items?.length || !sports.data?.items?.length;
+  const displayCategories = useMemo(() => mergeSportCategories(categories.data?.items || []), [categories.data?.items]);
+  const displaySports = useMemo(() => {
+    if (!form.category_id) return [];
+    const currentSports = sports.data?.items || [];
+    const matchedSports = currentSports.filter((sport) => String(sport.category_id) === String(form.category_id));
+    const category = displayCategories.find((item) => String(item.id) === String(form.category_id));
+    const fallbackGroup = findFallbackGroup(category);
+    const mergedSports = [...matchedSports];
+    fallbackGroup.sports.forEach((name, index) => {
+      if (!mergedSports.some((sport) => sport.name === name)) {
+        mergedSports.push({ id: `${fallbackGroup.category.id}-${index}`, name, category_id: fallbackGroup.category.id });
+      }
+    });
+    return mergedSports;
+  }, [displayCategories, form.category_id, sports.data?.items]);
+  const usingFallbackSports = !displaySports.some((sport) => isNumericId(sport.id) && String(sport.category_id) === String(form.category_id));
   const selectedCategory = useMemo(() => displayCategories.find((category) => String(category.id) === String(form.category_id)), [displayCategories, form.category_id]);
   const purposeOptions = useMemo(() => uniqueValues([...(selectedCategory?.purpose?.split("/") || []), ...DEFAULT_PURPOSE_OPTIONS]), [selectedCategory?.purpose]);
 
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
   useEffect(() => {
-    const firstCategory = displayCategories[0];
-    if (!form.category_id && firstCategory) {
-      const firstPurpose = firstCategory.purpose.split("/")[0].trim();
-      setPurposeMode(firstPurpose);
-      setForm((prev) => ({ ...prev, category_id: String(firstCategory.id), purpose: firstPurpose }));
-    }
-  }, [displayCategories, form.category_id]);
-
-  useEffect(() => {
     const firstSport = displaySports[0];
     if (firstSport && !displaySports.some((sport) => String(sport.id) === String(form.sport_id))) {
       setForm((prev) => ({ ...prev, sport_id: String(firstSport.id) }));
+    } else if (!firstSport && form.sport_id) {
+      setForm((prev) => ({ ...prev, sport_id: "" }));
     }
   }, [displaySports, form.sport_id]);
 
@@ -230,7 +249,7 @@ function MobileMeetingCreate() {
 
   const updateCategory = (categoryId) => {
     const category = displayCategories.find((item) => String(item.id) === String(categoryId));
-    const firstPurpose = category?.purpose?.split("/")?.[0]?.trim() || form.purpose;
+    const firstPurpose = category?.purpose?.split("/")?.[0]?.trim() || initialForm.purpose;
     setPurposeMode(firstPurpose);
     setForm((prev) => ({ ...prev, category_id: categoryId, sport_id: "", purpose: firstPurpose }));
   };
@@ -354,8 +373,8 @@ function MobileMeetingCreate() {
         <div className="form-progress"><span>단계 {step}/3</span><div aria-hidden="true">{[1, 2, 3].map((item) => <i key={item} className={item <= step ? "active" : ""} />)}</div></div>
         {formMessage ? <p className="mobile-form-message mobile-form-message--error">{formMessage}</p> : null}
         {step === 1 && <section>
-          <label>카테고리<select value={form.category_id} onChange={(event) => updateCategory(event.target.value)}>{displayCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-          <label>종목<select required value={form.sport_id} onChange={(event) => update("sport_id", event.target.value)}>{displaySports.map((sport) => <option key={sport.id} value={sport.id}>{sport.name}</option>)}</select></label>
+          <label>카테고리<select value={form.category_id} onChange={(event) => updateCategory(event.target.value)}><option value="">카테고리 선택</option>{displayCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+          <label>종목<select required value={form.sport_id} onChange={(event) => update("sport_id", event.target.value)} disabled={!form.category_id}><option value="">종목 선택</option>{displaySports.map((sport) => <option key={sport.id} value={sport.id}>{sport.name}</option>)}</select></label>
           {usingFallbackSports ? <p className="mobile-form-message">기본 종목 목록을 표시하고 있습니다. 실제 등록은 DB 종목 데이터가 연결된 뒤 가능합니다.</p> : null}
           <div className="meeting-type-segment" role="group" aria-label="모임 방식"><button type="button" className={form.meeting_type === "one_time" ? "active" : ""} onClick={() => update("meeting_type", "one_time")}>한 번만 진행</button><button type="button" className={form.meeting_type === "regular" ? "active" : ""} onClick={() => update("meeting_type", "regular")}>반복 진행</button></div>
           <label>모집 목적<select value={purposeMode} onChange={(event) => updatePurposeMode(event.target.value)}>{purposeOptions.map((purpose) => <option key={purpose} value={purpose}>{purpose}</option>)}<option value={CUSTOM_PURPOSE}>기타</option></select></label>

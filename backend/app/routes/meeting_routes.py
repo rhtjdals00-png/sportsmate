@@ -22,7 +22,7 @@ def current_user_id_optional():
 def index():
     current_user_id = current_user_id_optional()
     items = list_meetings(request.args, current_user_id)
-    return jsonify({"items": [meeting.to_dict(current_user_id=current_user_id) for meeting in items]})
+    return jsonify({"items": [meeting.to_list_dict(current_user_id=current_user_id) for meeting in items]})
 
 
 @meeting_bp.post("")
@@ -76,7 +76,7 @@ def delete(meeting_id):
 def join(meeting_id):
     try:
         participant = join_meeting(meeting_id, int(get_jwt_identity()), (request.get_json() or {}).get("join_message", ""))
-        return jsonify({"participant": participant.to_dict()}), 201
+        return jsonify({"participant": participant.to_dict(), "meeting": participant.meeting.to_dict(current_user_id=participant.user_id)}), 201
     except ValueError as error:
         return jsonify({"message": str(error)}), 400
 

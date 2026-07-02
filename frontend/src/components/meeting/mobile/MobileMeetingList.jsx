@@ -68,7 +68,7 @@ const isNumericId = (value) => /^\d+$/.test(String(value || ""));
 function MobileMeetingList() {
   const [params, setParams] = useSearchParams();
   const query = Object.fromEntries(params.entries());
-  const meetings = useAsync(() => meetingApi.list(query), [params.toString()]);
+  const meetings = useAsync(() => meetingApi.list({ limit: 10, ...query }), [params.toString()]);
   const categories = useAsync(() => sportApi.categories(), []);
   const sports = useAsync(
     () => sportApi.sports(isNumericId(params.get("category")) ? { category_id: params.get("category") } : {}),

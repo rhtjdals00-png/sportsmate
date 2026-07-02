@@ -3007,3 +3007,45 @@
 .mobile-shell .mobile-schedule-toggles label {
   min-height: 42px;
 }
+
+.mobile-shell .mobile-push-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  border: 1px solid rgba(79, 70, 229, 0.18);
+  border-radius: 22px;
+  background: #eef2ff;
+  padding: 16px;
+}
+
+.mobile-shell .mobile-push-card > svg {
+  color: var(--mobile-primary);
+}
+
+.mobile-shell .mobile-push-card strong {
+  color: var(--mobile-text);
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.mobile-shell .mobile-push-card p {
+  margin: 5px 0 0;
+  color: var(--mobile-muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.mobile-shell .mobile-push-card span {
+  display: block;
+  margin-top: 8px;
+  color: var(--mobile-primary);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.mobile-shell .mobile-push-card .button {
+  grid-column: 1 / -1;
+  min-height: 44px;
+}

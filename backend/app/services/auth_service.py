@@ -56,6 +56,16 @@ def generate_user_tag():
     raise ValueError("사용자 태그를 생성하지 못했습니다. 다시 시도해주세요.")
 
 
+def merge_auth_providers(primary_provider, existing_provider=""):
+    providers = []
+    for value in [primary_provider, existing_provider]:
+        for item in (value or "").split(","):
+            provider = item.strip()
+            if provider and provider not in providers:
+                providers.append(provider)
+    return ",".join(providers) or "email"
+
+
 def sync_supabase_user(data):
     auth_user_id = (data.get("auth_user_id") or data.get("id") or "").strip()
     email, name, phone_number, nickname = normalize_profile_payload(data)
@@ -84,12 +94,14 @@ def sync_supabase_user(data):
     else:
         user.auth_user_id = user.auth_user_id or auth_user_id
         user.email = email
-        user.name = name or user.name
-        user.phone_number = phone_number if phone_number is not None else user.phone_number
-        user.nickname = nickname or user.nickname
+        # 2026-07-02: Supabase 동기화는 초기값 보강에만 쓰고, SportsMate DB에서 관리하는 계정 정보는 보존.
+        user.name = user.name or name
+        user.phone_number = user.phone_number or phone_number
+        user.nickname = user.nickname or nickname
         user.user_tag = user.user_tag or generate_user_tag()
 
-    user.provider = provider
+    # 2026-07-02: Supabase 재동기화가 google,email 같은 SportsMate 연동 상태를 google로 덮어쓰지 않도록 보존.
+    user.provider = merge_auth_providers(provider, user.provider)
     user.provider_id = provider_id
     user.profile_image_url = profile_image_url or user.profile_image_url
 
@@ -192,8 +204,10 @@ def login_with_supabase(data):
         is_new_user = False
         user.auth_user_id = user.auth_user_id or provider_id
         user.name = user.name or name
-        user.phone_number = phone_number if phone_number is not None else user.phone_number
-        user.provider = provider
+        # 2026-07-02: 소셜 재로그인 시 Supabase metadata가 기존 계정 정보를 덮어쓰지 않도록 보존.
+        user.phone_number = user.phone_number or phone_number
+        # 2026-07-02: 소셜 재로그인 시에도 provider의 email 연동 표시를 유지.
+        user.provider = merge_auth_providers(provider, user.provider)
         user.provider_id = provider_id or user.provider_id
         user.nickname = user.nickname or nickname
         user.user_tag = user.user_tag or generate_user_tag()

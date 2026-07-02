@@ -15,9 +15,11 @@ import {
   X
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { userApi } from "../../../api/userApi";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { useAsync } from "../../../hooks/useAsync";
+import { markProfileEditVerified } from "../../../utils/profileEditAccess";
 
 const PROFILE_INTRO_MAX_LENGTH = 30;
 const PROFILE_INTRO_EMPTY_TEXT = "아직 한 줄 소개가 없습니다.";
@@ -85,6 +87,13 @@ function tagLabel(user) {
   const rawTag = user?.user_tag || user?.user_tag_display || user?.nickname_with_tag?.match(/\[([^\]]+)\]/)?.[1] || "";
   const normalized = String(rawTag).replace(/^#/, "").replace(/^\[/, "").replace(/\]$/, "").trim();
   return normalized ? `#${normalized}` : "";
+}
+
+function hasLinkedEmailProvider(user) {
+  return (user?.provider || "")
+    .split(",")
+    .map((item) => item.trim())
+    .includes("email");
 }
 
 function normalizeMeeting(meeting, state) {
@@ -304,6 +313,8 @@ function DesktopMyPage() {
   const [introDraft, setIntroDraft] = useState("");
   const [authOpen, setAuthOpen] = useState(false);
   const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authChecking, setAuthChecking] = useState(false);
   const [savingIntro, setSavingIntro] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -351,6 +362,8 @@ function DesktopMyPage() {
     { key: "reviews", label: "후기 관리", icon: FileText }
   ];
   const activePanel = activityPanels[activeActivity];
+  // 2026-07-02: PC 프로필 수정 보호는 SportsMate DB provider에 email 연동이 실제 반영된 경우에만 통과.
+  const canVerifyPassword = hasLinkedEmailProvider(user);
 
   const startIntroEdit = () => {
     setIntroDraft(savedIntro.slice(0, PROFILE_INTRO_MAX_LENGTH));
@@ -389,14 +402,45 @@ function DesktopMyPage() {
   };
 
   const openProtectedEdit = () => {
+    setAuthError("");
+    if (!canVerifyPassword) {
+      setAuthPassword("");
+      setAuthOpen("account-link");
+      return;
+    }
     setAuthOpen(true);
     setAuthPassword("");
   };
 
-  const confirmProtectedEdit = () => {
-    // 2026-07-01: 비밀번호 확인 API 연결 전까지 PC 프로필 수정 진입 흐름만 유지.
-    setAuthOpen(false);
-    navigate("/mypage/profile");
+  const confirmProtectedEdit = async () => {
+    if (!authPassword.trim()) {
+      setAuthError("비밀번호를 입력해주세요.");
+      return;
+    }
+
+    setAuthChecking(true);
+    setAuthError("");
+    try {
+      if (!isSupabaseConfigured || !supabase) {
+        throw new Error("인증 서비스 설정을 확인해주세요.");
+      }
+      // 2026-07-02: 비밀번호 원본은 Supabase Auth에 있으므로 Supabase 로그인 검증을 먼저 수행.
+      const { error: supabaseError } = await supabase.auth.signInWithPassword({
+        email: user?.email || "",
+        password: authPassword
+      });
+      if (supabaseError) {
+        throw new Error("비밀번호가 올바르지 않습니다.");
+      }
+      await userApi.verifyPassword({ password: authPassword });
+      markProfileEditVerified();
+      setAuthOpen(false);
+      navigate("/mypage/profile");
+    } catch (error) {
+      setAuthError(error?.response?.data?.message || "비밀번호 확인에 실패했습니다.");
+    } finally {
+      setAuthChecking(false);
+    }
   };
 
   if (!authUser && !profileState.loading) {
@@ -512,7 +556,7 @@ function DesktopMyPage() {
         </section>
       </div>
 
-      {authOpen && (
+      {authOpen === true && (
         <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setAuthOpen(false)}>
           <section className="profile-auth-modal">
             <button className="schedule-modal-close" type="button" onClick={() => setAuthOpen(false)}><X size={18} /></button>
@@ -520,9 +564,24 @@ function DesktopMyPage() {
             <h2>프로필 수정 확인</h2>
             <p>중요한 프로필 정보를 수정하기 전에 비밀번호 확인이 필요합니다.</p>
             <input type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} placeholder="비밀번호 입력" />
+            {authError && <em className="nickname-check warn">{authError}</em>}
             <div>
               <button className="ghost-btn" type="button" onClick={() => setAuthOpen(false)}>취소</button>
-              <button className="primary-small" type="button" onClick={confirmProtectedEdit}>확인</button>
+              <button className="primary-small" type="button" onClick={confirmProtectedEdit} disabled={authChecking}>{authChecking ? "확인 중" : "확인"}</button>
+            </div>
+          </section>
+        </div>
+      )}
+      {authOpen === "account-link" && (
+        <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setAuthOpen(false)}>
+          <section className="profile-auth-modal">
+            <button className="schedule-modal-close" type="button" onClick={() => setAuthOpen(false)}><X size={18} /></button>
+            <ShieldCheck size={26} />
+            <h2>계정 연동이 필요합니다</h2>
+            <p>소셜 로그인 계정은 이름, 핸드폰 번호, 이메일 로그인 정보를 등록한 뒤 프로필 수정을 이용할 수 있습니다.</p>
+            <div>
+              <button className="ghost-btn" type="button" onClick={() => setAuthOpen(false)}>나중에 하기</button>
+              <button className="primary-small" type="button" onClick={() => navigate("/mypage/account-link")}>연동하기</button>
             </div>
           </section>
         </div>

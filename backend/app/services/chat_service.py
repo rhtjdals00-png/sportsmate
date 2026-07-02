@@ -1,7 +1,8 @@
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import ChatMessage, ChatRoom, Meeting, Notification, Participant, Sport, User
+from app.models import ChatMessage, ChatRoom, Meeting, Participant, Sport, User
+from app.services.notification_service import create_notification, send_web_push
 
 
 def _room_options(include_messages=False):
@@ -32,7 +33,10 @@ def send_message(room_id, user_id, content):
     for participant in participants:
         if participant.user_id == user_id:
             continue
-        db.session.add(Notification(user_id=participant.user_id, type="chat", title="새 채팅 메시지", message=content[:80], link_url=f"/chats/{room.id}"))
+        create_notification(participant.user_id, "chat", "새 채팅 메시지", content[:80], f"/chats/{room.id}", send_push=False)
 
     db.session.commit()
+    for participant in participants:
+        if participant.user_id != user_id:
+            send_web_push(participant.user_id, "새 채팅 메시지", content[:80], f"/chats/{room.id}")
     return message

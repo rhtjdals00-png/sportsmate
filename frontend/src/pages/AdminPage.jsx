@@ -159,7 +159,7 @@ function AdminPage() {
               type: r.reason || "기타",
               target: r.target_name || r.target_type || `대상 #${r.target_id || ""}`,
               reporter: r.reporter_name || "신고자",
-              date: r.created_at ? new Date(r.created_at).toLocaleDateString() : "2023.10.27",
+              date: r.created_at ? new Date(r.created_at).toLocaleDateString().replace(/\s/g, "").replace(/\.$/, "") : "2023.10.27",
               status: r.status === "pending" || r.status === "대기 중" ? "대기 중" : "처리 완료"
             }));
             

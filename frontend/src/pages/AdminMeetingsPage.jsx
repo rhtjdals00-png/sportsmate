@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { adminApi } from "../api/adminApi";
 import { Trash2, AlertCircle } from "lucide-react";
 
@@ -12,6 +12,7 @@ const mockMeetings = [
 ];
 
 function AdminMeetingsPage() {
+  const navigate = useNavigate();
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchField, setSearchField] = useState("all");
@@ -49,7 +50,7 @@ function AdminMeetingsPage() {
             host: m.host ? (m.host.nickname || m.host.name || `방장 #${m.host.id}`) : "알 수 없음",
             sport: m.sport ? m.sport.name : "일반",
             emoji: m.sport ? (m.sport.name === "축구" ? "⚽" : m.sport.name === "러닝" ? "🏃" : m.sport.name === "테니스" ? "🎾" : m.sport.name === "농구" ? "🏀" : "👟") : "👟",
-            date: m.start_at ? new Date(m.start_at).toLocaleDateString() : "2023.11.04",
+            date: m.start_at ? new Date(m.start_at).toLocaleDateString().replace(/\s/g, "").replace(/\.$/, "") : "2023.11.04",
             capacity: `${m.current_participants || 0} / ${m.max_participants || 0}`,
             status: m.status === "closed" || m.current_participants === m.max_participants ? "마감" : "모집중"
           }));
@@ -231,12 +232,14 @@ function AdminMeetingsPage() {
                 </tr>
               ) : (
                 filteredMeetings.map((m) => (
-                  <tr key={m.id}>
+                  <tr 
+                    key={m.id} 
+                    onClick={() => navigate(`/admin/meetings/${m.id}`)}
+                    style={{ cursor: "pointer" }}
+                  >
                     <td>#{m.id}</td>
                     <td style={{ fontWeight: 600, maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      <Link to={`/admin/meetings/${m.id}`} className="admin-data-table__row-link">
-                        {m.title}
-                      </Link>
+                      {m.title}
                     </td>
                     <td>{m.host}</td>
                     <td>
@@ -256,7 +259,10 @@ function AdminMeetingsPage() {
                     <td style={{ textAlign: "center" }}>
                       <button
                         type="button"
-                        onClick={() => deleteMeeting(m.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteMeeting(m.id);
+                        }}
                         className="admin-table-action-btn admin-table-action-btn--outline"
                         style={{ color: "#ef4444", borderColor: "#fca5a5" }}
                       >

@@ -2,17 +2,17 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy.orm import joinedload
 
-from app.models import ChatMessage, ChatRoom, Meeting, Participant, Sport, User
+from app.extensions import db
+from app.models import ChatRoom, Meeting, Participant, Sport
 from app.services.chat_service import ensure_chat_access, send_message
 
 chat_bp = Blueprint("chat", __name__)
 
 
 ROOM_LIST_OPTIONS = (
-    joinedload(ChatRoom.meeting).joinedload(Meeting.host).joinedload(User.profile),
+    joinedload(ChatRoom.meeting).joinedload(Meeting.host),
     joinedload(ChatRoom.meeting).joinedload(Meeting.sport).joinedload(Sport.category),
-    joinedload(ChatRoom.meeting).joinedload(Meeting.participants),
-    joinedload(ChatRoom.messages).joinedload(ChatMessage.sender).joinedload(User.profile),
+    joinedload(ChatRoom.meeting).joinedload(Meeting.chat_room),
 )
 
 
@@ -20,6 +20,16 @@ ROOM_LIST_OPTIONS = (
 @jwt_required()
 def rooms():
     user_id = int(get_jwt_identity())
+    approved_meetings = (
+        Meeting.query
+        .join(Participant, Participant.meeting_id == Meeting.id)
+        .filter(Participant.user_id == user_id, Participant.status == "approved")
+        .all()
+    )
+    missing_rooms = [ChatRoom(meeting_id=meeting.id) for meeting in approved_meetings if not meeting.chat_room]
+    if missing_rooms:
+        db.session.add_all(missing_rooms)
+        db.session.commit()
     items = (
         ChatRoom.query.options(*ROOM_LIST_OPTIONS)
         .join(Meeting, ChatRoom.meeting_id == Meeting.id)
@@ -27,7 +37,7 @@ def rooms():
         .filter(Participant.user_id == user_id, Participant.status == "approved")
         .all()
     )
-    return jsonify({"items": [room.to_dict() for room in items]})
+    return jsonify({"items": [room.to_list_dict() for room in items]})
 
 
 @chat_bp.get("/<int:room_id>/messages")

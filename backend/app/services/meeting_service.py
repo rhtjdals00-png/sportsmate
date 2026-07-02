@@ -3,7 +3,8 @@ from datetime import datetime
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import ChatRoom, Meeting, Notification, Participant, Review, Sport, User
+from app.models import ChatRoom, Meeting, Participant, Review, Sport
+from app.services.notification_service import create_notification, send_web_push
 
 
 def parse_datetime(value):
@@ -13,12 +14,14 @@ def parse_datetime(value):
 
 
 def list_meetings(params, current_user_id=None):
-    query = Meeting.query.options(
-        joinedload(Meeting.host).joinedload(User.profile),
+    load_options = [
+        joinedload(Meeting.host),
         joinedload(Meeting.sport).joinedload(Sport.category),
-        joinedload(Meeting.participants),
         joinedload(Meeting.chat_room),
-    )
+    ]
+    if current_user_id:
+        load_options.append(joinedload(Meeting.participants))
+    query = Meeting.query.options(*load_options)
     if params.get("sport"):
       ######################
         try:
@@ -130,8 +133,9 @@ def join_meeting(meeting_id, user_id, join_message=""):
         participant.approved_at = datetime.utcnow()
         meeting.current_participants += 1
     db.session.add(participant)
-    db.session.add(Notification(user_id=meeting.host_id, type="join_request", title="새 참여 신청", message=f"{meeting.title}에 새 참여 신청이 있습니다.", link_url=f"/host/meetings/{meeting.id}/applicants"))
+    create_notification(meeting.host_id, "join_request", "새 참여 신청", f"{meeting.title}에 새 참여 신청이 있습니다.", f"/host/meetings/{meeting.id}/applicants", send_push=False)
     db.session.commit()
+    send_web_push(meeting.host_id, "새 참여 신청", f"{meeting.title}에 새 참여 신청이 있습니다.", f"/host/meetings/{meeting.id}/applicants")
     return participant
 
 
@@ -154,9 +158,10 @@ def update_application(meeting_id, applicant_user_id, host_id, status):
         participant.status = "rejected"
         participant.rejected_at = datetime.utcnow()
         title = "참여 신청 거절"
-        message = f"{meeting.title} 참여 신청이 거절되었습니다."
-    db.session.add(Notification(user_id=participant.user_id, type=status, title=title, message=message, link_url=f"/meetings/{meeting.id}"))
+    message = f"{meeting.title} 참여 신청이 거절되었습니다."
+    create_notification(participant.user_id, status, title, message, f"/meetings/{meeting.id}", send_push=False)
     db.session.commit()
+    send_web_push(participant.user_id, title, message, f"/meetings/{meeting.id}")
     return participant
 
 

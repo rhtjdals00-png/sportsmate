@@ -33,6 +33,7 @@ class User(db.Model, TimestampMixin):
 
     def to_dict(self):
         profile = self.profile
+        provider_values = {item.strip() for item in (self.provider or "").split(",") if item.strip()}
         return {
             "id": self.id,
             "auth_user_id": self.auth_user_id,
@@ -48,6 +49,8 @@ class User(db.Model, TimestampMixin):
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "provider": self.provider,
+            # 2026-07-02: 소셜 계정의 이메일 연동 여부를 프론트 분기용으로 제공.
+            "has_password": "email" in provider_values,
             "profile": {
                 "region": profile.region if profile else "",
                 "bio": profile.bio if profile else "",

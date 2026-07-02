@@ -7,7 +7,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%) !important;
   color: #ffffff !important;
   font-weight: 600;
   font-size: 13px;
@@ -17,6 +17,7 @@
   margin-right: 16px;
   box-shadow: 0 4px 10px rgba(59, 130, 246, 0.25);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: none !important;
 }
 
 .desktop-header__admin-btn:hover {
@@ -568,7 +569,7 @@
   display: grid;
   grid-template-columns: 2.1fr 1fr;
   gap: 24px;
-  align-items: start;
+  align-items: stretch;
 }
 
 /* Common Card panel style */

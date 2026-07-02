@@ -14,9 +14,13 @@ function ResponsiveLayout() {
     if (!message) return;
     sessionStorage.removeItem("sportsmate_flash");
     setToast(message);
+  }, [location.key]);
+
+  useEffect(() => {
+    if (!toast) return undefined;
     const timer = window.setTimeout(() => setToast(""), 2600);
     return () => window.clearTimeout(timer);
-  }, [location.key]);
+  }, [toast]);
 
   const content = isMobile ? (
     <MobileLayout>

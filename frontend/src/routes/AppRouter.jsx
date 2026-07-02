@@ -14,6 +14,7 @@ import ChatListPage from "../pages/ChatListPage.jsx";
 import ChatRoomPage from "../pages/ChatRoomPage.jsx";
 import MyPage from "../pages/MyPage.jsx";
 import ProfileEditPage from "../pages/ProfileEditPage.jsx";
+import AccountLinkPage from "../pages/AccountLinkPage.jsx";
 import ProfileIntroPage from "../pages/ProfileIntroPage.jsx";
 import ProfileSetupPage from "../pages/ProfileSetupPage.jsx";
 import MyMeetingsPage from "../pages/MyMeetingsPage.jsx";
@@ -59,6 +60,7 @@ function AppRouter() {
         <Route path="/map" element={<MapPage />} />
         <Route path="/mypage" element={protect(<MyPage />)} />
         <Route path="/mypage/profile" element={protect(<ProfileEditPage />)} />
+        <Route path="/mypage/account-link" element={protect(<AccountLinkPage />)} />
         <Route path="/profile/intro" element={protect(<ProfileIntroPage />)} />
         <Route path="/profile/setup" element={protect(<ProfileSetupPage />)} />
         <Route path="/mypage/meetings" element={protect(<MyMeetingsPage />)} />

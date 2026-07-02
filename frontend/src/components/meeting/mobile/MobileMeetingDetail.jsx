@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { CalendarClock, Eye, LockKeyhole, MessageCircle, UserRound, Users } from "lucide-react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
@@ -26,10 +26,11 @@ function MobileMeetingDetail() {
   const [reporting, setReporting] = useState(false);
   const [checkingAttendance, setCheckingAttendance] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId]);
+  const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId, refreshKey]);
   const detailMeeting = detail.data?.meeting;
   const detailIsHost = user?.id === detailMeeting?.host?.id;
-  const detailCanViewMemberContent = Boolean(detailMeeting && (detailIsHost || detailMeeting.viewer_status === "approved"));
+  const detailViewerStatus = detailMeeting?.viewer_status || detailMeeting?.my_participant?.status || "";
+  const detailCanViewMemberContent = Boolean(detailMeeting && (detailIsHost || detailViewerStatus === "approved"));
   const reviews = useAsync(
     () => detailCanViewMemberContent ? meetingApi.reviews(meetingId) : Promise.resolve({ items: [] }),
     [meetingId, refreshKey, detailCanViewMemberContent]
@@ -43,6 +44,12 @@ function MobileMeetingDetail() {
     [meetingId, refreshKey, detailCanViewMemberContent]
   );
 
+  useEffect(() => {
+    if (!message.text) return undefined;
+    const timer = window.setTimeout(() => setMessage({ text: "", tone: "notice" }), 2400);
+    return () => window.clearTimeout(timer);
+  }, [message.text]);
+
   if (detail.loading) return <LoadingCards count={2} />;
 
   const meeting = detail.data?.meeting;
@@ -50,9 +57,11 @@ function MobileMeetingDetail() {
   const isHost = user?.id === meeting.host?.id;
   const isClosed = meeting.status !== "open";
   const isFull = Number(meeting.current_participants || 0) >= Number(meeting.max_participants || 0);
-  const canJoin = !isHost && !isClosed && !isFull && !joining;
+  const viewerStatus = meeting.viewer_status || meeting.my_participant?.status || "";
+  const isApprovedParticipant = viewerStatus === "approved";
+  const isPendingParticipant = viewerStatus === "pending";
+  const canJoin = !isHost && !isApprovedParticipant && !isPendingParticipant && !isClosed && !isFull && !joining;
   const chatRoomId = meeting.chat_room_id || location.state?.chatRoomId;
-  const viewerStatus = meeting.viewer_status || "";
   const canViewMemberContent = isHost || viewerStatus === "approved";
 
   const joinMeeting = async () => {
@@ -62,8 +71,13 @@ function MobileMeetingDetail() {
     }
     setJoining(true);
     try {
-      await meetingApi.join(meeting.id, { join_message: "함께 운동하고 싶습니다." });
+      const data = await meetingApi.join(meeting.id, { join_message: "함께 운동하고 싶습니다." });
+      if (!meeting.approval_required && (data.meeting?.chat_room_id || chatRoomId)) {
+        navigate(`/chats/${data.meeting?.chat_room_id || chatRoomId}`);
+        return;
+      }
       setMessage({ text: meeting.approval_required ? "참여 신청이 완료되었습니다." : "모임 참여가 완료되었습니다.", tone: "notice" });
+      setRefreshKey((value) => value + 1);
     } catch (error) {
       setMessage({ text: error.response?.data?.message || "참여 신청을 처리하지 못했습니다.", tone: "error" });
     } finally {
@@ -266,6 +280,15 @@ function MobileMeetingDetail() {
             ) : null}
             <Link className="button button--primary" to={`/host/meetings/${meeting.id}`}>방장 관리</Link>
           </div>
+        ) : isApprovedParticipant && chatRoomId ? (
+          <Link className="button button--primary" to={`/chats/${chatRoomId}`}>
+            <MessageCircle size={18} />
+            채팅방 입장
+          </Link>
+        ) : isApprovedParticipant ? (
+          <Button disabled>참가 중</Button>
+        ) : isPendingParticipant ? (
+          <Button disabled>승인 대기 중</Button>
         ) : (
           <Button onClick={joinMeeting} disabled={!canJoin}>
             {joining ? "신청 중..." : isClosed ? "모집 마감" : isFull ? "정원 마감" : "참여 신청"}
