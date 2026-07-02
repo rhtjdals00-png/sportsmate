@@ -1,6 +1,7 @@
 import json
+import re
 from urllib.parse import urlencode
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from flask import current_app
 from sqlalchemy import or_
@@ -66,23 +67,200 @@ def sync_regions_from_configured_api():
     return {"synced": len(saved), "message": "지역 데이터를 동기화했습니다."}
 
 
+def _strip_html(value):
+    return re.sub(r"<[^>]+>", "", value or "").strip()
+
+
+def _naver_coord(value):
+    if value in (None, ""):
+        return None
+    try:
+        return round(float(value) / 10000000, 7)
+    except (TypeError, ValueError):
+        return None
+
+
+def _float_or_none(value):
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _local_result(title, address, latitude=None, longitude=None, road_address="", category="", source=""):
+    return {
+        "title": _strip_html(title) or _strip_html(address),
+        "address": _strip_html(address) or _strip_html(title),
+        "road_address": _strip_html(road_address),
+        "category": _strip_html(category),
+        "latitude": _float_or_none(latitude),
+        "longitude": _float_or_none(longitude),
+        "source": source,
+    }
+
+
+def _kakao_request(url, keyword, size=10):
+    api_key = current_app.config.get("KAKAO_REST_API_KEY")
+    if not api_key:
+        return None
+
+    params = urlencode({"query": keyword, "size": size})
+    request = Request(
+        f"{url}?{params}",
+        headers={
+            "Authorization": f"KakaoAK {api_key}",
+            "User-Agent": "SportsMate/0.1",
+        },
+    )
+    with urlopen(request, timeout=8) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def search_kakao_keyword(keyword, size=10):
+    payload = _kakao_request(current_app.config.get("KAKAO_KEYWORD_SEARCH_URL"), keyword, size=size)
+    if payload is None:
+        return None
+
+    items = []
+    for item in payload.get("documents", []):
+        road_address = item.get("road_address_name") or ""
+        address = road_address or item.get("address_name") or item.get("place_name") or keyword
+        items.append(_local_result(
+            item.get("place_name") or address,
+            address,
+            latitude=item.get("y"),
+            longitude=item.get("x"),
+            road_address=road_address,
+            category=item.get("category_name") or "\uc7a5\uc18c",
+            source="kakao-keyword",
+        ))
+    return {"source": "kakao-keyword", "items": items}
+
+
+def search_kakao_address(keyword, size=10):
+    payload = _kakao_request(current_app.config.get("KAKAO_ADDRESS_SEARCH_URL"), keyword, size=size)
+    if payload is None:
+        return None
+
+    items = []
+    for item in payload.get("documents", []):
+        road = item.get("road_address") or {}
+        jibun = item.get("address") or {}
+        road_address = road.get("address_name") or ""
+        address = road_address or jibun.get("address_name") or item.get("address_name") or keyword
+        items.append(_local_result(
+            address,
+            address,
+            latitude=item.get("y"),
+            longitude=item.get("x"),
+            road_address=road_address,
+            category="\uc8fc\uc18c",
+            source="kakao-address",
+        ))
+    return {"source": "kakao-address", "items": items}
+
+
+def search_naver_geocode(keyword, size=10):
+    client_id = current_app.config.get("NAVER_MAP_CLIENT_ID")
+    client_secret = current_app.config.get("NAVER_MAP_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        return None
+
+    params = urlencode({"query": keyword})
+    request = Request(
+        f"{current_app.config.get('NAVER_GEOCODE_URL')}?{params}",
+        headers={
+            "X-NCP-APIGW-API-KEY-ID": client_id,
+            "X-NCP-APIGW-API-KEY": client_secret,
+            "User-Agent": "SportsMate/0.1",
+        },
+    )
+    with urlopen(request, timeout=8) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+
+    items = []
+    for item in (payload.get("addresses") or [])[:size]:
+        road_address = _strip_html(item.get("roadAddress"))
+        jibun_address = _strip_html(item.get("jibunAddress"))
+        address = road_address or jibun_address or keyword
+        items.append(_local_result(
+            address,
+            address,
+            latitude=item.get("y"),
+            longitude=item.get("x"),
+            road_address=road_address,
+            category="\uc8fc\uc18c",
+            source="naver-geocode",
+        ))
+    return {"source": "naver-geocode", "items": items}
+
+
+def search_naver_places(keyword, size=10):
+    client_id = current_app.config.get("NAVER_SEARCH_CLIENT_ID")
+    client_secret = current_app.config.get("NAVER_SEARCH_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        return None
+
+    params = urlencode({"query": keyword, "display": size, "start": 1, "sort": "random"})
+    request = Request(f"https://openapi.naver.com/v1/search/local.json?{params}")
+    request.add_header("X-Naver-Client-Id", client_id)
+    request.add_header("X-Naver-Client-Secret", client_secret)
+    with urlopen(request, timeout=8) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+
+    items = []
+    for item in payload.get("items", []):
+        title = _strip_html(item.get("title"))
+        road_address = _strip_html(item.get("roadAddress"))
+        address = road_address or _strip_html(item.get("address")) or title
+        items.append(_local_result(
+            title or address,
+            address,
+            latitude=_naver_coord(item.get("mapy")),
+            longitude=_naver_coord(item.get("mapx")),
+            road_address=road_address,
+            category=item.get("category"),
+            source="naver-local",
+        ))
+    return {"source": "naver-local", "items": items}
+
+
+def search_places(keyword, size=10):
+    merged = []
+    seen = set()
+    sources = []
+    for searcher in (search_kakao_address, search_naver_geocode, search_kakao_keyword, search_naver_places):
+        try:
+            result = searcher(keyword, size=size)
+        except Exception:
+            continue
+        if result is None:
+            continue
+        sources.append(result.get("source"))
+        for item in result.get("items", []):
+            key = (
+                item.get("title") or "",
+                item.get("address") or "",
+                item.get("latitude"),
+                item.get("longitude"),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(item)
+            if len(merged) >= size:
+                return {"source": "+".join(filter(None, sources)), "items": merged}
+    if merged:
+        return {"source": "+".join(filter(None, sources)), "items": merged}
+    return search_vworld_places(keyword, size=size)
+
 def search_vworld_places(keyword, size=10):
     api_key = current_app.config.get("VWORLD_API_KEY")
     if not api_key:
-        keyword_filter = f"%{keyword}%"
-        fallback = Region.query.filter(or_(Region.name.ilike(keyword_filter), Region.full_name.ilike(keyword_filter))).limit(size).all()
-        return {
-            "source": "local",
-            "items": [
-                {
-                    "title": region.full_name,
-                    "address": region.full_name,
-                    "latitude": region.latitude,
-                    "longitude": region.longitude
-                }
-                for region in fallback
-            ]
-        }
+        return {"source": "external-unavailable", "items": []}
+
 
     params = {
         "service": "search",
