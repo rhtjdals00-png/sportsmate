@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { adminApi } from "../api/adminApi";
+import { useAuth } from "../contexts/AuthContext.jsx";
 import { 
   Mail, 
   Phone, 
@@ -155,8 +156,19 @@ const userDetailDb = {
 function AdminUserDetailPage() {
   const { userId } = useParams();
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    nickname: "",
+    email: "",
+    phone: "",
+    location: "",
+    preferred_sports: "",
+    role: "user"
+  });
 
   useEffect(() => {
     async function fetchUserDetail() {
@@ -169,12 +181,14 @@ function AdminUserDetailPage() {
             name: user.name || "이름 없음",
             nickname: user.nickname || "닉네임 없음",
             sportTag: user.profile && user.profile.preferred_sports ? `🏃 ${user.profile.preferred_sports}` : "운동 메이트",
+            preferred_sports: user.profile && user.profile.preferred_sports ? user.profile.preferred_sports : "",
             status: user.is_active === false ? "정지" : "정상 회원",
             email: user.email || "이메일 없음",
             phone: user.phone_number || "전화번호 없음",
-            joinedDate: user.created_at ? new Date(user.created_at).toLocaleDateString() : "2023.10.27",
+            joinedDate: user.created_at ? new Date(user.created_at).toLocaleDateString().replace(/\s/g, "").replace(/\.$/, "") : "2023.10.27",
             location: user.profile && user.profile.region ? user.profile.region : "지역 미설정",
             avatar: user.profile_image_url || "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&fit=crop&q=80",
+            role: user.role || "user",
             stats: {
               meetingsCount: user.stats ? user.stats.meetingsCount : 0,
               meetingsTrend: "",
@@ -203,7 +217,50 @@ function AdminUserDetailPage() {
 
   const handleEditInfo = () => {
     if (!userData) return;
-    alert(`${userData.name} 회원의 정보 수정 화면(기획 진행 중)으로 이동합니다.`);
+    setEditForm({
+      name: userData.name,
+      nickname: userData.nickname,
+      email: userData.email,
+      phone: userData.phone === "전화번호 없음" ? "" : userData.phone,
+      location: userData.location === "지역 미설정" ? "" : userData.location,
+      preferred_sports: userData.preferred_sports || "",
+      role: userData.role || "user"
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await adminApi.updateUser(userId, {
+        name: editForm.name,
+        nickname: editForm.nickname,
+        email: editForm.email,
+        phone_number: editForm.phone,
+        region: editForm.location,
+        preferred_sports: editForm.preferred_sports,
+        role: editForm.role
+      });
+      if (res && res.user) {
+        const u = res.user;
+        setUserData(prev => ({
+          ...prev,
+          name: u.name || "이름 없음",
+          nickname: u.nickname || "닉네임 없음",
+          sportTag: u.profile && u.profile.preferred_sports ? `🏃 ${u.profile.preferred_sports}` : "운동 메이트",
+          preferred_sports: u.profile && u.profile.preferred_sports ? u.profile.preferred_sports : "",
+          email: u.email || "이메일 없음",
+          phone: u.phone_number || "전화번호 없음",
+          location: u.profile && u.profile.region ? u.profile.region : "지역 미설정",
+          role: u.role || "user"
+        }));
+        setIsEditModalOpen(false);
+        alert("회원 정보가 성공적으로 수정되었습니다.");
+      }
+    } catch (err) {
+      console.error("Failed to update user info", err);
+      alert("회원 정보 수정에 실패했습니다.");
+    }
   };
 
   const handleSendMessage = () => {
@@ -476,6 +533,235 @@ function AdminUserDetailPage() {
           </button>
         </section>
       </div>
+
+      {isEditModalOpen && (() => {
+        const isRoleDisabled = currentUser?.role === "admin" && (userData?.role === "superadmin" || userData?.role === "admin");
+        const showAllOptions = currentUser?.role === "superadmin";
+
+        return (
+          <div style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+            backdropFilter: "blur(4px)"
+          }}>
+            <div style={{
+              backgroundColor: "#ffffff",
+              borderRadius: "16px",
+              padding: "28px",
+              width: "500px",
+              maxWidth: "95%",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+              boxSizing: "border-box"
+            }}>
+              <h3 style={{ margin: "0 0 20px 0", fontSize: "20px", fontWeight: 700, color: "#1e293b" }}>회원 정보 수정</h3>
+              <form onSubmit={handleSaveEdit}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+                  <div>
+                    <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#475569" }}>이름</label>
+                    <input 
+                      type="text" 
+                      value={editForm.name} 
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      required
+                      style={{
+                        width: "100%",
+                        padding: "8px 12px",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "14px",
+                        outline: "none",
+                        boxSizing: "border-box"
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#475569" }}>닉네임</label>
+                    <input 
+                      type="text" 
+                      value={editForm.nickname} 
+                      onChange={(e) => setEditForm({ ...editForm, nickname: e.target.value })}
+                      required
+                      style={{
+                        width: "100%",
+                        padding: "8px 12px",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "14px",
+                        outline: "none",
+                        boxSizing: "border-box"
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: "16px" }}>
+                  <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#475569" }}>이메일</label>
+                  <input 
+                    type="email" 
+                    value={editForm.email} 
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "14px",
+                      outline: "none",
+                      boxSizing: "border-box"
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: "16px" }}>
+                  <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#475569" }}>전화번호</label>
+                  <input 
+                    type="text" 
+                    value={editForm.phone} 
+                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    placeholder="예: 010-1234-5678"
+                    style={{
+                      width: "100%",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "14px",
+                      outline: "none",
+                      boxSizing: "border-box"
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: "16px" }}>
+                  <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#475569" }}>주 활동 지역</label>
+                  <input 
+                    type="text" 
+                    value={editForm.location} 
+                    onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                    placeholder="예: 서울특별시 용산구"
+                    style={{
+                      width: "100%",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "14px",
+                      outline: "none",
+                      boxSizing: "border-box"
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: "16px" }}>
+                  <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#475569" }}>선호 운동 종목</label>
+                  <input 
+                    type="text" 
+                    value={editForm.preferred_sports} 
+                    onChange={(e) => setEditForm({ ...editForm, preferred_sports: e.target.value })}
+                    placeholder="예: 축구, 러닝, 농구"
+                    style={{
+                      width: "100%",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "14px",
+                      outline: "none",
+                      boxSizing: "border-box"
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: "24px" }}>
+                  <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#475569" }}>구분 (회원 등급)</label>
+                  <select
+                    value={editForm.role}
+                    onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                    disabled={isRoleDisabled}
+                    style={{
+                      width: "100%",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "14px",
+                      backgroundColor: isRoleDisabled ? "#f1f5f9" : "#ffffff",
+                      cursor: isRoleDisabled ? "not-allowed" : "default",
+                      outline: "none",
+                      boxSizing: "border-box"
+                    }}
+                  >
+                    {showAllOptions ? (
+                      <>
+                        <option value="superadmin">최고관리자 (superadmin)</option>
+                        <option value="admin">관리자 (admin)</option>
+                        <option value="user">일반회원 (user)</option>
+                        <option value="suspended">정지회원 (suspended)</option>
+                        <option value="pending_withdrawal">탈퇴대기회원 (pending_withdrawal)</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="user">일반회원 (user)</option>
+                        <option value="suspended">정지회원 (suspended)</option>
+                        <option value="pending_withdrawal">탈퇴대기회원 (pending_withdrawal)</option>
+                        {(userData?.role === "admin" || userData?.role === "superadmin") && (
+                          <option value={userData.role} disabled>
+                            {userData.role === "superadmin" ? "최고관리자 (변경 불가)" : "관리자 (변경 불가)"}
+                          </option>
+                        )}
+                      </>
+                    )}
+                  </select>
+                  {isRoleDisabled && (
+                    <span style={{ fontSize: "12px", color: "#ef4444", marginTop: "4px", display: "block" }}>
+                      일반 관리자는 최고관리자 및 관리자 등급을 변경할 수 없습니다.
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                  <button 
+                    type="button" 
+                    onClick={() => setIsEditModalOpen(false)}
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      backgroundColor: "#ffffff",
+                      color: "#475569",
+                      fontWeight: 600,
+                      fontSize: "14px",
+                      cursor: "pointer"
+                    }}
+                  >
+                    취소
+                  </button>
+                  <button 
+                    type="submit"
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: "8px",
+                      border: "none",
+                      backgroundColor: "#3b82f6",
+                      color: "#ffffff",
+                      fontWeight: 600,
+                      fontSize: "14px",
+                      cursor: "pointer"
+                    }}
+                  >
+                    저장하기
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

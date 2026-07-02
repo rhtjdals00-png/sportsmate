@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { adminApi } from "../api/adminApi";
 import { User, Shield, Ban, CheckCircle } from "lucide-react";
 
@@ -13,6 +13,7 @@ const mockUsers = [
 ];
 
 function AdminUsersPage() {
+  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchField, setSearchField] = useState("all");
@@ -57,7 +58,7 @@ function AdminUsersPage() {
             user_tag: u.user_tag || "",
             provider: u.provider || "email",
             role: u.role || "user",
-            created_at: u.created_at ? new Date(u.created_at).toLocaleDateString() : "2023.10.27",
+            created_at: u.created_at ? new Date(u.created_at).toLocaleDateString().replace(/\s/g, "").replace(/\.$/, "") : "2023.10.27",
             status: u.is_active === false ? "정지" : "활성"
           }));
           setUsers(formatted);
@@ -245,12 +246,14 @@ function AdminUsersPage() {
                 </tr>
               ) : (
                 paginatedUsers.map((u) => (
-                  <tr key={u.id}>
+                  <tr 
+                    key={u.id} 
+                    onClick={() => navigate(`/admin/users/${u.id}`)}
+                    style={{ cursor: "pointer" }}
+                  >
                     <td>#{u.id}</td>
                     <td style={{ fontWeight: 600 }}>
-                      <Link to={`/admin/users/${u.id}`} className="admin-data-table__row-link">
-                        {u.nickname}
-                      </Link>
+                      {u.nickname}
                     </td>
                     <td>
                       {u.user_tag ? (

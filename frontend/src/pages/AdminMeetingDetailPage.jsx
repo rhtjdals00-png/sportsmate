@@ -121,6 +121,15 @@ function AdminMeetingDetailPage() {
   const navigate = useNavigate();
   const [meetingData, setMeetingData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    description: "",
+    location_name: "",
+    address: "",
+    max_participants: 6,
+    purpose: ""
+  });
 
   useEffect(() => {
     async function fetchMeetingDetail() {
@@ -135,9 +144,16 @@ function AdminMeetingDetailPage() {
             host: m.host ? (m.host.nickname || m.host.name || `방장 #${m.host.id}`) : "알 수 없음",
             sport: m.sport ? m.sport.name : "일반",
             emoji: m.sport ? (m.sport.name === "축구" ? "⚽" : m.sport.name === "러닝" ? "🏃" : m.sport.name === "테니스" ? "🎾" : m.sport.name === "농구" ? "🏀" : "👟") : "👟",
-            createdDate: m.created_at ? new Date(m.created_at).toLocaleDateString() : "2023.10.15",
+            createdDate: m.created_at ? (() => {
+              const d = new Date(m.created_at);
+              return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
+            })() : "2023.10.15",
             capacity: `${m.current_participants || 0} / ${m.max_participants || 0}`,
+            max_participants: m.max_participants || 0,
             location: m.address || m.location_name || "위치 정보 없음",
+            location_name: m.location_name || "",
+            address: m.address || "",
+            purpose: m.purpose || "",
             stats: {
               totalAttendees: m.current_participants || 0,
               attendeesTrend: `최대 정원 ${m.max_participants || 0}명`,
@@ -164,25 +180,90 @@ function AdminMeetingDetailPage() {
 
   const handleEditInfo = () => {
     if (!meetingData) return;
-    alert(`'${meetingData.title}' 모임 정보 수정 화면(기획 진행 중)으로 이동합니다.`);
+    setEditForm({
+      title: meetingData.title,
+      description: meetingData.memo,
+      location_name: meetingData.location_name || "",
+      address: meetingData.address || "",
+      max_participants: meetingData.max_participants,
+      purpose: meetingData.purpose || ""
+    });
+    setIsEditModalOpen(true);
   };
 
-  const handleKickMember = (memberId, nickname) => {
-    if (!meetingData) return;
-    if (window.confirm(`정말 '${nickname}' 멤버를 이 모임에서 강제 추방하시겠습니까?`)) {
-      setMeetingData(prev => ({
-        ...prev,
-        members: prev.members.filter(m => m.id !== memberId)
-      }));
-      alert(`${nickname} 회원이 모임에서 추방되었습니다.`);
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await adminApi.updateMeeting(meetingId, editForm);
+      if (res && res.meeting) {
+        const m = res.meeting;
+        const fillPercent = m.max_participants ? Math.round((m.current_participants / m.max_participants) * 100) : 0;
+        setMeetingData(prev => ({
+          ...prev,
+          title: m.title || "제목 없음",
+          purpose: m.purpose || "",
+          memo: m.description || "등록된 상세 소개 설명이 없습니다.",
+          location_name: m.location_name || "",
+          address: m.address || "",
+          max_participants: m.max_participants || 0,
+          location: m.address || m.location_name || "위치 정보 없음",
+          capacity: `${m.current_participants || 0} / ${m.max_participants || 0}`,
+          stats: {
+            ...prev.stats,
+            totalAttendees: m.current_participants || 0,
+            attendeesTrend: `최대 정원 ${m.max_participants || 0}명`,
+            fillRate: fillPercent
+          }
+        }));
+        setIsEditModalOpen(false);
+        alert("모임 정보가 성공적으로 수정되었습니다.");
+      }
+    } catch (err) {
+      console.error("Failed to update meeting info", err);
+      alert("모임 정보 수정에 실패했습니다.");
     }
   };
 
-  const handleDeleteMeeting = () => {
+  const handleKickMember = async (memberId, nickname) => {
+    if (!meetingData) return;
+    if (window.confirm(`정말 '${nickname}' 멤버를 이 모임에서 강제 추방하시겠습니까?`)) {
+      try {
+        await adminApi.kickMember(meetingId, memberId);
+        setMeetingData(prev => {
+          const nextMembers = prev.members.filter(m => m.id !== memberId);
+          const nextCount = Math.max(1, nextMembers.length);
+          const maxParticipants = prev.max_participants || 1;
+          const fillPercent = Math.round((nextCount / maxParticipants) * 100);
+          return {
+            ...prev,
+            members: nextMembers,
+            capacity: `${nextCount} / ${maxParticipants}`,
+            stats: {
+              ...prev.stats,
+              totalAttendees: nextCount,
+              fillRate: fillPercent
+            }
+          };
+        });
+        alert(`${nickname} 회원이 모임에서 추방되었습니다.`);
+      } catch (err) {
+        console.error("Failed to kick member", err);
+        alert("멤버 강제 퇴장에 실패했습니다.");
+      }
+    }
+  };
+
+  const handleDeleteMeeting = async () => {
     if (!meetingData) return;
     if (window.confirm(`'${meetingData.title}' 모임을 영구히 강제 삭제/폐쇄 처리하시겠습니까? 이 동작은 모임 게시판에도 즉시 반영됩니다.`)) {
-      alert("모임이 성공적으로 폐쇄 처리되었습니다.");
-      navigate("/admin/meetings");
+      try {
+        await adminApi.deleteMeeting(meetingId);
+        alert("모임이 성공적으로 폐쇄 처리되었습니다.");
+        navigate("/admin/meetings");
+      } catch (err) {
+        console.error("Failed to delete meeting", err);
+        alert("모임 폐쇄에 실패했습니다.");
+      }
     }
   };
 
@@ -413,17 +494,189 @@ function AdminMeetingDetailPage() {
               {meetingData.memo || "작성된 메모가 없습니다."}
             </p>
           </div>
-
-          <button 
-            type="button" 
-            onClick={handleDeleteMeeting}
-            className="admin-restrict-card__btn"
-          >
-            <Trash2 size={15} />
-            <span>모임 강제 폭파</span>
-          </button>
         </section>
       </div>
+
+      {isEditModalOpen && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          zIndex: 1000,
+          backdropFilter: "blur(4px)"
+        }}>
+          <div style={{
+            backgroundColor: "#ffffff",
+            borderRadius: "16px",
+            padding: "28px",
+            width: "500px",
+            maxWidth: "95%",
+            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+            boxSizing: "border-box"
+          }}>
+            <h3 style={{ margin: "0 0 20px 0", fontSize: "20px", fontWeight: 700, color: "#1e293b" }}>모임 정보 수정</h3>
+            <form onSubmit={handleSaveEdit}>
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#475569" }}>모임명</label>
+                <input 
+                  type="text" 
+                  value={editForm.title} 
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "14px",
+                    outline: "none",
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#475569" }}>모임 목적 (한줄 요약)</label>
+                <input 
+                  type="text" 
+                  value={editForm.purpose} 
+                  onChange={(e) => setEditForm({ ...editForm, purpose: e.target.value })}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "14px",
+                    outline: "none",
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#475569" }}>모임 소개</label>
+                <textarea 
+                  value={editForm.description} 
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  required
+                  rows="4"
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "14px",
+                    outline: "none",
+                    resize: "vertical",
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#475569" }}>장소명</label>
+                  <input 
+                    type="text" 
+                    value={editForm.location_name} 
+                    onChange={(e) => setEditForm({ ...editForm, location_name: e.target.value })}
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "14px",
+                      outline: "none",
+                      boxSizing: "border-box"
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#475569" }}>최대 정원</label>
+                  <input 
+                    type="number" 
+                    min="2"
+                    max="100"
+                    value={editForm.max_participants} 
+                    onChange={(e) => setEditForm({ ...editForm, max_participants: parseInt(e.target.value) || 2 })}
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "14px",
+                      outline: "none",
+                      boxSizing: "border-box"
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "24px" }}>
+                <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#475569" }}>상세 주소</label>
+                <input 
+                  type="text" 
+                  value={editForm.address} 
+                  onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "14px",
+                    outline: "none",
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                <button 
+                  type="button" 
+                  onClick={() => setIsEditModalOpen(false)}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    backgroundColor: "#ffffff",
+                    color: "#475569",
+                    fontWeight: 600,
+                    fontSize: "14px",
+                    cursor: "pointer"
+                  }}
+                >
+                  취소
+                </button>
+                <button 
+                  type="submit"
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    border: "none",
+                    backgroundColor: "#3b82f6",
+                    color: "#ffffff",
+                    fontWeight: 600,
+                    fontSize: "14px",
+                    cursor: "pointer"
+                  }}
+                >
+                  저장하기
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
