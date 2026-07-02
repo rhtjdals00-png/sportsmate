@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import Button from "../../common/Button.jsx";
-import { AlarmClock, CalendarClock } from "lucide-react";
+import { AlarmClock, CalendarClock, ChevronLeft, ChevronRight } from "lucide-react";
 import { meetingApi } from "../../../api/meetingApi";
 import { sportApi } from "../../../api/sportApi";
 import { locationApi } from "../../../api/locationApi";
@@ -15,6 +15,81 @@ const DEFAULT_PURPOSE_OPTIONS = ["운동 메이트 모집", "팀 모집", "파�
 
 const TIME_MINUTES = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
 const TIME_HOURS = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0"));
+
+const WEEKDAY_LABELS = ["\uc77c", "\uc6d4", "\ud654", "\uc218", "\ubaa9", "\uae08", "\ud1a0"];
+const padDatePart = (value) => String(value).padStart(2, "0");
+const formatDateValue = (date) => `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
+const parseDateValue = (value) => {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+};
+const getMonthDays = (date) => {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const lastDate = new Date(year, month + 1, 0).getDate();
+  return [
+    ...Array.from({ length: firstDay }, () => null),
+    ...Array.from({ length: lastDate }, (_, index) => new Date(year, month, index + 1)),
+  ];
+};
+const displayDateValue = (value) => {
+  const date = parseDateValue(value);
+  if (!date) return "\ub0a0\uc9dc \uc120\ud0dd";
+  return `${date.getFullYear()}\ub144 ${date.getMonth() + 1}\uc6d4 ${date.getDate()}\uc77c`;
+};
+
+function CalendarSelect({ value, onChange, min, icon, label }) {
+  const selectedDate = parseDateValue(value);
+  const minDate = parseDateValue(min);
+  const baseDate = selectedDate || minDate || new Date();
+  const [open, setOpen] = useState(false);
+  const [viewDate, setViewDate] = useState(new Date(baseDate.getFullYear(), baseDate.getMonth(), 1));
+  const monthDays = getMonthDays(viewDate);
+  const selectDate = (date) => {
+    if (!date) return;
+    if (minDate && date < minDate) return;
+    onChange(formatDateValue(date));
+    setOpen(false);
+  };
+  const moveMonth = (amount) => setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + amount, 1));
+
+  return (
+    <span className="meeting-calendar-field">
+      <button type="button" className="meeting-calendar-trigger" onClick={() => setOpen((current) => !current)} aria-label={label}>
+        {icon}
+        <span>{displayDateValue(value)}</span>
+      </button>
+      {open && (
+        <div className="meeting-calendar-popover">
+          <div className="meeting-calendar-head">
+            <button type="button" onClick={() => moveMonth(-1)} aria-label={"\uc774\uc804 \ub2ec"}><ChevronLeft size={18} /></button>
+            <strong>{viewDate.getFullYear()}{"\ub144"} {viewDate.getMonth() + 1}{"\uc6d4"}</strong>
+            <button type="button" onClick={() => moveMonth(1)} aria-label={"\ub2e4\uc74c \ub2ec"}><ChevronRight size={18} /></button>
+          </div>
+          <div className="meeting-calendar-weekdays">
+            {WEEKDAY_LABELS.map((day) => <span key={day}>{day}</span>)}
+          </div>
+          <div className="meeting-calendar-days">
+            {monthDays.map((date, index) => {
+              const dateValue = date ? formatDateValue(date) : `blank-${index}`;
+              const disabled = Boolean(date && minDate && date < minDate);
+              const selected = Boolean(date && value === dateValue);
+              return (
+                <button type="button" key={dateValue} disabled={!date || disabled} className={selected ? "selected" : ""} onClick={() => selectDate(date)}>
+                  {date ? date.getDate() : ""}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
+
 
 const splitTimeValue = (value) => {
   if (!value) return { period: "AM", hour: "", minute: "00" };
@@ -296,8 +371,8 @@ function MobileMeetingCreate() {
           {(addressLoading || addressResults.length > 0) && <div className="address-result-list">{addressLoading ? <span>검색 중입니다.</span> : addressResults.map((place, index) => <button type="button" key={`${place.title}-${index}`} onClick={() => selectAddress(place)}><strong>{(place.title || place.address || "").replace(/<[^>]+>/g, "")}</strong><small>{place.address}</small></button>)}</div>}
           <label>장소명<input required value={form.location_name} onChange={(event) => update("location_name", event.target.value)} /></label>
           <div className="mobile-schedule-toggles"><label><input type="checkbox" checked={hasStartSchedule} onChange={(event) => toggleStartSchedule(event.target.checked)} /> 시작 일정 있음</label><label><input type="checkbox" checked={hasEndSchedule} disabled={!hasStartSchedule} onChange={(event) => toggleEndSchedule(event.target.checked)} /> 종료 일정 있음</label></div>
-          {hasStartSchedule && <div className="date-time-row"><label>{"\uc2dc\uc791 \ub0a0\uc9dc"}<span className="mobile-icon-input"><CalendarClock size={17} /><input required type="date" min={today} value={form.start_date} onChange={(event) => updateStartDate(event.target.value)} /></span></label><label>{"\uc2dc\uc791 \uc2dc\uac04"}<span className="mobile-icon-input"><AlarmClock size={17} /><TimeSelect required min={form.start_date === today ? nowTime : undefined} value={form.start_time} onChange={updateStartTime} /></span></label></div>}
-          {hasEndSchedule && <div className="date-time-row"><label>{"\uc885\ub8cc \ub0a0\uc9dc"}<span className="mobile-icon-input"><CalendarClock size={17} /><input required type="date" min={form.start_date || today} value={form.end_date} onChange={(event) => updateEndDate(event.target.value)} /></span></label><label>{"\uc885\ub8cc \uc2dc\uac04"}<span className="mobile-icon-input"><AlarmClock size={17} /><TimeSelect required min={form.end_date === form.start_date ? form.start_time : undefined} value={form.end_time} onChange={updateEndTime} /></span></label></div>}
+          {hasStartSchedule && <div className="date-time-row"><label>{"\uc2dc\uc791 \ub0a0\uc9dc"}<CalendarSelect label={"\uc2dc\uc791\uc77c"} min={today} value={form.start_date} onChange={updateStartDate} icon={<CalendarClock size={17} />} /></label><label>{"\uc2dc\uc791 \uc2dc\uac04"}<span className="mobile-icon-input"><AlarmClock size={17} /><TimeSelect required min={form.start_date === today ? nowTime : undefined} value={form.start_time} onChange={updateStartTime} /></span></label></div>}
+          {hasEndSchedule && <div className="date-time-row"><label>{"\uc885\ub8cc \ub0a0\uc9dc"}<CalendarSelect label={"\uc885\ub8cc\uc77c"} min={form.start_date || today} value={form.end_date} onChange={updateEndDate} icon={<CalendarClock size={17} />} /></label><label>{"\uc885\ub8cc \uc2dc\uac04"}<span className="mobile-icon-input"><AlarmClock size={17} /><TimeSelect required min={form.end_date === form.start_date ? form.start_time : undefined} value={form.end_time} onChange={updateEndTime} /></span></label></div>}
           <label>정원<input type="number" min="2" max="50" value={form.max_participants} onChange={(event) => update("max_participants", event.target.value)} /></label>
         </section>}
         <div className="form-actions">{step > 1 && <Button type="button" variant="secondary" onClick={() => setStep(step - 1)}>이전</Button>}{step < 3 ? <Button type="button" onClick={goNext}>다음</Button> : <Button type="submit" disabled={submitting}>{submitting ? "등록 중..." : "모임 등록"}</Button>}</div>

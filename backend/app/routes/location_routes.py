@@ -1,8 +1,8 @@
 from functools import lru_cache
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
-from app.services.location_service import list_regions, search_vworld_places, sync_regions_from_configured_api
+from app.services.location_service import list_regions, search_places, sync_regions_from_configured_api
 
 location_bp = Blueprint("locations", __name__)
 
@@ -32,10 +32,17 @@ def sync_regions():
     return jsonify(result)
 
 
+@location_bp.get("/map/config")
+def map_config():
+    return jsonify({
+        "naver_dynamic_map_client_id": current_app.config.get("NAVER_DYNAMIC_MAP_CLIENT_ID", "")
+    })
+
+
 @location_bp.get("/map/search")
 def map_search():
     keyword = request.args.get("keyword", "").strip()
     if not keyword:
         return jsonify({"items": [], "source": "local"})
-    result = search_vworld_places(keyword, size=min(int(request.args.get("size", 10)), 30))
+    result = search_places(keyword, size=min(int(request.args.get("size", 10)), 30))
     return jsonify(result)

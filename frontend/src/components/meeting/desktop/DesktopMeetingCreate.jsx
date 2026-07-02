@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlarmClock, CalendarClock } from "lucide-react";
+import { AlarmClock, CalendarClock, ChevronLeft, ChevronRight, Map as MapIcon, MapPin, Search } from "lucide-react";
 import { meetingApi } from "../../../api/meetingApi";
 import { sportApi } from "../../../api/sportApi";
+import { locationApi } from "../../../api/locationApi";
 import { useAsync } from "../../../hooks/useAsync";
 
 const TITLE_MAX_LENGTH = 40;
@@ -11,6 +12,81 @@ const DEFAULT_PURPOSE_OPTIONS = ["운동 메이트 모집", "팀 모집", "파�
 
 const TIME_MINUTES = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
 const TIME_HOURS = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0"));
+
+const WEEKDAY_LABELS = ["\uc77c", "\uc6d4", "\ud654", "\uc218", "\ubaa9", "\uae08", "\ud1a0"];
+const padDatePart = (value) => String(value).padStart(2, "0");
+const formatDateValue = (date) => `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
+const parseDateValue = (value) => {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+};
+const getMonthDays = (date) => {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const lastDate = new Date(year, month + 1, 0).getDate();
+  return [
+    ...Array.from({ length: firstDay }, () => null),
+    ...Array.from({ length: lastDate }, (_, index) => new Date(year, month, index + 1)),
+  ];
+};
+const displayDateValue = (value) => {
+  const date = parseDateValue(value);
+  if (!date) return "\ub0a0\uc9dc \uc120\ud0dd";
+  return `${date.getFullYear()}\ub144 ${date.getMonth() + 1}\uc6d4 ${date.getDate()}\uc77c`;
+};
+
+function CalendarSelect({ value, onChange, min, icon, label }) {
+  const selectedDate = parseDateValue(value);
+  const minDate = parseDateValue(min);
+  const baseDate = selectedDate || minDate || new Date();
+  const [open, setOpen] = useState(false);
+  const [viewDate, setViewDate] = useState(new Date(baseDate.getFullYear(), baseDate.getMonth(), 1));
+  const monthDays = getMonthDays(viewDate);
+  const selectDate = (date) => {
+    if (!date) return;
+    if (minDate && date < minDate) return;
+    onChange(formatDateValue(date));
+    setOpen(false);
+  };
+  const moveMonth = (amount) => setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + amount, 1));
+
+  return (
+    <span className="meeting-calendar-field">
+      <button type="button" className="meeting-calendar-trigger" onClick={() => setOpen((current) => !current)} aria-label={label}>
+        {icon}
+        <span>{displayDateValue(value)}</span>
+      </button>
+      {open && (
+        <div className="meeting-calendar-popover">
+          <div className="meeting-calendar-head">
+            <button type="button" onClick={() => moveMonth(-1)} aria-label={"\uc774\uc804 \ub2ec"}><ChevronLeft size={18} /></button>
+            <strong>{viewDate.getFullYear()}{"\ub144"} {viewDate.getMonth() + 1}{"\uc6d4"}</strong>
+            <button type="button" onClick={() => moveMonth(1)} aria-label={"\ub2e4\uc74c \ub2ec"}><ChevronRight size={18} /></button>
+          </div>
+          <div className="meeting-calendar-weekdays">
+            {WEEKDAY_LABELS.map((day) => <span key={day}>{day}</span>)}
+          </div>
+          <div className="meeting-calendar-days">
+            {monthDays.map((date, index) => {
+              const dateValue = date ? formatDateValue(date) : `blank-${index}`;
+              const disabled = Boolean(date && minDate && date < minDate);
+              const selected = Boolean(date && value === dateValue);
+              return (
+                <button type="button" key={dateValue} disabled={!date || disabled} className={selected ? "selected" : ""} onClick={() => selectDate(date)}>
+                  {date ? date.getDate() : ""}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
+
 
 const splitTimeValue = (value) => {
   if (!value) return { period: "AM", hour: "", minute: "00" };
@@ -28,14 +104,41 @@ const buildTimeValue = ({ period, hour, minute }) => {
   return `${String(hour24).padStart(2, "0")}:${minute}`;
 };
 
+const formatTimeFromMinutes = (totalMinutes) => {
+  const clamped = Math.max(0, Math.min(totalMinutes, 23 * 60 + 55));
+  const hour = Math.floor(clamped / 60);
+  const minute = Math.floor(clamped % 60 / 5) * 5;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+};
+
+const roundUpToNextSlot = (date = new Date()) => {
+  const totalMinutes = date.getHours() * 60 + date.getMinutes();
+  return formatTimeFromMinutes(Math.ceil((totalMinutes + 1) / 5) * 5);
+};
+
+const addMinutesToTime = (value, minutes) => {
+  if (!value) return "";
+  const [hour, minute] = value.split(":").map(Number);
+  return formatTimeFromMinutes(hour * 60 + minute + minutes);
+};
+
+const defaultStartTimeForDate = (dateValue, todayValue) => (dateValue === todayValue ? roundUpToNextSlot() : "09:00");
+
+const clampTimeAfterMin = (value, min) => {
+  if (!value || !min || value > min) return value;
+  const [minHour, minMinute] = min.split(":").map(Number);
+  const nextTotalMinutes = Math.ceil((minHour * 60 + minMinute + 1) / 5) * 5;
+  if (nextTotalMinutes >= 24 * 60) return "";
+  return formatTimeFromMinutes(nextTotalMinutes);
+};
+
 function TimeSelect({ value, onChange, min, required = false }) {
   const parts = splitTimeValue(value);
   const changePart = (key, nextValue) => {
     const nextParts = { ...parts, [key]: nextValue };
     const nextTime = buildTimeValue(nextParts);
     if (!nextTime) return onChange("");
-    if (min && nextTime <= min) return onChange("");
-    return onChange(nextTime);
+    return onChange(clampTimeAfterMin(nextTime, min));
   };
 
   return (
@@ -52,6 +155,151 @@ function TimeSelect({ value, onChange, min, required = false }) {
         {TIME_MINUTES.map((minute) => <option key={minute} value={minute}>{minute}{"\ubd84"}</option>)}
       </select>
     </span>
+  );
+}
+
+
+const DEFAULT_MAP_CENTER = { latitude: 37.5665, longitude: 126.9780 };
+const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
+
+function loadNaverMapScript(clientId) {
+  if (!clientId) return Promise.reject(new Error("missing naver map client id"));
+  if (window.naver?.maps) return Promise.resolve(window.naver.maps);
+  if (window.__sportsmateNaverMapPromise) return window.__sportsmateNaverMapPromise;
+
+  window.__sportsmateNaverMapPromise = new Promise((resolve, reject) => {
+    const existing = document.getElementById(NAVER_MAP_SCRIPT_ID);
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.naver.maps), { once: true });
+      existing.addEventListener("error", reject, { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = NAVER_MAP_SCRIPT_ID;
+    script.async = true;
+    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(clientId)}`;
+    script.onload = () => resolve(window.naver.maps);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+
+  return window.__sportsmateNaverMapPromise;
+}
+
+function toMapPoint(place) {
+  const latitude = Number(place?.latitude);
+  const longitude = Number(place?.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { latitude, longitude };
+}
+
+const ADMIN_REGION_PATTERN = /(특별시|광역시|특별자치시|도|시|군|구|읍|면|동|리)$/;
+const normalizePlaceText = (value) => (value || "").replace(/<[^>]+>/g, "").trim();
+const isAdministrativeRegion = (place) => {
+  const title = normalizePlaceText(place?.title || place?.address || place?.road_address);
+  const category = normalizePlaceText(place?.category);
+  return category === "주소" && ADMIN_REGION_PATTERN.test(title.split(/\s+/).at(-1) || title);
+};
+
+function DesktopLocationMap({ clientId, selectedLocation, results, onSelect }) {
+  const mapElementRef = useRef(null);
+  const mapRef = useRef(null);
+  const selectedMarkerRef = useRef(null);
+  const resultMarkersRef = useRef([]);
+  const [mapStatus, setMapStatus] = useState("idle");
+
+  useEffect(() => {
+    if (!clientId) return;
+    let disposed = false;
+    setMapStatus("loading");
+    loadNaverMapScript(clientId)
+      .then((maps) => {
+        if (disposed || !mapElementRef.current || mapRef.current) return;
+        const center = new maps.LatLng(DEFAULT_MAP_CENTER.latitude, DEFAULT_MAP_CENTER.longitude);
+        mapRef.current = new maps.Map(mapElementRef.current, {
+          center,
+          zoom: 12,
+          mapDataControl: false,
+          scaleControl: false,
+          zoomControl: true,
+          zoomControlOptions: {
+            position: maps.Position.TOP_RIGHT,
+            style: maps.ZoomControlStyle.SMALL,
+          },
+        });
+        maps.Event.addListener(mapRef.current, "click", (event) => {
+          onSelect({
+            title: "\uc9c0\ub3c4\uc5d0\uc11c \uc120\ud0dd\ud55c \uc704\uce58",
+            address: "\uc9c0\ub3c4\uc5d0\uc11c \uc120\ud0dd\ud55c \uc704\uce58",
+            latitude: event.coord.lat(),
+            longitude: event.coord.lng(),
+          });
+        });
+        setMapStatus("ready");
+      })
+      .catch(() => setMapStatus("error"));
+
+    return () => {
+      disposed = true;
+    };
+  }, [clientId, onSelect]);
+
+  useEffect(() => {
+    const maps = window.naver?.maps;
+    const map = mapRef.current;
+    const selectedPoint = toMapPoint(selectedLocation);
+    if (!maps || !map || !selectedPoint) return;
+
+    const position = new maps.LatLng(selectedPoint.latitude, selectedPoint.longitude);
+    if (!selectedMarkerRef.current) {
+      selectedMarkerRef.current = new maps.Marker({ map, position });
+    } else {
+      selectedMarkerRef.current.setPosition(position);
+      selectedMarkerRef.current.setMap(map);
+    }
+    map.setCenter(position);
+    if (map.getZoom() < 14) map.setZoom(15);
+  }, [selectedLocation?.latitude, selectedLocation?.longitude]);
+
+  useEffect(() => {
+    const maps = window.naver?.maps;
+    const map = mapRef.current;
+    if (!maps || !map) return;
+
+    resultMarkersRef.current.forEach((marker) => marker.setMap(null));
+    resultMarkersRef.current = [];
+
+    const bounds = new maps.LatLngBounds();
+    let hasBounds = false;
+    results.forEach((place) => {
+      const point = toMapPoint(place);
+      if (!point) return;
+      const position = new maps.LatLng(point.latitude, point.longitude);
+      const marker = new maps.Marker({ map, position });
+      maps.Event.addListener(marker, "click", () => onSelect(place));
+      resultMarkersRef.current.push(marker);
+      bounds.extend(position);
+      hasBounds = true;
+    });
+    if (hasBounds && !toMapPoint(selectedLocation)) map.fitBounds(bounds, { top: 36, right: 36, bottom: 36, left: 36 });
+  }, [results, onSelect, selectedLocation?.latitude, selectedLocation?.longitude]);
+
+  if (!clientId) {
+    return <div className="desktop-location-map-empty"><MapIcon size={20} />{"\ub124\uc774\ubc84 \uc9c0\ub3c4 \ud074\ub77c\uc774\uc5b8\ud2b8 \ud0a4\ub97c \uc124\uc815\ud558\uba74 \uc9c0\ub3c4\uc5d0\uc11c \uc704\uce58\ub97c \uc9c0\uc815\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4."}</div>;
+  }
+
+  return (
+    <div className="desktop-location-map-panel">
+      <div className="desktop-location-map-toolbar">
+        <span><MapIcon size={17} />{"\uc9c0\ub3c4\uc5d0\uc11c \uc704\uce58 \uc9c0\uc815"}</span>
+        <small>{"\uac80\uc0c9 \uacb0\uacfc \ub9c8\ucee4\ub098 \uc9c0\ub3c4\uc758 \uc704\uce58\ub97c \ud074\ub9ad\ud558\uc138\uc694."}</small>
+      </div>
+      <div className="desktop-location-map" ref={mapElementRef}>
+        {mapStatus === "loading" && <span>{"\uc9c0\ub3c4\ub97c \ubd88\ub7ec\uc624\ub294 \uc911\uc785\ub2c8\ub2e4."}</span>}
+        {mapStatus === "error" && <span>{"\uc9c0\ub3c4\ub97c \ubd88\ub7ec\uc624\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4."}</span>}
+      </div>
+    </div>
   );
 }
 
@@ -85,9 +333,22 @@ function DesktopMeetingCreate() {
   const [purposeMode, setPurposeMode] = useState(initialForm.purpose);
   const [hasStartSchedule, setHasStartSchedule] = useState(true);
   const [hasEndSchedule, setHasEndSchedule] = useState(false);
+  const [locationKeyword, setLocationKeyword] = useState("");
+  const [locationResults, setLocationResults] = useState([]);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationScope, setLocationScope] = useState("");
+  const [mapClientId, setMapClientId] = useState("");
   const categories = useAsync(() => sportApi.categories(), []);
   const sports = useAsync(() => sportApi.sports(form.category_id ? { category_id: form.category_id } : {}), [form.category_id]);
   const today = toDateInputValue(new Date());
+
+
+  useEffect(() => {
+    locationApi.mapConfig()
+      .then((data) => setMapClientId(data.naver_dynamic_map_client_id || ""))
+      .catch(() => setMapClientId(""));
+  }, []);
+
 
   const selectedCategory = useMemo(
     () => categories.data?.items?.find((category) => String(category.id) === String(form.category_id)),
@@ -122,6 +383,48 @@ function DesktopMeetingCreate() {
     setForm((prev) => ({ ...prev, purpose: nextPurpose }));
   }, [purposeMode, purposeOptions]);
 
+
+  useEffect(() => {
+    const keyword = locationKeyword.trim();
+    if (!keyword) {
+      setLocationResults([]);
+      return;
+    }
+    const scopedKeyword = locationScope && !keyword.startsWith(locationScope) ? `${locationScope} ${keyword}` : keyword;
+    const timer = window.setTimeout(() => {
+      setLocationLoading(true);
+      locationApi.searchPlaces({ keyword: scopedKeyword, size: 8 })
+        .then((data) => setLocationResults(data.items || []))
+        .catch(() => setLocationResults([]))
+        .finally(() => setLocationLoading(false));
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [locationKeyword, locationScope]);
+
+  const selectLocation = useCallback((place) => {
+    const title = normalizePlaceText(place.title);
+    const address = place.address || place.road_address || title;
+    if (isAdministrativeRegion(place)) {
+      const scope = address || title;
+      setLocationScope(scope);
+      setLocationKeyword("");
+      setLocationResults([]);
+      setForm((prev) => ({ ...prev, location_name: "", address: scope, latitude: undefined, longitude: undefined }));
+      return;
+    }
+    setLocationScope("");
+    setForm((prev) => ({ ...prev, location_name: title || address, address, latitude: place.latitude, longitude: place.longitude }));
+    setLocationKeyword(address);
+    setLocationResults([]);
+  }, []);
+
+  const clearLocationScope = () => {
+    setLocationScope("");
+    setLocationKeyword("");
+    setLocationResults([]);
+    setForm((prev) => ({ ...prev, location_name: "", address: "", latitude: undefined, longitude: undefined }));
+  };
+
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const updateTitle = (value) => update("title", value.slice(0, TITLE_MAX_LENGTH));
@@ -136,20 +439,42 @@ function DesktopMeetingCreate() {
     if (!checked) {
       setHasEndSchedule(false);
       setForm((prev) => ({ ...prev, start_date: "", start_time: "", end_date: "", end_time: "", meeting_type: "regular" }));
+      return;
     }
+    setForm((prev) => {
+      const nextStartDate = prev.start_date || today;
+      const nextStartTime = prev.start_time || defaultStartTimeForDate(nextStartDate, today);
+      return { ...prev, start_date: nextStartDate, start_time: nextStartTime };
+    });
   };
 
   const toggleEndSchedule = (checked) => {
     setHasEndSchedule(checked);
     if (!checked) {
       setForm((prev) => ({ ...prev, end_date: "", end_time: "" }));
+      return;
     }
+    setForm((prev) => {
+      const nextStartDate = prev.start_date || today;
+      const nextStartTime = prev.start_time || defaultStartTimeForDate(nextStartDate, today);
+      const nextEndDate = prev.end_date || nextStartDate;
+      const baseEndTime = prev.end_time || addMinutesToTime(nextStartTime, 60);
+      return {
+        ...prev,
+        start_date: nextStartDate,
+        start_time: nextStartTime,
+        end_date: nextEndDate,
+        end_time: nextEndDate === nextStartDate ? clampTimeAfterMin(baseEndTime, nextStartTime) : baseEndTime
+      };
+    });
   };
 
   const updateStartDate = (value) => {
     setForm((prev) => {
-      const next = { ...prev, start_date: value };
+      const nextStartTime = prev.start_time || defaultStartTimeForDate(value, today);
+      const next = { ...prev, start_date: value, start_time: nextStartTime };
       if (prev.end_date && value && prev.end_date < value) next.end_date = value;
+      if (next.end_date === value && next.end_time) next.end_time = clampTimeAfterMin(next.end_time, nextStartTime);
       return next;
     });
   };
@@ -157,7 +482,7 @@ function DesktopMeetingCreate() {
   const updateStartTime = (value) => {
     setForm((prev) => {
       const next = { ...prev, start_time: value };
-      if (prev.end_date === prev.start_date && prev.end_time && value && prev.end_time <= value) next.end_time = "";
+      if (prev.end_date === prev.start_date && prev.end_time && value) next.end_time = clampTimeAfterMin(prev.end_time, value);
       return next;
     });
   };
@@ -166,25 +491,26 @@ function DesktopMeetingCreate() {
     setForm((prev) => {
       const minEndDate = prev.start_date || today;
       const nextEndDate = value && value < minEndDate ? minEndDate : value;
-      const next = { ...prev, end_date: nextEndDate };
-      if (nextEndDate === prev.start_date && prev.start_time && prev.end_time && prev.end_time <= prev.start_time) next.end_time = "";
+      const nextStartTime = prev.start_time || defaultStartTimeForDate(minEndDate, today);
+      const baseEndTime = prev.end_time || addMinutesToTime(nextStartTime, 60);
+      const next = { ...prev, start_time: prev.start_time || nextStartTime, end_date: nextEndDate, end_time: baseEndTime };
+      if (nextEndDate === prev.start_date && nextStartTime && next.end_time) next.end_time = clampTimeAfterMin(next.end_time, nextStartTime);
       return next;
     });
   };
 
   const updateEndTime = (value) => {
-    setForm((prev) => {
-      if (prev.end_date === prev.start_date && prev.start_time && value && value <= prev.start_time) {
-        return { ...prev, end_time: "" };
-      }
-      return { ...prev, end_time: value };
-    });
+    setForm((prev) => ({
+      ...prev,
+      end_time: prev.end_date === prev.start_date ? clampTimeAfterMin(value, prev.start_time) : value
+    }));
   };
 
   const submit = async (event) => {
     event.preventDefault();
     const trimmedPurpose = form.purpose.trim();
     if (!trimmedPurpose) return alert("모집 목적을 선택하거나 입력해주세요.");
+    if (!form.location_name || !form.address) return alert("\uc704\uce58 \uac80\uc0c9 \uacb0\uacfc\ub098 \uc9c0\ub3c4\uc5d0\uc11c \uc704\uce58\ub97c \uc120\ud0dd\ud574\uc8fc\uc138\uc694.");
     if (hasStartSchedule && (!form.start_date || !form.start_time)) return alert("시작 일정이 있는 모임은 시작일과 시작 시간을 입력해주세요.");
     if (hasEndSchedule && !hasStartSchedule) return alert("종료 일정은 시작 일정이 있을 때만 설정할 수 있습니다.");
     if (hasEndSchedule && (!form.end_date || !form.end_time)) return alert("종료 일정이 있는 모임은 종료일과 종료 시간을 입력해주세요.");
@@ -247,19 +573,28 @@ function DesktopMeetingCreate() {
             {hasStartSchedule && (
               <fieldset className="desktop-date-time-pair">
                 <legend>시작 일정</legend>
-                <label>시작일<span className="desktop-icon-input"><CalendarClock size={18} /><input required type="date" min={today} value={form.start_date} onChange={(event) => updateStartDate(event.target.value)} /></span></label>
+                <label>시작일<CalendarSelect label={"\uc2dc\uc791\uc77c"} min={today} value={form.start_date} onChange={updateStartDate} icon={<CalendarClock size={18} />} /></label>
                 <label>시작 시간<span className="desktop-icon-input"><AlarmClock size={18} /><TimeSelect required value={form.start_time} onChange={updateStartTime} /></span></label>
               </fieldset>
             )}
             {hasEndSchedule && (
               <fieldset className="desktop-date-time-pair">
                 <legend>종료 일정</legend>
-                <label>종료일<span className="desktop-icon-input"><CalendarClock size={18} /><input required type="date" min={form.start_date || today} value={form.end_date} onChange={(event) => updateEndDate(event.target.value)} /></span></label>
+                <label>종료일<CalendarSelect label={"\uc885\ub8cc\uc77c"} min={form.start_date || today} value={form.end_date} onChange={updateEndDate} icon={<CalendarClock size={18} />} /></label>
                 <label>종료 시간<span className="desktop-icon-input"><AlarmClock size={18} /><TimeSelect required min={form.end_date === form.start_date ? form.start_time : undefined} value={form.end_time} onChange={updateEndTime} /></span></label>
               </fieldset>
             )}
-            <label>장소명<input required value={form.location_name} onChange={(event) => update("location_name", event.target.value)} /></label>
-            <label>주소<input required value={form.address} onChange={(event) => update("address", event.target.value)} /></label>
+            <div className="desktop-location-picker desktop-form-full">
+              <label>{"도로명/주소 검색"}<span><Search size={18} /><input value={locationKeyword} placeholder={"예: 경기 화성시 동탄대로, 만세구 새솔동"} onChange={(event) => { setLocationKeyword(event.target.value); setLocationScope(""); setForm((prev) => ({ ...prev, address: event.target.value, location_name: "", latitude: undefined, longitude: undefined })); }} /></span></label>
+              {locationScope && <div className="desktop-location-scope"><MapPin size={16} /><span><strong>{locationScope}</strong>{" 안에서 검색 중"}</span><button type="button" onClick={clearLocationScope}>{"범위 해제"}</button></div>}
+              <div className="desktop-location-workspace">
+                <div className="desktop-location-search-column">
+                  {(locationLoading || locationResults.length > 0) && <div className="desktop-location-results">{locationLoading ? <span>{"\uac80\uc0c9 \uc911\uc785\ub2c8\ub2e4."}</span> : locationResults.map((place, index) => <button type="button" key={`${place.title}-${index}`} onClick={() => selectLocation(place)}><MapPin size={17} /><strong>{(place.title || place.address || "").replace(/<[^>]+>/g, "")}</strong><small>{place.address || place.road_address}</small></button>)}</div>}
+                  {(form.location_name || (form.address && !locationScope)) && <div className="desktop-location-selected"><MapPin size={18} /><strong>{form.location_name || "선택된 주소"}</strong><span>{form.address}</span></div>}
+                </div>
+                <DesktopLocationMap clientId={mapClientId} selectedLocation={form} results={locationResults} onSelect={selectLocation} />
+              </div>
+            </div>
             <label>최대 인원<input min="2" type="number" value={form.max_participants} onChange={(event) => update("max_participants", event.target.value)} /></label>
           </div>
         </section>
