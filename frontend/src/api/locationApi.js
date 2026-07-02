@@ -16,5 +16,6 @@ function cachedRegions(params = {}) {
 
 export const locationApi = {
   regions: (params = {}) => cachedRegions(params),
+  mapConfig: () => apiClient.get("/map/config").then((res) => res.data),
   searchPlaces: (params = {}) => apiClient.get("/map/search", { params }).then((res) => res.data)
 };
