@@ -1,8 +1,9 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required, verify_jwt_in_request
+from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import Attendance, Meeting, Notice, Participant, Review, Vote, VoteOption
+from app.models import Attendance, Meeting, Notice, Participant, Review, Sport, User, Vote, VoteOption
 from app.services.meeting_service import create_meeting, create_review, join_meeting, list_meetings, update_application, update_meeting
 
 meeting_bp = Blueprint("meetings", __name__)
@@ -37,18 +38,14 @@ def create():
 @meeting_bp.get("/<int:meeting_id>")
 def show(meeting_id):
     current_user_id = current_user_id_optional()
-    meeting = Meeting.query.get_or_404(meeting_id)
+    meeting = Meeting.query.options(
+        joinedload(Meeting.host).joinedload(User.profile),
+        joinedload(Meeting.sport).joinedload(Sport.category),
+        joinedload(Meeting.participants),
+        joinedload(Meeting.chat_room),
+    ).get_or_404(meeting_id)
     meeting.view_count += 1
     db.session.commit()
-
-    payload = meeting.to_dict()
-    current_user_id = current_user_id_optional()
-    participant = None
-    if current_user_id:
-        participant = Participant.query.filter_by(meeting_id=meeting_id, user_id=current_user_id).first()
-    payload["viewer_participant"] = participant.to_dict() if participant else None
-    payload["viewer_role"] = "host" if current_user_id and meeting.host_id == current_user_id else participant.role if participant else ""
-    payload["viewer_status"] = "approved" if current_user_id and meeting.host_id == current_user_id else participant.status if participant else ""
     return jsonify({"meeting": meeting.to_dict(current_user_id=current_user_id)})
 
 
@@ -125,7 +122,7 @@ def reject(meeting_id, user_id):
 
 @meeting_bp.get("/<int:meeting_id>/reviews")
 def reviews(meeting_id):
-    items = Review.query.filter_by(meeting_id=meeting_id).order_by(Review.created_at.desc()).all()
+    items = Review.query.options(joinedload(Review.reviewer).joinedload(User.profile)).filter_by(meeting_id=meeting_id).order_by(Review.created_at.desc()).all()
     return jsonify({"items": [item.to_dict() for item in items]})
 
 
@@ -167,7 +164,7 @@ def post_notice(meeting_id):
 @meeting_bp.get("/<int:meeting_id>/votes")
 def votes(meeting_id):
     Meeting.query.get_or_404(meeting_id)
-    items = Vote.query.filter_by(meeting_id=meeting_id).order_by(Vote.created_at.desc()).all()
+    items = Vote.query.options(joinedload(Vote.options)).filter_by(meeting_id=meeting_id).order_by(Vote.created_at.desc()).all()
     return jsonify({"items": [item.to_dict() for item in items]})
 
 

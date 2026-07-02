@@ -571,3 +571,207 @@
   color: #475569;
 }
 
+
+
+.desktop-meeting-create-form .desktop-field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.desktop-meeting-create-form .desktop-field-label-row em {
+  color: #94a3b8;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.desktop-meeting-schedule-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.desktop-date-time-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.desktop-date-time-pair legend {
+  padding: 0 6px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.desktop-date-time-pair label {
+  min-width: 0;
+}
+
+.desktop-icon-input {
+  position: relative;
+  display: block;
+}
+
+.desktop-icon-input svg {
+  position: absolute;
+  top: 50%;
+  left: 13px;
+  z-index: 1;
+  transform: translateY(-50%);
+  color: #64748b;
+  pointer-events: none;
+}
+
+.desktop-form-grid .desktop-icon-input input {
+  min-height: 46px;
+  padding-left: 42px;
+  background: #fff;
+}
+
+.desktop-form-grid input:focus,
+.desktop-form-grid select:focus,
+.desktop-form-grid textarea:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.14);
+}
+
+.desktop-form-actions--submit-only {
+  justify-content: flex-end;
+}
+
+@media (max-width: 920px) {
+  .desktop-meeting-schedule-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.desktop-schedule-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.desktop-schedule-toggles label,
+.mobile-schedule-toggles label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #dbe4f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #334155;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.desktop-schedule-toggles input,
+.mobile-schedule-toggles input {
+  width: 18px;
+  height: 18px;
+  accent-color: #4f46e5;
+}
+
+.desktop-schedule-toggles label:has(input:checked),
+.mobile-schedule-toggles label:has(input:checked) {
+  border-color: #c7d2fe;
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.desktop-schedule-toggles label:has(input:disabled),
+.mobile-schedule-toggles label:has(input:disabled) {
+  opacity: 0.55;
+}
+
+
+.desktop-icon-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line, #d8e1ef);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.desktop-icon-input > svg {
+  flex: 0 0 auto;
+  color: #4f46e5;
+}
+
+.desktop-icon-input input,
+.desktop-icon-input select {
+  min-height: 0;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent;
+}
+
+.desktop-icon-input input:focus,
+.desktop-icon-input select:focus {
+  outline: none;
+}
+
+.meeting-time-select {
+  display: grid;
+  grid-template-columns: 76px minmax(70px, 1fr) minmax(70px, 1fr);
+  gap: 6px;
+  width: 100%;
+}
+
+.meeting-time-select select {
+  width: 100%;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid #d8e1ef !important;
+  border-radius: 7px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.mobile-icon-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--line, #d8e1ef);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.mobile-icon-input > svg {
+  flex: 0 0 auto;
+  color: #4f46e5;
+}
+
+.mobile-icon-input input,
+.mobile-icon-input select {
+  min-height: 0;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent;
+}
+
+.mobile-icon-input .meeting-time-select {
+  grid-template-columns: 62px minmax(58px, 1fr) minmax(58px, 1fr);
+  gap: 4px;
+}
+
+.mobile-icon-input .meeting-time-select select {
+  height: 32px;
+  padding: 0 5px;
+  font-size: 12px;
+}
