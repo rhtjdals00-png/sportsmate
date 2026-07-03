@@ -212,7 +212,7 @@ def kick_member(meeting_id, user_id):
 @jwt_required()
 def update_user(user_id):
     from flask_jwt_extended import get_jwt_identity
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
     admin_user = User.query.get(current_user_id)
     if not admin_user or admin_user.role not in ["superadmin", "admin"]:
         return jsonify({"message": "관리자 권한이 필요합니다."}), 403
@@ -223,11 +223,39 @@ def update_user(user_id):
     from app.models import UserProfile
     
     data = request.get_json() or {}
+
+    # 1. Restriction: Standard admin cannot manage superadmin or other admin users.
+    if admin_user.role == "admin" and user.role in ["superadmin", "admin"]:
+        return jsonify({"message": "일반 관리자는 최고관리자 또는 관리자 등급을 관리할 수 없습니다."}), 403
+
+    # 2. Restriction: Check if suspension is requested and validate
+    if "is_active" in data and not data["is_active"]:
+        if int(admin_user.id) == int(user.id) and admin_user.role == "superadmin":
+            return jsonify({"message": "최고관리자는 자기 자신을 정지할 수 없습니다."}), 400
+        if user.role == "superadmin":
+            superadmin_count = User.query.filter(User.role == "superadmin").count()
+            if superadmin_count <= 1:
+                return jsonify({"message": "시스템 내 최고관리자는 최소 1명 존재해야 합니다. 최고관리자를 정지할 수 없습니다."}), 400
     
     # Check if role update is requested
     if "role" in data:
         new_role = data["role"]
         
+        # 1. Prevent superadmin from changing their own role to another role (self-demotion restriction)
+        print(f"[ROLE UPDATE] Admin user ID: {admin_user.id} (type: {type(admin_user.id)}), Target user ID: {user.id} (type: {type(user.id)})")
+        if int(admin_user.id) == int(user.id) and admin_user.role == "superadmin" and new_role != "superadmin":
+            return jsonify({"message": "최고관리자는 자기 자신의 등급을 다른 등급으로 변경할 수 없습니다. 최고관리자 권한을 먼저 이양하십시오."}), 400
+
+        # 2. Prevent demoting the last superadmin in the database
+        if user.role == "superadmin" and new_role != "superadmin":
+            superadmin_count = User.query.filter(User.role == "superadmin").count()
+            if superadmin_count <= 1:
+                return jsonify({"message": "시스템 내 최고관리자는 최소 1명 존재해야 합니다. 마지막 최고관리자는 다른 등급으로 강등할 수 없습니다."}), 400
+            
+        # 3. Prevent transferring superadmin role to a user who is not currently an admin
+        if new_role == "superadmin" and user.role != "admin" and user.role != "superadmin":
+            return jsonify({"message": "최고관리자 권한은 일반 관리자(admin) 등급에게만 이양할 수 있습니다."}), 400
+
         # Restriction: If standard admin, they can only change user's role to/from user, suspended, and pending_withdrawal.
         # They cannot set or remove superadmin/admin roles.
         if admin_user.role == "admin":
@@ -245,12 +273,24 @@ def update_user(user_id):
                 other.role = "admin"
                 
         user.role = new_role
+        if new_role == "suspended":
+            user.is_active = False
+        elif user.is_active == False:
+            user.is_active = True
     
     # Update User fields
     user_fields = ["name", "email", "phone_number", "nickname"]
     for field in user_fields:
         if field in data:
             setattr(user, field, data[field])
+            
+    if "is_active" in data:
+        is_active = data["is_active"]
+        user.is_active = is_active
+        if not is_active:
+            user.role = "suspended"
+        elif user.role == "suspended":
+            user.role = "user"
             
     # Update UserProfile fields
     if "region" in data or "preferred_sports" in data:

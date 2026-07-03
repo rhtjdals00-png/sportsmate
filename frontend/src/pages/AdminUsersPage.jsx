@@ -267,15 +267,17 @@ function AdminUsersPage() {
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <span>{u.email}</span>
-                        {u.provider === "kakao" && (
-                          <span className="admin-badge admin-badge--orange" style={{ fontSize: "10px", padding: "1px 5px", lineHeight: 1.2 }}>카카오</span>
-                        )}
-                        {u.provider === "google" && (
-                          <span className="admin-badge admin-badge--blue" style={{ fontSize: "10px", padding: "1px 5px", lineHeight: 1.2 }}>구글</span>
-                        )}
-                        {u.provider === "email" && (
-                          <span className="admin-badge admin-badge--gray" style={{ fontSize: "10px", padding: "1px 5px", lineHeight: 1.2 }}>이메일</span>
-                        )}
+                        {(() => {
+                          const list = (u.provider || "").split(",").map(p => p.trim());
+                          const hasSocial = list.includes("google") || list.includes("kakao");
+                          const filtered = hasSocial ? list.filter(p => p !== "email") : list;
+                          return filtered.map(trimP => {
+                            if (trimP === "kakao") return <span key={trimP} className="admin-badge admin-badge--orange" style={{ fontSize: "10px", padding: "1px 5px", lineHeight: 1.2, marginLeft: "4px" }}>카카오</span>;
+                            if (trimP === "google") return <span key={trimP} className="admin-badge admin-badge--blue" style={{ fontSize: "10px", padding: "1px 5px", lineHeight: 1.2, marginLeft: "4px" }}>구글</span>;
+                            if (trimP === "email") return <span key={trimP} className="admin-badge admin-badge--gray" style={{ fontSize: "10px", padding: "1px 5px", lineHeight: 1.2, marginLeft: "4px" }}>이메일</span>;
+                            return null;
+                          });
+                        })()}
                       </div>
                     </td>
                     <td style={{ color: "#64748b" }}>{u.created_at}</td>
