@@ -1,11 +1,33 @@
 import { useMemo, useState } from "react";
-import { BellRing } from "lucide-react";
+import { BellRing, MessageCircle, UserPlus } from "lucide-react";
+import { Link } from "react-router-dom";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import EmptyState from "../../common/EmptyState.jsx";
 import Button from "../../common/Button.jsx";
 import { notificationApi } from "../../../api/notificationApi";
 import { useAsync } from "../../../hooks/useAsync";
 import { enablePushNotifications, getPushSupportState } from "../../../utils/pushNotifications";
+
+function formatNotificationTime(value) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Seoul"
+  }).format(new Date(value));
+}
+
+function notificationMeta(item) {
+  if (item.type === "chat") {
+    return { icon: MessageCircle, label: "채팅", action: "채팅방 보기" };
+  }
+  if (item.type === "join_request") {
+    return { icon: UserPlus, label: "가입 신청", action: "신청 내역 보기" };
+  }
+  return { icon: BellRing, label: "알림", action: "자세히 보기" };
+}
 
 function MobileNotifications() {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -49,13 +71,29 @@ function MobileNotifications() {
         )}
       </section>
       <div className="notification-list">
-        {(notifications.data?.items || []).map((item) => (
-          <article key={item.id} className={item.is_read ? "read" : ""}>
-            <strong>{item.title}</strong>
-            <p>{item.message}</p>
-            {!item.is_read && <button type="button" onClick={() => markRead(item.id)}>읽음 처리</button>}
-          </article>
-        ))}
+        {(notifications.data?.items || []).map((item) => {
+          const meta = notificationMeta(item);
+          const Icon = meta.icon;
+          return (
+            <article key={item.id} className={item.is_read ? "read" : ""}>
+              <div className="notification-card__icon">
+                <Icon size={18} />
+              </div>
+              <div className="notification-card__body">
+                <div className="notification-card__meta">
+                  <span>{meta.label}</span>
+                  <time>{formatNotificationTime(item.created_at)}</time>
+                </div>
+                <strong>{item.title}</strong>
+                <p>{item.message}</p>
+                <div className="notification-card__actions">
+                  {item.link_url ? <Link to={item.link_url}>{meta.action}</Link> : null}
+                  {!item.is_read && <button type="button" onClick={() => markRead(item.id)}>읽음 처리</button>}
+                </div>
+              </div>
+            </article>
+          );
+        })}
       </div>
       {!notifications.loading && !notifications.data?.items?.length && (
         <EmptyState title="새 알림이 없습니다." description="참여 승인, 채팅, 공지 알림이 여기에 표시됩니다." />

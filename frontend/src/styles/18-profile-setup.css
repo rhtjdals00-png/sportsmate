@@ -1,4 +1,4 @@
-.profile-setup-page {
+﻿.profile-setup-page {
   min-height: calc(100vh - 72px);
   padding: 44px 24px 72px;
   background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
@@ -185,7 +185,7 @@
   min-height: 46px;
   border-radius: 8px;
   background: #eef2ff;
-  color: #3730a3;
+  color: #1e40af;
   font-weight: 800;
 }
 
@@ -215,7 +215,7 @@
 .profile-setup__categories button.is-active,
 .profile-setup__sport-list button.is-selected {
   border-color: #2563eb;
-  background: linear-gradient(135deg, #4f46e5, #0ea5e9);
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
   color: #fff;
 }
 
@@ -294,7 +294,7 @@
 .profile-setup__level-toggle input {
   width: 18px;
   height: 18px;
-  accent-color: #4f46e5;
+  accent-color: #2563eb;
 }
 
 .profile-setup__sport-levels {
@@ -365,7 +365,7 @@
 
 .profile-setup__security svg {
   flex: 0 0 auto;
-  color: #4f46e5;
+  color: #2563eb;
 }
 
 .profile-setup__security h2 {
@@ -386,7 +386,7 @@
   border: 1px solid #c7d2fe;
   border-radius: 8px;
   background: #eef2ff;
-  color: #3730a3;
+  color: #1e40af;
   padding: 0 14px;
   font-weight: 800;
   cursor: pointer;
@@ -481,8 +481,8 @@
 }
 
 .account-link-password-input:focus-within {
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.14);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
 }
 
 .account-link-password-input svg {
@@ -502,7 +502,7 @@
 }
 
 .account-link-password-input.is-valid {
-  border-color: #4f46e5;
+  border-color: #2563eb;
 }
 
 .account-link-password-input.is-invalid {
@@ -549,12 +549,12 @@
 }
 
 .account-link-panel .button--primary {
-  background: #4f46e5;
-  box-shadow: 0 12px 24px rgba(79, 70, 229, 0.22);
+  background: #2563eb;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.22);
 }
 
 .account-link-panel .button--primary:hover {
-  background: #4338ca;
+  background: #1d4ed8;
 }
 
 @media (max-width: 860px) {
@@ -674,7 +674,7 @@
   border: 0;
   border-radius: 8px;
   background: #eef2ff;
-  color: #4338ca;
+  color: #1d4ed8;
   padding: 0 12px;
   font-size: 0.88rem;
   font-weight: 900;
@@ -789,7 +789,7 @@
   gap: 6px;
   border: 0;
   border-radius: 8px;
-  background: #4f46e5;
+  background: #2563eb;
   color: #ffffff;
   font-weight: 900;
   cursor: pointer;
@@ -839,9 +839,9 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: linear-gradient(135deg, #4f46e5, #0ea5e9);
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
   color: #ffffff;
-  box-shadow: 0 22px 48px rgba(79, 70, 229, 0.32);
+  box-shadow: 0 22px 48px rgba(37, 99, 235, 0.32);
   animation: profileIntroFloat 3.2s ease-in-out infinite;
 }
 
@@ -864,7 +864,7 @@
   border: 1px solid #dbeafe;
   border-radius: 50%;
   background: #ffffff;
-  color: #4f46e5;
+  color: #2563eb;
   box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
 }
 
@@ -983,3 +983,4 @@
     grid-template-columns: 1fr;
   }
 }
+

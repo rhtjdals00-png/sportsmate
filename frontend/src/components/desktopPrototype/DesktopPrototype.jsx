@@ -2,6 +2,7 @@ import {
   BarChart3,
   Bike,
   CalendarCheck,
+  CalendarClock,
   CalendarDays,
   Camera,
   Check,
@@ -30,6 +31,7 @@ import {
   Send,
   ShieldCheck,
   SlidersHorizontal,
+  Star,
   UserRound,
   UserCheck,
   Users,
@@ -39,12 +41,12 @@ import {
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMemo, useRef, useState } from "react";
 import DesktopMeetingDetail from "../meeting/desktop/DesktopMeetingDetail.jsx";
-import SharedMeetingCard from "../meeting/shared/MeetingCard.jsx";
 import EmptyState from "../common/EmptyState.jsx";
 import LoadingCards from "../common/LoadingCards.jsx";
 import { meetingApi } from "../../api/meetingApi";
 import { sportApi } from "../../api/sportApi";
 import { useAsync } from "../../hooks/useAsync";
+import { formatDateTime, formatMeetingType } from "../../utils/formatters";
 
 const joinedStates = new Set(["host", "joined"]);
 
@@ -213,6 +215,50 @@ function MeetingCard({ item }) {
   );
 }
 
+
+function HomeRecommendedCard({ meeting }) {
+  const sportName = meeting.sport?.name || meeting.sport_name;
+
+  return (
+    <article className="meeting-card meeting-card--compact home-recommend-card" aria-label={meeting.title}>
+      <div className="meeting-card__body">
+        <div className="meeting-card__thumb" style={meeting.cover_image_url ? { backgroundImage: `url(${meeting.cover_image_url})` } : undefined}>
+          {!meeting.cover_image_url && <span>{sportName}</span>}
+        </div>
+        <div>
+          <div className="meeting-card__top">
+            <span className={`badge ${meeting.status === "open" ? "badge--success" : "badge--slate"}`}>
+              {meeting.status === "open" ? "모집중" : "모집마감"}
+            </span>
+            <span className="badge badge--sky">{sportName}</span>
+            <span>{formatMeetingType(meeting.meeting_type)}</span>
+          </div>
+          <span className="meeting-card__title">{meeting.title}</span>
+          <p>{meeting.description}</p>
+        </div>
+      </div>
+      <dl className="meeting-card__meta">
+        <div>
+          <MapPin size={16} />
+          <span>{meeting.location_name || meeting.address}</span>
+        </div>
+        <div>
+          <CalendarClock size={16} />
+          <span>{formatDateTime(meeting.start_at)}</span>
+        </div>
+        <div>
+          <Users size={16} />
+          <span>{meeting.current_participants}/{meeting.max_participants}명</span>
+        </div>
+        <div>
+          <Star size={16} />
+          <span>4.{meeting.id % 5 + 5}</span>
+        </div>
+      </dl>
+    </article>
+  );
+}
+
 function DesktopPrototype({ page }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -334,12 +380,15 @@ function DesktopPrototype({ page }) {
 }
 
 function HomeContent() {
-  const recommendedMeetings = useAsync(() => meetingApi.list({ limit: 10 }), []);
+  const [recommendRetryKey, setRecommendRetryKey] = useState(0);
+  const recommendedMeetings = useAsync(() => meetingApi.list({ limit: 10 }), [recommendRetryKey]);
   const sports = useAsync(() => sportApi.sports(), []);
   const recommendedItems = recommendedMeetings.data?.items || [];
+  const navigate = useNavigate();
   const carouselRef = useRef(null);
   const dragStateRef = useRef(null);
   const dragMovedRef = useRef(false);
+  const [carouselDragging, setCarouselDragging] = useState(false);
   const sportItems = sports.data?.items || [];
   const homeSportShortcuts = useMemo(() => {
     const definitions = [
@@ -357,36 +406,50 @@ function HomeContent() {
   }, [sportItems]);
 
   const startCarouselDrag = (event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
     const target = carouselRef.current;
-    if (!target) return;
+    if (!target || target.scrollWidth <= target.clientWidth) return;
     dragMovedRef.current = false;
     dragStateRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       scrollLeft: target.scrollLeft
     };
-    target.setPointerCapture?.(event.pointerId);
+    setCarouselDragging(true);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
   };
 
   const moveCarouselDrag = (event) => {
     const target = carouselRef.current;
     const state = dragStateRef.current;
-    if (!target || !state) return;
+    if (!target || !state || state.pointerId !== event.pointerId) return;
     const deltaX = event.clientX - state.startX;
-    if (Math.abs(deltaX) > 5) dragMovedRef.current = true;
+    if (Math.abs(deltaX) > 5) {
+      dragMovedRef.current = true;
+      event.preventDefault();
+    }
     target.scrollLeft = state.scrollLeft - deltaX;
   };
 
   const endCarouselDrag = (event) => {
-    carouselRef.current?.releasePointerCapture?.(event.pointerId);
+    if (dragStateRef.current?.pointerId !== event.pointerId) return;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
     dragStateRef.current = null;
+    setCarouselDragging(false);
   };
 
-  const preventDraggedClick = (event) => {
-    if (!dragMovedRef.current) return;
+  const openRecommendedMeeting = (meetingId) => {
+    if (dragMovedRef.current) {
+      dragMovedRef.current = false;
+      return;
+    }
+    navigate(`/meetings/${meetingId}`);
+  };
+
+  const handleRecommendedKeyDown = (event, meetingId) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    event.stopPropagation();
-    dragMovedRef.current = false;
+    navigate(`/meetings/${meetingId}`);
   };
 
   return (
@@ -441,15 +504,24 @@ function HomeContent() {
         ) : recommendedItems.length ? (
           <div
             ref={carouselRef}
-            className="home-card-carousel"
-            onClickCapture={preventDraggedClick}
-            onPointerDown={startCarouselDrag}
-            onPointerMove={moveCarouselDrag}
-            onPointerUp={endCarouselDrag}
-            onPointerCancel={endCarouselDrag}
-            onPointerLeave={endCarouselDrag}
+            className={`home-card-carousel ${carouselDragging ? "is-dragging" : ""}`}
           >
-            {recommendedItems.map((meeting) => <SharedMeetingCard key={meeting.id} meeting={meeting} compact />)}
+            {recommendedItems.map((meeting) => (
+              <div
+                key={meeting.id}
+                className="home-card-drag-target"
+                role="link"
+                tabIndex={0}
+                onClick={() => openRecommendedMeeting(meeting.id)}
+                onKeyDown={(event) => handleRecommendedKeyDown(event, meeting.id)}
+                onPointerDown={startCarouselDrag}
+                onPointerMove={moveCarouselDrag}
+                onPointerUp={endCarouselDrag}
+                onPointerCancel={endCarouselDrag}
+              >
+                <HomeRecommendedCard meeting={meeting} />
+              </div>
+            ))}
           </div>
         ) : (
           <EmptyState title="아직 등록된 모임이 없습니다." actionLabel="모임 만들기" actionTo="/meetings/create" />

@@ -92,6 +92,8 @@ def sync_supabase_user(data):
         user = User(email=email, auth_user_id=auth_user_id, name=name, phone_number=phone_number, nickname=nickname, user_tag=generate_user_tag())
         db.session.add(user)
     else:
+        if not user.is_active:
+            raise ValueError("정지된 회원입니다.")
         user.auth_user_id = user.auth_user_id or auth_user_id
         user.email = email
         # 2026-07-02: Supabase 동기화는 초기값 보강에만 쓰고, SportsMate DB에서 관리하는 계정 정보는 보존.
@@ -163,7 +165,7 @@ def login_user(data):
     if not user or not user.password_hash or not user.check_password(data.get("password") or ""):
         raise ValueError("이메일 또는 비밀번호가 올바르지 않습니다.")
     if not user.is_active:
-        raise ValueError("비활성화된 계정입니다.")
+        raise ValueError("정지된 회원입니다.")
     return build_auth_response(user)
 
 def login_with_supabase(data):
@@ -216,7 +218,7 @@ def login_with_supabase(data):
             user.profile = UserProfile()
 
     if not user.is_active:
-        raise ValueError("비활성화된 계정입니다.")
+        raise ValueError("정지된 회원입니다.")
 
     db.session.commit()
     response = build_auth_response(user)

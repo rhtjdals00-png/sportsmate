@@ -105,6 +105,9 @@ export function AuthProvider({ children }) {
           setAuthError(error?.response?.data?.message || error?.message || "로그인 동기화에 실패했습니다.");
           setBackendTokenReady(false);
           setUser(null);
+          if (supabase) {
+            await supabase.auth.signOut().catch(() => {});
+          }
         }
       }
       setLoading(false);
@@ -121,6 +124,9 @@ export function AuthProvider({ children }) {
           setAuthError(error?.response?.data?.message || error?.message || "로그인 동기화에 실패했습니다.");
           setBackendTokenReady(false);
           setUser(null);
+          if (supabase) {
+            await supabase.auth.signOut().catch(() => {});
+          }
         }
       } else {
         setAuthError("");
@@ -152,7 +158,12 @@ export function AuthProvider({ children }) {
           password: payload.password
         });
         if (error) throw error;
-        await syncProfile(data.user, { allow_nickname_suffix: true });
+        try {
+          await syncProfile(data.user, { allow_nickname_suffix: true });
+        } catch (syncError) {
+          await client.auth.signOut().catch(() => {});
+          throw syncError;
+        }
         return data;
       },
       async register(payload) {
@@ -269,6 +280,23 @@ export function AuthProvider({ children }) {
     }),
     [user, session, authError, backendTokenReady, loading]
   );
+
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(async () => {
+      try {
+        await authApi.me();
+      } catch (err) {
+        if (err.response?.status === 401) {
+          const msg = err.response.data?.message || err.response.data?.msg;
+          if (msg === "정지된 회원입니다.") {
+            clearInterval(interval);
+          }
+        }
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

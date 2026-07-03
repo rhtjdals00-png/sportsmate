@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { CalendarCheck, Check, Dumbbell, Footprints, MapPin, MessageCircle, Pencil, Star, Trophy, X } from "lucide-react";
+import { CalendarCheck, Check, Dumbbell, Footprints, MapPin, MessageCircle, Pencil, ShieldCheck, Star, Trophy, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import Button from "../../common/Button.jsx";
@@ -31,6 +31,11 @@ function formatRating(value) {
   return rating > 0 ? rating.toFixed(1) : "신규";
 }
 
+function isAdminUser(user) {
+  const role = String(user?.role || user?.profile?.role || "").toLowerCase();
+  return Boolean(user?.is_admin || user?.isAdmin || role === "admin" || role === "superadmin" || role === "administrator");
+}
+
 function MobileMyPage() {
   const navigate = useNavigate();
   const { user, logout, setCurrentUser } = useAuth();
@@ -44,6 +49,7 @@ function MobileMyPage() {
   const pendingCount = meetings.data?.pending?.length || 0;
   const reviewCount = reviews.data?.items?.length || 0;
   const exerciseLevel = levelLabels[profile.exercise_level] || "입문";
+  const showAdminEntry = isAdminUser(user);
   const introStorageKey = user?.id ? `sportsmate_profile_extra_${user.id}` : "sportsmate_profile_extra_guest";
   const initialIntro = useMemo(() => profile.bio || (() => {
     try {
@@ -153,13 +159,19 @@ function MobileMyPage() {
           <span>후기</span>
           <strong>{reviews.loading ? "확인 중" : `${reviewCount}개`}</strong>
         </div>
-        <div>
+        <Link to="/mypage/meetings">
           <CalendarCheck size={18} />
           <span>승인 대기</span>
           <strong>{meetings.loading ? "확인 중" : `${pendingCount}건`}</strong>
-        </div>
+        </Link>
       </section>
       <div className="menu-list">
+        {showAdminEntry ? (
+          <Link className="mobile-my-admin-link" to="/admin">
+            <ShieldCheck size={18} />
+            <span>관리자 페이지로 이동</span>
+          </Link>
+        ) : null}
         <Link to="/mypage/profile">프로필 수정</Link>
         <Link to="/mypage/meetings">내가 만든 모임 <span>{hostedCount}</span></Link>
         <Link to="/mypage/meetings">참여 중인 모임 <span>{joinedCount}</span></Link>

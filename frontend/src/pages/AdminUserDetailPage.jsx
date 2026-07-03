@@ -178,6 +178,7 @@ function AdminUserDetailPage() {
         if (res && res.user) {
           const user = res.user;
           const formatted = {
+            id: user.id,
             name: user.name || "이름 없음",
             nickname: user.nickname || "닉네임 없음",
             sportTag: user.profile && user.profile.preferred_sports ? `🏃 ${user.profile.preferred_sports}` : "운동 메이트",
@@ -207,7 +208,7 @@ function AdminUserDetailPage() {
         console.error("API error while loading user detail", err);
         // Fallback to mock database
         const fallback = userDetailDb[userId] || userDetailDb["1"];
-        setUserData(fallback);
+        setUserData({ ...fallback, id: Number(userId) });
       } finally {
         setLoading(false);
       }
@@ -273,14 +274,28 @@ function AdminUserDetailPage() {
     }
   };
 
-  const toggleStatus = () => {
+  const toggleStatus = async () => {
     if (!userData) return;
     const nextStatus = userData.status === "정상 회원" ? "정지" : "정상 회원";
     if (window.confirm(`${userData.name} 회원의 상태를 '${nextStatus}'(으)로 변경하시겠습니까?`)) {
-      setUserData(prev => ({
-        ...prev,
-        status: nextStatus
-      }));
+      try {
+        const nextIsActive = nextStatus === "정상 회원";
+        const res = await adminApi.updateUser(userId, {
+          is_active: nextIsActive
+        });
+        if (res && res.user) {
+          const u = res.user;
+          setUserData(prev => ({
+            ...prev,
+            status: u.is_active === false ? "정지" : "정상 회원",
+            memo: u.is_active === false ? "정지된 계정입니다." : "정상적으로 서비스 이용 중인 회원입니다."
+          }));
+          alert(`계정이 성공적으로 ${nextStatus} 처리되었습니다.`);
+        }
+      } catch (err) {
+        console.error("Failed to update user status", err);
+        alert(err.response?.data?.message || "계정 상태 변경에 실패했습니다.");
+      }
     }
   };
 
@@ -535,7 +550,8 @@ function AdminUserDetailPage() {
       </div>
 
       {isEditModalOpen && (() => {
-        const isRoleDisabled = currentUser?.role === "admin" && (userData?.role === "superadmin" || userData?.role === "admin");
+        const isRoleDisabled = (currentUser?.role === "admin" && (userData?.role === "superadmin" || userData?.role === "admin")) ||
+                               (currentUser?.role === "superadmin" && currentUser?.id === userData?.id);
         const showAllOptions = currentUser?.role === "superadmin";
 
         return (
@@ -698,7 +714,9 @@ function AdminUserDetailPage() {
                   >
                     {showAllOptions ? (
                       <>
-                        <option value="superadmin">최고관리자 (superadmin)</option>
+                        <option value="superadmin" disabled={userData?.role !== "admin" && userData?.role !== "superadmin"}>
+                          최고관리자 (superadmin){userData?.role !== "admin" && userData?.role !== "superadmin" ? " (관리자만 이양 가능)" : ""}
+                        </option>
                         <option value="admin">관리자 (admin)</option>
                         <option value="user">일반회원 (user)</option>
                         <option value="suspended">정지회원 (suspended)</option>
@@ -719,7 +737,9 @@ function AdminUserDetailPage() {
                   </select>
                   {isRoleDisabled && (
                     <span style={{ fontSize: "12px", color: "#ef4444", marginTop: "4px", display: "block" }}>
-                      일반 관리자는 최고관리자 및 관리자 등급을 변경할 수 없습니다.
+                      {currentUser?.id === userData?.id 
+                        ? "최고관리자는 자기 자신을 다른 등급으로 변경할 수 없습니다."
+                        : "일반 관리자는 최고관리자 및 관리자 등급을 변경할 수 없습니다."}
                     </span>
                   )}
                 </div>
