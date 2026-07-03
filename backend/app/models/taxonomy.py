@@ -5,7 +5,7 @@ class SportCategory(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), nullable=False, unique=True)
-    purpose = db.Column(db.String(120), nullable=False, default="파트너 모집")
+    purpose = db.Column(db.String(120), nullable=False, default="운동 메이트 모집")
     sports = db.relationship("Sport", back_populates="category", cascade="all, delete-orphan")
 
     def to_dict(self):

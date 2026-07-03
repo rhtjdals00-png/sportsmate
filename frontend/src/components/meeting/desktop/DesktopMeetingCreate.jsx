@@ -230,8 +230,7 @@ function DesktopLocationMap({ clientId, selectedLocation, results, onSelect }) {
         });
         maps.Event.addListener(mapRef.current, "click", (event) => {
           onSelect({
-            title: "\uc9c0\ub3c4\uc5d0\uc11c \uc120\ud0dd\ud55c \uc704\uce58",
-            address: "\uc9c0\ub3c4\uc5d0\uc11c \uc120\ud0dd\ud55c \uc704\uce58",
+            source: "map-click",
             latitude: event.coord.lat(),
             longitude: event.coord.lng(),
           });
@@ -316,8 +315,7 @@ const initialForm = {
   start_time: "",
   end_date: "",
   end_time: "",
-  max_participants: 6,
-  approval_required: true
+  max_participants: 6
 };
 
 const combineDateTime = (date, time) => date && time ? `${date}T${time}` : "";
@@ -325,6 +323,11 @@ const toDateInputValue = (date) => date.toISOString().slice(0, 10);
 
 function uniqueValues(values) {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function getApiItems(payload) {
+  if (Array.isArray(payload)) return payload;
+  return Array.isArray(payload?.items) ? payload.items : [];
 }
 
 function DesktopMeetingCreate() {
@@ -338,9 +341,14 @@ function DesktopMeetingCreate() {
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationScope, setLocationScope] = useState("");
   const [mapClientId, setMapClientId] = useState("");
+  const locationSearchRequestRef = useRef(0);
+  const selectedLocationKeywordRef = useRef("");
+  const locationReverseRequestRef = useRef(0);
   const categories = useAsync(() => sportApi.categories(), []);
   const sports = useAsync(() => sportApi.sports(form.category_id ? { category_id: form.category_id } : {}), [form.category_id]);
   const today = toDateInputValue(new Date());
+  const categoryItems = useMemo(() => getApiItems(categories.data), [categories.data]);
+  const sportItems = useMemo(() => getApiItems(sports.data), [sports.data]);
 
 
   useEffect(() => {
@@ -351,8 +359,8 @@ function DesktopMeetingCreate() {
 
 
   const selectedCategory = useMemo(
-    () => categories.data?.items?.find((category) => String(category.id) === String(form.category_id)),
-    [categories.data?.items, form.category_id]
+    () => categoryItems.find((category) => String(category.id) === String(form.category_id)),
+    [categoryItems, form.category_id]
   );
 
   const purposeOptions = useMemo(() => {
@@ -361,20 +369,20 @@ function DesktopMeetingCreate() {
   }, [selectedCategory?.purpose]);
 
   useEffect(() => {
-    const firstCategory = categories.data?.items?.[0];
+    const firstCategory = categoryItems[0];
     if (!form.category_id && firstCategory) {
       const firstPurpose = firstCategory.purpose?.split("/")?.[0]?.trim() || initialForm.purpose;
       setPurposeMode(firstPurpose);
       setForm((prev) => ({ ...prev, category_id: String(firstCategory.id), purpose: firstPurpose }));
     }
-  }, [categories.data?.items, form.category_id]);
+  }, [categoryItems, form.category_id]);
 
   useEffect(() => {
-    const firstSport = sports.data?.items?.[0];
-    if (firstSport && !sports.data.items.some((sport) => String(sport.id) === String(form.sport_id))) {
+    const firstSport = sportItems[0];
+    if (firstSport && !sportItems.some((sport) => String(sport.id) === String(form.sport_id))) {
       setForm((prev) => ({ ...prev, sport_id: String(firstSport.id) }));
     }
-  }, [sports.data?.items, form.sport_id]);
+  }, [sportItems, form.sport_id]);
 
   useEffect(() => {
     if (purposeMode === CUSTOM_PURPOSE || purposeOptions.includes(purposeMode)) return;
@@ -386,46 +394,116 @@ function DesktopMeetingCreate() {
 
   useEffect(() => {
     const keyword = locationKeyword.trim();
-    if (!keyword) {
+    if (!keyword || selectedLocationKeywordRef.current === keyword) {
       setLocationResults([]);
+      setLocationLoading(false);
       return;
     }
     const scopedKeyword = locationScope && !keyword.startsWith(locationScope) ? `${locationScope} ${keyword}` : keyword;
+    const requestId = locationSearchRequestRef.current + 1;
+    locationSearchRequestRef.current = requestId;
     const timer = window.setTimeout(() => {
       setLocationLoading(true);
       locationApi.searchPlaces({ keyword: scopedKeyword, size: 8 })
-        .then((data) => setLocationResults(data.items || []))
-        .catch(() => setLocationResults([]))
-        .finally(() => setLocationLoading(false));
+        .then((data) => {
+          if (locationSearchRequestRef.current !== requestId || selectedLocationKeywordRef.current === keyword) return;
+          setLocationResults(data.items || []);
+        })
+        .catch(() => {
+          if (locationSearchRequestRef.current === requestId) setLocationResults([]);
+        })
+        .finally(() => {
+          if (locationSearchRequestRef.current === requestId) setLocationLoading(false);
+        });
     }, 300);
     return () => window.clearTimeout(timer);
   }, [locationKeyword, locationScope]);
 
-  const selectLocation = useCallback((place) => {
+  const selectLocation = useCallback(async (place) => {
+    if (place.source === "map-click") {
+      const requestId = locationReverseRequestRef.current + 1;
+      locationReverseRequestRef.current = requestId;
+      const latitude = place.latitude;
+      const longitude = place.longitude;
+      selectedLocationKeywordRef.current = "지도에서 선택한 위치";
+      locationSearchRequestRef.current += 1;
+      setLocationScope("");
+      setLocationResults([]);
+      setLocationLoading(false);
+      setLocationKeyword("지도에서 선택한 위치");
+      setForm((prev) => ({
+        ...prev,
+        location_name: "주소 확인 중",
+        address: "지도에서 선택한 위치의 주소를 확인하고 있습니다.",
+        latitude,
+        longitude
+      }));
+
+      try {
+        const data = await locationApi.reverseGeocode({ latitude, longitude });
+        const item = data.item || {};
+        const title = normalizePlaceText(item.title) || item.address || "지도에서 선택한 위치";
+        const address = item.address || item.road_address || title;
+        if (locationReverseRequestRef.current !== requestId) return;
+        selectedLocationKeywordRef.current = address;
+        setForm((prev) => ({
+          ...prev,
+          location_name: title,
+          address,
+          latitude,
+          longitude
+        }));
+        setLocationKeyword(address);
+      } catch {
+        if (locationReverseRequestRef.current !== requestId) return;
+        setForm((prev) => ({
+          ...prev,
+          location_name: "지도에서 선택한 위치",
+          address: `위도 ${Number(latitude).toFixed(6)}, 경도 ${Number(longitude).toFixed(6)}`,
+          latitude,
+          longitude
+        }));
+      }
+      return;
+    }
+
     const title = normalizePlaceText(place.title);
     const address = place.address || place.road_address || title;
     if (isAdministrativeRegion(place)) {
       const scope = address || title;
+      selectedLocationKeywordRef.current = "";
+      locationSearchRequestRef.current += 1;
       setLocationScope(scope);
       setLocationKeyword("");
       setLocationResults([]);
+      setLocationLoading(false);
       setForm((prev) => ({ ...prev, location_name: "", address: scope, latitude: undefined, longitude: undefined }));
       return;
     }
+    selectedLocationKeywordRef.current = address;
+    locationSearchRequestRef.current += 1;
     setLocationScope("");
     setForm((prev) => ({ ...prev, location_name: title || address, address, latitude: place.latitude, longitude: place.longitude }));
     setLocationKeyword(address);
     setLocationResults([]);
+    setLocationLoading(false);
   }, []);
 
   const clearLocationScope = () => {
+    selectedLocationKeywordRef.current = "";
+    locationSearchRequestRef.current += 1;
     setLocationScope("");
     setLocationKeyword("");
     setLocationResults([]);
+    setLocationLoading(false);
     setForm((prev) => ({ ...prev, location_name: "", address: "", latitude: undefined, longitude: undefined }));
   };
 
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  const updateCategory = (categoryId) => {
+    setForm((prev) => ({ ...prev, category_id: categoryId, sport_id: "" }));
+  };
 
   const updateTitle = (value) => update("title", value.slice(0, TITLE_MAX_LENGTH));
 
@@ -509,6 +587,7 @@ function DesktopMeetingCreate() {
   const submit = async (event) => {
     event.preventDefault();
     const trimmedPurpose = form.purpose.trim();
+    if (!form.category_id || !form.sport_id) return alert("카테고리와 종목을 선택해주세요.");
     if (!trimmedPurpose) return alert("모집 목적을 선택하거나 입력해주세요.");
     if (!form.location_name || !form.address) return alert("\uc704\uce58 \uac80\uc0c9 \uacb0\uacfc\ub098 \uc9c0\ub3c4\uc5d0\uc11c \uc704\uce58\ub97c \uc120\ud0dd\ud574\uc8fc\uc138\uc694.");
     if (hasStartSchedule && (!form.start_date || !form.start_time)) return alert("시작 일정이 있는 모임은 시작일과 시작 시간을 입력해주세요.");
@@ -524,7 +603,6 @@ function DesktopMeetingCreate() {
     const data = await meetingApi.create({
       ...form,
       purpose: trimmedPurpose,
-      approval_required: true,
       start_at: hasStartSchedule ? combineDateTime(form.start_date, form.start_time) : null,
       end_at: hasEndSchedule ? combineDateTime(form.end_date, form.end_time) : null,
       meeting_type: hasEndSchedule || !hasStartSchedule ? "regular" : form.meeting_type,
@@ -533,6 +611,9 @@ function DesktopMeetingCreate() {
     });
     navigate(`/meetings/${data.meeting.id}`);
   };
+
+  const showLocationResultsPanel = locationLoading || locationResults.length > 0;
+  const showSelectedLocation = Boolean(form.location_name && !locationScope);
 
   return (
     <div className="desktop-page">
@@ -547,8 +628,8 @@ function DesktopMeetingCreate() {
         <section>
           <h2>종목 정보</h2>
           <div className="desktop-form-grid">
-            <label>카테고리<select value={form.category_id} onChange={(event) => update("category_id", event.target.value)}>{(categories.data?.items || []).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-            <label>종목<select required value={form.sport_id} onChange={(event) => update("sport_id", event.target.value)}>{(sports.data?.items || []).map((sport) => <option key={sport.id} value={sport.id}>{sport.name}</option>)}</select></label>
+            <label>카테고리<select value={form.category_id} disabled={categories.loading || !categoryItems.length} onChange={(event) => updateCategory(event.target.value)}>{categoryItems.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+            <label>종목<select required value={form.sport_id} disabled={sports.loading || !sportItems.length} onChange={(event) => update("sport_id", event.target.value)}>{sportItems.map((sport) => <option key={sport.id} value={sport.id}>{sport.name}</option>)}</select></label>
             <label>모임 방식<select value={form.meeting_type} onChange={(event) => update("meeting_type", event.target.value)}><option value="one_time">한 번만 진행</option><option value="regular">반복 진행</option></select></label>
           </div>
         </section>
@@ -585,13 +666,15 @@ function DesktopMeetingCreate() {
               </fieldset>
             )}
             <div className="desktop-location-picker desktop-form-full">
-              <label>{"도로명/주소 검색"}<span><Search size={18} /><input value={locationKeyword} placeholder={"예: 경기 화성시 동탄대로, 만세구 새솔동"} onChange={(event) => { setLocationKeyword(event.target.value); setLocationScope(""); setForm((prev) => ({ ...prev, address: event.target.value, location_name: "", latitude: undefined, longitude: undefined })); }} /></span></label>
+              <label>{"도로명/주소 검색"}<span><Search size={18} /><input value={locationKeyword} placeholder={"예: 경기 화성시 동탄대로, 만세구 새솔동"} onChange={(event) => { selectedLocationKeywordRef.current = ""; setLocationKeyword(event.target.value); setLocationScope(""); setForm((prev) => ({ ...prev, address: event.target.value, location_name: "", latitude: undefined, longitude: undefined })); }} /></span></label>
               {locationScope && <div className="desktop-location-scope"><MapPin size={16} /><span><strong>{locationScope}</strong>{" 안에서 검색 중"}</span><button type="button" onClick={clearLocationScope}>{"범위 해제"}</button></div>}
-              <div className="desktop-location-workspace">
-                <div className="desktop-location-search-column">
-                  {(locationLoading || locationResults.length > 0) && <div className="desktop-location-results">{locationLoading ? <span>{"\uac80\uc0c9 \uc911\uc785\ub2c8\ub2e4."}</span> : locationResults.map((place, index) => <button type="button" key={`${place.title}-${index}`} onClick={() => selectLocation(place)}><MapPin size={17} /><strong>{(place.title || place.address || "").replace(/<[^>]+>/g, "")}</strong><small>{place.address || place.road_address}</small></button>)}</div>}
-                  {(form.location_name || (form.address && !locationScope)) && <div className="desktop-location-selected"><MapPin size={18} /><strong>{form.location_name || "선택된 주소"}</strong><span>{form.address}</span></div>}
-                </div>
+              {showSelectedLocation && <div className="desktop-location-selected"><MapPin size={18} /><strong>{form.location_name || "선택된 주소"}</strong><span>{form.address}</span></div>}
+              <div className={`desktop-location-workspace ${showLocationResultsPanel ? "has-results" : "is-map-only"}`}>
+                {showLocationResultsPanel && (
+                  <div className="desktop-location-search-column">
+                    <div className="desktop-location-results">{locationLoading ? <span>{"\uac80\uc0c9 \uc911\uc785\ub2c8\ub2e4."}</span> : locationResults.map((place, index) => <button type="button" key={`${place.title}-${index}`} onClick={() => selectLocation(place)}><MapPin size={17} /><strong>{(place.title || place.address || "").replace(/<[^>]+>/g, "")}</strong><small>{place.address || place.road_address}</small></button>)}</div>
+                  </div>
+                )}
                 <DesktopLocationMap clientId={mapClientId} selectedLocation={form} results={locationResults} onSelect={selectLocation} />
               </div>
             </div>

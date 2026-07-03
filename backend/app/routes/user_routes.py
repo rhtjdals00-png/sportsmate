@@ -114,6 +114,13 @@ def verify_password():
     return jsonify({"verified": True})
 
 
+def bounded_limit(default=100, maximum=200):
+    try:
+        return max(1, min(int(request.args.get("limit", default)), maximum))
+    except (TypeError, ValueError):
+        return default
+
+
 def meetings_for_user(user_id, status=None, hosted=False):
     query = Meeting.query.options(*MEETING_LIST_OPTIONS)
     if hosted:
@@ -122,7 +129,7 @@ def meetings_for_user(user_id, status=None, hosted=False):
         query = query.join(Participant, Participant.meeting_id == Meeting.id).filter(Participant.user_id == user_id)
         if status:
             query = query.filter(Participant.status == status)
-    return query.order_by(Meeting.start_at.desc()).all()
+    return query.order_by(Meeting.start_at.is_(None), Meeting.start_at.desc()).limit(bounded_limit()).all()
 
 
 @user_bp.get("/me/meetings")
@@ -139,7 +146,14 @@ def my_meetings():
 @jwt_required()
 def my_reviews():
     user_id = int(get_jwt_identity())
-    reviews = Review.query.filter_by(reviewer_id=user_id).order_by(Review.created_at.desc()).all()
+    reviews = (
+        Review.query
+        .options(joinedload(Review.reviewer).joinedload(User.profile))
+        .filter_by(reviewer_id=user_id)
+        .order_by(Review.created_at.desc())
+        .limit(bounded_limit())
+        .all()
+    )
     return jsonify({"items": [review.to_dict() for review in reviews]})
 
 
