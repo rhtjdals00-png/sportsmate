@@ -1,6 +1,13 @@
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL || "/api/v1";
+const API_BASE_URL =
+  typeof window !== "undefined" &&
+  !window.location.hostname.includes("localhost") &&
+  !window.location.hostname.includes("127.0.0.1") &&
+  configuredApiBaseUrl.startsWith("/api")
+    ? "https://sportsmate.onrender.com/api/v1"
+    : configuredApiBaseUrl;
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -34,4 +41,3 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-

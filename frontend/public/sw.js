@@ -1,4 +1,4 @@
-const CACHE_NAME = "sportsmate-v2";
+const CACHE_NAME = "sportsmate-v3";
 const STATIC_ASSETS = ["/", "/manifest.json", "/images/logo.png"];
 
 self.addEventListener("install", (event) => {

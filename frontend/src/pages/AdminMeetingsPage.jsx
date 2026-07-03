@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { adminApi } from "../api/adminApi";
 import { Trash2, AlertCircle } from "lucide-react";
+import { useResponsive } from "../hooks/useResponsive";
+import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
 
 // Mock meetings data
 const mockMeetings = [
@@ -13,6 +15,7 @@ const mockMeetings = [
 
 function AdminMeetingsPage() {
   const navigate = useNavigate();
+  const { isMobile } = useResponsive();
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchField, setSearchField] = useState("all");
@@ -99,6 +102,68 @@ function AdminMeetingsPage() {
       );
     }
   });
+
+  if (isMobile) {
+    return (
+      <>
+        <MobileHeader title="모임 관리" />
+        <div className="mobile-admin-meetings">
+          <section className="mobile-admin-list-head">
+            <h2>개설된 모임 목록 <span>{filteredMeetings.length}개</span></h2>
+            <div>
+              <select value={searchField} onChange={(e) => setSearchField(e.target.value)}>
+                <option value="all">전체</option>
+                <option value="title">모임명</option>
+                <option value="host">개설자</option>
+                <option value="sport">종목</option>
+                <option value="status">상태</option>
+              </select>
+              <input
+                type="search"
+                placeholder="검색어 입력"
+                value={tempSearchQuery}
+                onChange={(e) => setTempSearchQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+              />
+              <button type="button" onClick={handleSearch}>검색</button>
+            </div>
+          </section>
+          {loading ? (
+            <div className="mobile-admin-loading">모임 데이터를 불러오는 중입니다.</div>
+          ) : filteredMeetings.length ? (
+            <section className="mobile-admin-meeting-list">
+              {filteredMeetings.map((meeting) => (
+                <article key={meeting.id} onClick={() => navigate(`/admin/meetings/${meeting.id}`)}>
+                  <div>
+                    <span>#{meeting.id}</span>
+                    <em>{meeting.status}</em>
+                  </div>
+                  <strong>{meeting.title}</strong>
+                  <dl>
+                    <div><dt>개설자</dt><dd>{meeting.host}</dd></div>
+                    <div><dt>종목</dt><dd>{meeting.emoji} {meeting.sport}</dd></div>
+                    <div><dt>날짜</dt><dd>{meeting.date}</dd></div>
+                    <div><dt>정원</dt><dd>{meeting.capacity}</dd></div>
+                  </dl>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      deleteMeeting(meeting.id);
+                    }}
+                  >
+                    폐쇄 처리
+                  </button>
+                </article>
+              ))}
+            </section>
+          ) : (
+            <div className="mobile-admin-loading">검색 결과 조건에 맞는 모임이 없습니다.</div>
+          )}
+        </div>
+      </>
+    );
+  }
 
   return (
     <div className="admin-panel-card">

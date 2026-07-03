@@ -1,5 +1,5 @@
 import { Camera, MapPin, Plus, Send, UsersRound, Vote } from "lucide-react";
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
@@ -8,6 +8,8 @@ import { chatApi } from "../../../api/chatApi";
 import { useAsync } from "../../../hooks/useAsync";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
+import { meetingApi } from "../../../api/meetingApi";
+import { voteApi } from "../../../api/voteApi";
 
 function formatMessageTime(value) {
   if (!value) return "";
@@ -38,22 +40,25 @@ function MobileChatRoom() {
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [voteOpen, setVoteOpen] = useState(false);
+  const [voteMode, setVoteMode] = useState("list");
+  const [voteRefreshKey, setVoteRefreshKey] = useState(0);
+  const [voteForm, setVoteForm] = useState({ title: "", options: ["참여", "불참"] });
+  const [voteSubmitting, setVoteSubmitting] = useState(false);
+  const [voteError, setVoteError] = useState("");
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const [actionNotice, setActionNotice] = useState("");
   const [profilePreviewUser, setProfilePreviewUser] = useState(null);
+  const fileInputRef = useRef(null);
   const messages = useAsync(() => chatApi.messages(chatRoomId), [chatRoomId, refreshKey]);
   const room = messages.data?.room;
   const meeting = room?.meeting;
   const myRole = meeting?.my_participant?.role || (meeting?.host?.id === user?.id ? "host" : "member");
   const canCreateVote = ["host", "cohost", "subhost", "assistant"].includes(String(myRole).toLowerCase());
+  const votes = useAsync(() => meeting?.id ? meetingApi.votes(meeting.id) : Promise.resolve({ items: [] }), [meeting?.id, voteRefreshKey]);
   const demoNotice = {
     title: "오늘 모임 공지",
     body: "오늘 7시까지 여의도 한강공원 2번 출구 앞에서 모입니다. 개인 물과 러닝화를 준비해주세요.",
     meta: "방장 · 방금 전"
-  };
-  const demoVote = {
-    title: "오늘 참석 여부",
-    body: "오늘 모임에 참여 가능한지 선택해주세요. 방장이 선택 변경 가능 여부를 설정할 수 있습니다.",
-    allowChange: true
   };
   const renderedMessages = messages.data?.items || [];
 
@@ -120,6 +125,92 @@ function MobileChatRoom() {
     }
   };
 
+  const openPhotoPicker = () => {
+    setActionNotice("");
+    setError("");
+    fileInputRef.current?.click();
+  };
+
+  const handlePhotoSelected = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setActionMenuOpen(false);
+    setActionNotice("사진 전송 기능은 준비 중입니다. 선택한 사진은 아직 전송되지 않습니다.");
+    event.target.value = "";
+  };
+
+  const shareLocation = () => {
+    setActionNotice("");
+    setError("");
+    if (!("geolocation" in navigator)) {
+      setActionNotice("이 브라우저에서는 위치 공유를 사용할 수 없습니다.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      () => {
+        setActionMenuOpen(false);
+        setActionNotice("위치 권한이 확인되었습니다. 위치 공유 전송 기능은 준비 중입니다.");
+      },
+      () => {
+        setActionNotice("위치 권한이 허용되지 않았습니다. 브라우저 설정에서 위치 권한을 확인해주세요.");
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+    );
+  };
+
+  const openVoteList = () => {
+    setVoteMode("list");
+    setVoteError("");
+    setVoteOpen(true);
+  };
+
+  const openVoteCreate = () => {
+    setActionMenuOpen(false);
+    setVoteMode("create");
+    setVoteError("");
+    setVoteOpen(true);
+  };
+
+  const updateVoteOption = (index, value) => {
+    setVoteForm((current) => ({
+      ...current,
+      options: current.options.map((option, optionIndex) => optionIndex === index ? value : option)
+    }));
+  };
+
+  const createVote = async (event) => {
+    event.preventDefault();
+    if (!meeting?.id) return;
+    const options = voteForm.options.map((option) => option.trim()).filter(Boolean);
+    if (!voteForm.title.trim() || options.length < 2) {
+      setVoteError("투표 제목과 선택지 2개 이상을 입력해주세요.");
+      return;
+    }
+    setVoteSubmitting(true);
+    setVoteError("");
+    try {
+      await meetingApi.createVote(meeting.id, { title: voteForm.title.trim(), options });
+      setVoteForm({ title: "", options: ["참여", "불참"] });
+      setVoteMode("list");
+      setVoteRefreshKey((value) => value + 1);
+    } catch (createError) {
+      setVoteError(createError.response?.data?.message || "투표를 생성하지 못했습니다.");
+    } finally {
+      setVoteSubmitting(false);
+    }
+  };
+
+  const participateVote = async (voteId, optionId) => {
+    setVoteError("");
+    try {
+      await voteApi.participate(voteId, { option_id: optionId });
+      setVoteRefreshKey((value) => value + 1);
+    } catch (participateError) {
+      setVoteError(participateError.response?.data?.message || "투표 참여에 실패했습니다.");
+    }
+  };
+
   return (
     <>
       <MobileHeader
@@ -131,7 +222,7 @@ function MobileChatRoom() {
                 <span>상세</span>
               </Link>
             ) : null}
-            <button className="mobile-chat-vote-link" type="button" onClick={() => setVoteOpen(true)}>
+            <button className="mobile-chat-vote-link" type="button" onClick={openVoteList}>
               투표
             </button>
           </div>
@@ -195,13 +286,15 @@ function MobileChatRoom() {
       )}
       <form className="chat-input" onSubmit={send}>
         {error ? <p className="chat-input__error">{error}</p> : null}
+        {actionNotice ? <p className="chat-input__notice">{actionNotice}</p> : null}
         {actionMenuOpen ? (
           <div className="chat-action-menu" role="menu">
-            <button type="button" role="menuitem"><Camera size={17} />사진 전송</button>
-            {canCreateVote ? <button type="button" role="menuitem"><Vote size={17} />투표 생성</button> : null}
-            <button type="button" role="menuitem"><MapPin size={17} />위치 공유</button>
+            <button type="button" role="menuitem" onClick={openPhotoPicker}><Camera size={17} />사진 전송</button>
+            {canCreateVote ? <button type="button" role="menuitem" onClick={openVoteCreate}><Vote size={17} />투표 생성</button> : null}
+            <button type="button" role="menuitem" onClick={shareLocation}><MapPin size={17} />위치 공유</button>
           </div>
         ) : null}
+        <input ref={fileInputRef} className="chat-file-input" type="file" accept="image/*" onChange={handlePhotoSelected} />
         <button className="chat-input__more" type="button" onClick={() => setActionMenuOpen((value) => !value)} aria-label="채팅 기능 더보기" aria-expanded={actionMenuOpen}>
           <Plus size={22} />
         </button>
@@ -234,13 +327,45 @@ function MobileChatRoom() {
               <span>모임 투표</span>
               <button type="button" onClick={() => setVoteOpen(false)}>닫기</button>
             </div>
-            <strong>{demoVote.title}</strong>
-            <p>{demoVote.body}</p>
-            <div className="chat-vote-modal__actions">
-              <button type="button">참여</button>
-              <button type="button">불참</button>
-            </div>
-            <small>{demoVote.allowChange ? "선택 후에도 변경할 수 있습니다." : "방장 설정에 따라 선택 변경이 제한됩니다."}</small>
+            {canCreateVote ? (
+              <div className="chat-vote-modal__tabs">
+                <button type="button" className={voteMode === "list" ? "active" : ""} onClick={() => setVoteMode("list")}>진행 투표</button>
+                <button type="button" className={voteMode === "create" ? "active" : ""} onClick={() => setVoteMode("create")}>투표 만들기</button>
+              </div>
+            ) : null}
+            {voteError ? <p className="chat-vote-modal__error">{voteError}</p> : null}
+            {voteMode === "create" ? (
+              <form className="chat-vote-create" onSubmit={createVote}>
+                <label>투표 제목<input value={voteForm.title} onChange={(event) => setVoteForm({ ...voteForm, title: event.target.value })} placeholder="예: 오늘 참석 여부" /></label>
+                <div>
+                  {voteForm.options.map((option, index) => (
+                    <label key={index}>선택지 {index + 1}<input value={option} onChange={(event) => updateVoteOption(index, event.target.value)} /></label>
+                  ))}
+                </div>
+                <button type="button" onClick={() => setVoteForm((current) => ({ ...current, options: [...current.options, ""] }))}>선택지 추가</button>
+                <button type="submit" disabled={voteSubmitting}>{voteSubmitting ? "등록 중" : "투표 등록"}</button>
+              </form>
+            ) : votes.loading ? (
+              <p>투표를 불러오는 중입니다.</p>
+            ) : votes.data?.items?.length ? (
+              <div className="chat-vote-list">
+                {votes.data.items.map((vote) => (
+                  <article key={vote.id}>
+                    <strong>{vote.title}</strong>
+                    <div>
+                      {vote.options.map((option) => (
+                        <button type="button" key={option.id} onClick={() => participateVote(vote.id, option.id)}>
+                          <span>{option.text}</span>
+                          <em>{option.response_count}명</em>
+                        </button>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p>진행 중인 투표가 없습니다.</p>
+            )}
           </section>
         </div>
       ) : null}
