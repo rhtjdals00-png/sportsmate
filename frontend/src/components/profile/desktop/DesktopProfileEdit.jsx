@@ -1,68 +1,83 @@
-import { Check, MapPin, Pencil, Plus, Search, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, CheckCircle2, CircleAlert, LockKeyhole, Map as MapIcon, MapPin, Pencil, Plus, Search, X, XCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { locationApi } from "../../../api/locationApi";
 import { sportApi } from "../../../api/sportApi";
+import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { userApi } from "../../../api/userApi";
 import { useAuth } from "../../../contexts/AuthContext";
 
 const NICKNAME_MAX_LENGTH = 12;
 const MAX_PREFERRED_REGIONS = 2;
+const DEFAULT_MAP_CENTER = { latitude: 37.5665, longitude: 126.978 };
+const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
+
+const passwordChecks = [
+  { id: "length", label: "8자 이상", test: (password) => password.length >= 8 },
+  { id: "upper", label: "영문 대문자", test: (password) => /[A-Z]/.test(password) },
+  { id: "lower", label: "영문 소문자", test: (password) => /[a-z]/.test(password) },
+  { id: "number", label: "숫자", test: (password) => /\d/.test(password) },
+  { id: "special", label: "특수문자", test: (password) => /[^A-Za-z0-9]/.test(password) }
+];
+
+const isValidPassword = (password) => passwordChecks.every((item) => item.test(password));
+
+function getPasswordCheckItems(password) {
+  return passwordChecks.map((item) => ({ ...item, passed: item.test(password) }));
+}
+
+function getPasswordStrength(password) {
+  const passedCount = getPasswordCheckItems(password).filter((item) => item.passed).length;
+  if (!password) return { label: "입력 전", level: "empty", percent: 0 };
+  if (passedCount <= 2) return { label: "위험", level: "danger", percent: 32 };
+  if (passedCount <= 4) return { label: "보통", level: "normal", percent: 66 };
+  return { label: "안전", level: "safe", percent: 100 };
+}
+
+function loadNaverMapScript(clientId) {
+  if (!clientId) return Promise.reject(new Error("missing naver map client id"));
+  if (window.naver?.maps) return Promise.resolve(window.naver.maps);
+  if (window.__sportsmateNaverMapPromise) return window.__sportsmateNaverMapPromise;
+
+  window.__sportsmateNaverMapPromise = new Promise((resolve, reject) => {
+    const existing = document.getElementById(NAVER_MAP_SCRIPT_ID);
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.naver.maps), { once: true });
+      existing.addEventListener("error", reject, { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = NAVER_MAP_SCRIPT_ID;
+    script.async = true;
+    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(clientId)}`;
+    script.onload = () => resolve(window.naver.maps);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+
+  return window.__sportsmateNaverMapPromise;
+}
+
+function toMapPoint(place) {
+  const latitude = Number(place?.latitude);
+  const longitude = Number(place?.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { latitude, longitude };
+}
 
 const levelOptions = [
   { value: "beginner", label: "입문" },
   { value: "intermediate", label: "중급" },
-  { value: "advanced", label: "상급" }
+  { value: "advanced", label: "고급" }
 ];
 
 const fallbackSportCategories = [
-  { id: "ball", name: "구기 종목", sports: ["축구", "풋살", "농구", "배구", "야구", "족구"] },
-  { id: "racket", name: "라켓 스포츠", sports: ["배드민턴", "탁구", "테니스", "스쿼시"] },
-  { id: "outdoor", name: "러닝 / 야외", sports: ["러닝", "등산", "트래킹", "자전거", "산책"] },
+  { id: "ball", name: "구기 종목", sports: ["축구", "농구", "야구", "배구", "풋살", "족구"] },
+  { id: "racket", name: "라켓 스포츠", sports: ["배드민턴", "테니스", "탁구", "스쿼시"] },
+  { id: "outdoor", name: "야외 활동", sports: ["러닝", "등산", "트레킹", "자전거", "걷기"] },
   { id: "fitness", name: "피트니스", sports: ["헬스", "크로스핏", "클라이밍", "요가", "필라테스"] },
   { id: "etc", name: "기타", sports: ["볼링", "댄스", "골프", "수영"] }
-];
-
-const mockLocationResults = [
-  {
-    id: "olympic-park",
-    type: "place",
-    name: "올림픽공원",
-    address: "서울 송파구 올림픽로 424",
-    region: "서울 송파구",
-    category: "공원 / 체육시설"
-  },
-  {
-    id: "jamsil-stadium",
-    type: "place",
-    name: "잠실종합운동장",
-    address: "서울 송파구 올림픽로 25",
-    region: "서울 송파구",
-    category: "경기장"
-  },
-  {
-    id: "yeouido-park",
-    type: "place",
-    name: "여의도한강공원",
-    address: "서울 영등포구 여의동로 330",
-    region: "서울 영등포구",
-    category: "공원"
-  },
-  {
-    id: "gangnam",
-    type: "region",
-    name: "서울 강남구",
-    address: "",
-    region: "서울 강남구",
-    category: "지역"
-  },
-  {
-    id: "bundang",
-    type: "region",
-    name: "경기 성남시 분당구",
-    address: "",
-    region: "경기 성남시 분당구",
-    category: "지역"
-  }
 ];
 
 function mergeSportNames(baseSports, apiSports) {
@@ -85,7 +100,7 @@ function buildSportGroups(categories, sports) {
   }));
   const apiGroupByName = new Map(apiGroups.map((group) => [group.name, group]));
 
-  // 2026-07-01: API 응답 도착 후에도 관심 종목 탭 순서와 기본 24개 종목이 흔들리지 않도록 병합.
+  // 2026-07-01: API 응답 도착 후에도 관심 종목 탭 순서와 기본 종목이 흔들리지 않도록 병합.
   const fixedGroups = fallbackSportCategories.map((fallbackGroup) => {
     const apiGroup = apiGroupByName.get(fallbackGroup.name);
     return {
@@ -108,7 +123,13 @@ const emptyForm = {
   email: "",
   profile_image_url: "",
   region: "",
+  region_latitude: null,
+  region_longitude: null,
+  region_2: "",
+  region_2_latitude: null,
+  region_2_longitude: null,
   selected_regions: [],
+  selected_region_locations: [],
   exercise_level: "beginner",
   preferred_sports: [],
   preferred_sport_levels: {}
@@ -119,6 +140,35 @@ function splitList(value) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function normalizePlaceText(value) {
+  return (value || "").replace(/<[^>]+>/g, "").trim();
+}
+
+function compactRegionText(value) {
+  const parts = normalizePlaceText(value).split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).join(" ");
+}
+
+function normalizeLocationCandidate(place) {
+  const title = normalizePlaceText(place?.title || place?.name || "");
+  const address = normalizePlaceText(place?.address || place?.road_address || "");
+  const region = compactRegionText(address || place?.region || title);
+  const latitude = place?.latitude ?? null;
+  const longitude = place?.longitude ?? null;
+
+  return {
+    id: place?.id || `${title || address}-${latitude || ""}-${longitude || ""}`,
+    type: place?.type || "place",
+    name: title || address || "지도에서 선택한 위치",
+    address,
+    region,
+    category: normalizePlaceText(place?.category || "장소"),
+    latitude,
+    longitude,
+    source: place?.source || ""
+  };
 }
 
 function locationLabel(location) {
@@ -139,6 +189,122 @@ function regionToMockLocation(regionName, index) {
   };
 }
 
+function buildLocationFromProfile(label, latitude, longitude, index) {
+  if (!label) return null;
+  return {
+    id: `profile-region-${index}`,
+    type: "region",
+    name: label,
+    address: "",
+    region: label,
+    category: "저장된 선호지역",
+    latitude,
+    longitude,
+    source: "profile"
+  };
+}
+
+function ProfilePreferredLocationMap({ clientId, selectedLocation, results, onSelect }) {
+  const mapElementRef = useRef(null);
+  const mapRef = useRef(null);
+  const selectedMarkerRef = useRef(null);
+  const resultMarkersRef = useRef([]);
+  const [mapStatus, setMapStatus] = useState("idle");
+
+  useEffect(() => {
+    if (!clientId) return;
+    let disposed = false;
+    setMapStatus("loading");
+    loadNaverMapScript(clientId)
+      .then((maps) => {
+        if (disposed || !mapElementRef.current || mapRef.current) return;
+        const center = new maps.LatLng(DEFAULT_MAP_CENTER.latitude, DEFAULT_MAP_CENTER.longitude);
+        mapRef.current = new maps.Map(mapElementRef.current, {
+          center,
+          zoom: 12,
+          mapDataControl: false,
+          scaleControl: false,
+          zoomControl: true,
+          zoomControlOptions: {
+            position: maps.Position.TOP_RIGHT,
+            style: maps.ZoomControlStyle.SMALL
+          }
+        });
+        maps.Event.addListener(mapRef.current, "click", (event) => {
+          onSelect({
+            source: "map-click",
+            latitude: event.coord.lat(),
+            longitude: event.coord.lng()
+          });
+        });
+        setMapStatus("ready");
+      })
+      .catch(() => setMapStatus("error"));
+
+    return () => {
+      disposed = true;
+    };
+  }, [clientId, onSelect]);
+
+  useEffect(() => {
+    const maps = window.naver?.maps;
+    const map = mapRef.current;
+    const selectedPoint = toMapPoint(selectedLocation);
+    if (!maps || !map || !selectedPoint) return;
+
+    const position = new maps.LatLng(selectedPoint.latitude, selectedPoint.longitude);
+    if (!selectedMarkerRef.current) {
+      selectedMarkerRef.current = new maps.Marker({ map, position });
+    } else {
+      selectedMarkerRef.current.setPosition(position);
+      selectedMarkerRef.current.setMap(map);
+    }
+    map.setCenter(position);
+    if (map.getZoom() < 14) map.setZoom(15);
+  }, [selectedLocation?.latitude, selectedLocation?.longitude]);
+
+  useEffect(() => {
+    const maps = window.naver?.maps;
+    const map = mapRef.current;
+    if (!maps || !map) return;
+
+    resultMarkersRef.current.forEach((marker) => marker.setMap(null));
+    resultMarkersRef.current = [];
+
+    const bounds = new maps.LatLngBounds();
+    let hasBounds = false;
+    results.forEach((place) => {
+      const point = toMapPoint(place);
+      if (!point) return;
+      const position = new maps.LatLng(point.latitude, point.longitude);
+      const marker = new maps.Marker({ map, position });
+      maps.Event.addListener(marker, "click", () => onSelect(place));
+      resultMarkersRef.current.push(marker);
+      bounds.extend(position);
+      hasBounds = true;
+    });
+    if (hasBounds && !toMapPoint(selectedLocation)) {
+      map.fitBounds(bounds, { top: 36, right: 36, bottom: 36, left: 36 });
+    }
+  }, [results, onSelect, selectedLocation?.latitude, selectedLocation?.longitude]);
+
+  if (!clientId) {
+    return (
+      <div className="desktop-profile-map-preview desktop-profile-map-preview--empty">
+        <MapIcon size={22} />
+        <span>지도 클라이언트 키가 설정되면 이 영역에서 위치를 확인할 수 있습니다.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="desktop-profile-map-preview desktop-profile-map-preview--real" ref={mapElementRef}>
+      {mapStatus === "loading" && <span>지도를 불러오는 중입니다.</span>}
+      {mapStatus === "error" && <span>지도를 불러오지 못했습니다.</span>}
+    </div>
+  );
+}
+
 function normalizeLevels(value) {
   if (!value) return {};
   if (typeof value === "object") return value;
@@ -157,7 +323,11 @@ function tagLabel(user) {
 
 function buildFormFromUser(user) {
   const profile = user?.profile || {};
-  const selectedRegions = splitList(profile.region);
+  const selectedLocations = [
+    buildLocationFromProfile(profile.region, profile.region_latitude, profile.region_longitude, 1),
+    buildLocationFromProfile(profile.region_2, profile.region_2_latitude, profile.region_2_longitude, 2)
+  ].filter(Boolean);
+  const selectedRegions = selectedLocations.length ? selectedLocations.map(locationLabel) : splitList(profile.region);
   const preferredSports = splitList(profile.preferred_sports);
   const levels = normalizeLevels(profile.preferred_sport_levels);
 
@@ -168,7 +338,13 @@ function buildFormFromUser(user) {
     email: user?.email || "",
     profile_image_url: user?.profile_image_url || "",
     region: profile.region || "",
+    region_latitude: profile.region_latitude ?? null,
+    region_longitude: profile.region_longitude ?? null,
+    region_2: profile.region_2 || "",
+    region_2_latitude: profile.region_2_latitude ?? null,
+    region_2_longitude: profile.region_2_longitude ?? null,
     selected_regions: selectedRegions,
+    selected_region_locations: selectedLocations,
     exercise_level: profile.exercise_level || levels.all || "beginner",
     preferred_sports: preferredSports,
     preferred_sport_levels: levels
@@ -198,14 +374,18 @@ function DesktopProfileEdit() {
   const [regionSearching, setRegionSearching] = useState(false);
   const [regionMessage, setRegionMessage] = useState("");
   const [selectedRegionCandidate, setSelectedRegionCandidate] = useState(null);
+  const [mapClientId, setMapClientId] = useState("");
 
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" });
   const [passwordStatus, setPasswordStatus] = useState("idle");
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
   const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
   const [withdrawText, setWithdrawText] = useState("");
   const [withdrawStatus, setWithdrawStatus] = useState("idle");
   const profileLoadedRef = useRef(false);
+  const passwordCloseTimerRef = useRef(null);
 
   useEffect(() => {
     let mounted = true;
@@ -269,15 +449,38 @@ function DesktopProfileEdit() {
       });
   }, []);
 
+  useEffect(() => {
+    locationApi.mapConfig()
+      .then((data) => setMapClientId(data.naver_dynamic_map_client_id || ""))
+      .catch(() => setMapClientId(""));
+  }, []);
+
+  useEffect(() => () => {
+    if (passwordCloseTimerRef.current) {
+      window.clearTimeout(passwordCloseTimerRef.current);
+    }
+  }, []);
+
   const sportCategoryGroups = useMemo(() => buildSportGroups(categories, sports), [categories, sports]);
 
   const activeSportGroup = sportCategoryGroups.find((group) => String(group.id) === String(activeCategoryId)) || sportCategoryGroups[0];
   const selectableSports = activeSportGroup?.sports || [];
   const displayTag = tagLabel(loadedUser);
   const savedIntro = loadedUser?.profile?.bio || "아직 한 줄 소개가 없습니다.";
+  const newPasswordChecks = getPasswordCheckItems(passwordForm.next);
+  const newPasswordStrength = getPasswordStrength(passwordForm.next);
+  const hasPasswordConfirm = Boolean(passwordForm.confirm);
+  const passwordMatches = Boolean(passwordForm.next) && passwordForm.next === passwordForm.confirm;
   const selectedLocationCount = form.selected_regions.length;
-  const mapLocation = selectedRegionCandidate || (form.selected_regions[0] ? regionToMockLocation(form.selected_regions[0], 0) : null);
+  const savedRegionLocation = (form.selected_region_locations || [])[0];
+  const mapLocation = selectedRegionCandidate || savedRegionLocation || (form.selected_regions[0] ? regionToMockLocation(form.selected_regions[0], 0) : null);
   const pendingRegion = mapLocation ? locationLabel(mapLocation) : (regionQuery || "검색 결과를 선택하면 지도에서 확인할 수 있습니다");
+  const candidateRegion = selectedRegionCandidate
+    ? locationLabel(selectedRegionCandidate)
+    : "검색 결과나 지도에서 위치를 선택하면 추가할 수 있습니다";
+  const candidateNotice = selectedLocationCount >= MAX_PREFERRED_REGIONS
+    ? `선호지역은 최대 ${MAX_PREFERRED_REGIONS}개까지 선택할 수 있습니다`
+    : candidateRegion;
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
@@ -294,7 +497,8 @@ function DesktopProfileEdit() {
   };
 
   const addRegion = (location) => {
-    const nextRegion = locationLabel(location).trim();
+    const nextLocation = normalizeLocationCandidate(location);
+    const nextRegion = locationLabel(nextLocation).trim();
     if (!nextRegion) return;
     if (form.selected_regions.length >= MAX_PREFERRED_REGIONS && !form.selected_regions.includes(nextRegion)) {
       setRegionMessage(`선호지역은 최대 ${MAX_PREFERRED_REGIONS}개까지 선택할 수 있습니다.`);
@@ -305,10 +509,21 @@ function DesktopProfileEdit() {
       const nextRegions = current.selected_regions.includes(nextRegion)
         ? current.selected_regions
         : [...current.selected_regions, nextRegion];
+      const nextLocations = current.selected_regions.includes(nextRegion)
+        ? current.selected_region_locations
+        : [...current.selected_region_locations, nextLocation];
+      const firstLocation = nextLocations[0] || null;
+      const secondLocation = nextLocations[1] || null;
       return {
         ...current,
-        region: nextRegions.join(", "),
-        selected_regions: nextRegions
+        region: nextRegions[0] || "",
+        region_latitude: firstLocation?.latitude ?? null,
+        region_longitude: firstLocation?.longitude ?? null,
+        region_2: nextRegions[1] || "",
+        region_2_latitude: secondLocation?.latitude ?? null,
+        region_2_longitude: secondLocation?.longitude ?? null,
+        selected_regions: nextRegions,
+        selected_region_locations: nextLocations
       };
     });
     setRegionQuery("");
@@ -319,10 +534,19 @@ function DesktopProfileEdit() {
   const removeRegion = (regionName) => {
     setForm((current) => {
       const nextRegions = current.selected_regions.filter((region) => region !== regionName);
+      const nextLocations = current.selected_region_locations.filter((location) => locationLabel(location) !== regionName);
+      const firstLocation = nextLocations[0] || null;
+      const secondLocation = nextLocations[1] || null;
       return {
         ...current,
-        region: nextRegions.join(", "),
-        selected_regions: nextRegions
+        region: nextRegions[0] || "",
+        region_latitude: firstLocation?.latitude ?? null,
+        region_longitude: firstLocation?.longitude ?? null,
+        region_2: nextRegions[1] || "",
+        region_2_latitude: secondLocation?.latitude ?? null,
+        region_2_longitude: secondLocation?.longitude ?? null,
+        selected_regions: nextRegions,
+        selected_region_locations: nextLocations
       };
     });
   };
@@ -338,22 +562,42 @@ function DesktopProfileEdit() {
     }
 
     setRegionSearching(true);
-    window.setTimeout(() => {
-      const normalizedKeyword = keyword.toLowerCase();
-      const nextResults = mockLocationResults.filter((item) =>
-        [item.name, item.address, item.region, item.category]
-          .join(" ")
-          .toLowerCase()
-          .includes(normalizedKeyword)
-      );
+    try {
+      const data = await locationApi.searchPlaces({ keyword, size: 8 });
+      const nextResults = (data.items || []).map(normalizeLocationCandidate);
       setRegionResults(nextResults);
       setSelectedRegionCandidate(nextResults[0] || null);
-      if (!nextResults.length) {
-        setRegionMessage("목업 데이터에서 검색 결과를 찾지 못했습니다. 올림픽공원, 잠실, 강남구로 검색해보세요.");
-      }
+      if (!nextResults.length) setRegionMessage("검색 결과가 없습니다. 다른 장소명이나 지역명으로 검색해보세요.");
+    } catch {
+      setRegionResults([]);
+      setSelectedRegionCandidate(null);
+      setRegionMessage("장소 검색 API에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
       setRegionSearching(false);
-    }, 250);
+    }
   };
+
+  const selectRegionCandidate = useCallback(async (place) => {
+    const location = normalizeLocationCandidate(place);
+    setSelectedRegionCandidate(location);
+
+    if (place?.source !== "map-click") return;
+
+    try {
+      const data = await locationApi.reverseGeocode({
+        latitude: place.latitude,
+        longitude: place.longitude
+      });
+      setSelectedRegionCandidate(normalizeLocationCandidate({
+        ...(data.item || {}),
+        latitude: place.latitude,
+        longitude: place.longitude,
+        source: "map-click"
+      }));
+    } catch {
+      setSelectedRegionCandidate(location);
+    }
+  }, []);
 
   // 2026-07-03: profile/setup의 대분류-소주제-추가 흐름과 맞춰 PC 프로필 수정의 종목 선택 방식을 통일.
   const addSelectedSport = () => {
@@ -395,20 +639,97 @@ function DesktopProfileEdit() {
   };
 
   const updatePassword = (key, value) => {
+    if (passwordCloseTimerRef.current) {
+      window.clearTimeout(passwordCloseTimerRef.current);
+      passwordCloseTimerRef.current = null;
+    }
     setPasswordStatus("idle");
+    setPasswordMessage("");
     setPasswordForm((current) => ({ ...current, [key]: value }));
   };
 
-  const submitPasswordChange = () => {
+  const closePasswordModal = () => {
+    if (passwordSaving) return;
+    if (passwordCloseTimerRef.current) {
+      window.clearTimeout(passwordCloseTimerRef.current);
+      passwordCloseTimerRef.current = null;
+    }
+    setPasswordModalOpen(false);
+    setPasswordForm({ current: "", next: "", confirm: "" });
+    setPasswordStatus("idle");
+    setPasswordMessage("");
+  };
+
+  const submitPasswordChange = async () => {
     if (!passwordForm.current || !passwordForm.next || !passwordForm.confirm) {
       setPasswordStatus("empty");
+      setPasswordMessage("모든 비밀번호 항목을 입력해주세요.");
+      return;
+    }
+    if (!isValidPassword(passwordForm.next)) {
+      setPasswordStatus("invalid");
+      setPasswordMessage("비밀번호는 8자 이상이며 영문 대문자, 영문 소문자, 숫자, 특수문자를 모두 포함해야 합니다.");
       return;
     }
     if (passwordForm.next !== passwordForm.confirm) {
       setPasswordStatus("mismatch");
+      setPasswordMessage("새 비밀번호와 확인 값이 일치하지 않습니다.");
       return;
     }
-    setPasswordStatus("success");
+    if (passwordForm.current === passwordForm.next) {
+      setPasswordStatus("invalid");
+      setPasswordMessage("현재 비밀번호와 다른 새 비밀번호를 입력해주세요.");
+      return;
+    }
+    if (!isSupabaseConfigured || !supabase) {
+      setPasswordStatus("error");
+      setPasswordMessage("인증 서비스 설정을 확인해주세요.");
+      return;
+    }
+
+    setPasswordSaving(true);
+    setPasswordStatus("idle");
+    setPasswordMessage("");
+    try {
+      const email = loadedUser?.email || user?.email || "";
+      if (!email) {
+        setPasswordStatus("error");
+        setPasswordMessage("계정 이메일 정보를 확인할 수 없습니다.");
+        return;
+      }
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password: passwordForm.current
+      });
+      if (signInError) {
+        setPasswordStatus("error");
+        setPasswordMessage("현재 비밀번호가 올바르지 않습니다.");
+        return;
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: passwordForm.next });
+      if (updateError) throw updateError;
+
+      setPasswordStatus("success");
+      setPasswordMessage("비밀번호가 변경되었습니다.");
+      setPasswordForm({ current: "", next: "", confirm: "" });
+      passwordCloseTimerRef.current = window.setTimeout(() => {
+        setPasswordModalOpen(false);
+        setPasswordStatus("idle");
+        setPasswordMessage("");
+        passwordCloseTimerRef.current = null;
+      }, 1000);
+    } catch (error) {
+      const message = error?.message || "";
+      setPasswordStatus("error");
+      setPasswordMessage(
+        message.includes("New password should be different from the old password")
+          ? "현재 비밀번호와 다른 새 비밀번호를 입력해주세요."
+          : "비밀번호 변경에 실패했습니다. 잠시 후 다시 시도해주세요."
+      );
+    } finally {
+      setPasswordSaving(false);
+    }
   };
 
   const submitWithdraw = () => {
@@ -441,6 +762,11 @@ function DesktopProfileEdit() {
         nickname: form.nickname.trim(),
         profile_image_url: form.profile_image_url,
         region: form.region,
+        region_latitude: form.region_latitude,
+        region_longitude: form.region_longitude,
+        region_2: form.region_2,
+        region_2_latitude: form.region_2_latitude,
+        region_2_longitude: form.region_2_longitude,
         exercise_level: form.exercise_level,
         preferred_sports: form.preferred_sports.join(", "),
         preferred_sport_levels: useSportLevels
@@ -461,12 +787,13 @@ function DesktopProfileEdit() {
       <div className="screen-title desktop-profile-edit__title">
         <div>
           <h1>프로필 수정</h1>
-          <span>내 정보에 표시할 기본 정보와 운동 성향을 정리합니다.</span>
+          <span>내 정보를 표시할 기본 정보와 운동 성향을 정리합니다.</span>
         </div>
         <div>
           <Link className="ghost-btn" to="/mypage">취소</Link>
           <button className="primary-small" type="submit" disabled={saving || loading}>
-            <Check size={15} />{saving ? "저장 중" : "저장"}
+            {saving ? <span className="profile-action-spinner" aria-hidden="true" /> : <Check size={15} />}
+            저장
           </button>
         </div>
       </div>
@@ -534,7 +861,7 @@ function DesktopProfileEdit() {
         <div className="section-head">
           <div>
             <h2>선호 지역</h2>
-            <span>장소명이나 지역명을 검색하고 지도 위치를 확인한 뒤 최대 2개까지 추가할 수 있습니다.</span>
+            <span>장소명이나 지역명을 검색하고 지도 위치를 확인해 최대 2개까지 추가할 수 있습니다.</span>
           </div>
         </div>
         <div className="desktop-region-picker">
@@ -544,17 +871,43 @@ function DesktopProfileEdit() {
               <Search size={16} />
               <input
                 value={regionQuery}
-                placeholder="운동하고 싶은 지역이나 장소를 검색해보세요"
+                placeholder="활동하고 싶은 지역이나 장소를 검색해보세요"
                 onChange={(event) => setRegionQuery(event.target.value)}
                 onKeyDown={(event) => event.key === "Enter" && (event.preventDefault(), searchRegion())}
               />
             </span>
           </label>
           <button className="primary-small" type="button" onClick={searchRegion} disabled={regionSearching}>
-            {regionSearching ? "검색 중" : "검색"}
+            {regionSearching ? <span className="profile-action-spinner" aria-hidden="true" /> : null}
+            검색
           </button>
         </div>
         {regionMessage && <em className="nickname-check warn">{regionMessage}</em>}
+        <div className="desktop-region-selected">
+          {form.selected_regions.length ? form.selected_regions.map((regionName) => (
+            <button key={regionName} type="button" onClick={() => removeRegion(regionName)}>
+              {regionName}
+              <X size={14} />
+            </button>
+          )) : <span>선택된 선호지역이 없습니다.</span>}
+          <em>{selectedLocationCount}/{MAX_PREFERRED_REGIONS}</em>
+        </div>
+        <div className="desktop-region-candidate">
+          <span>
+            <MapPin size={15} />
+            <strong>현재 선택</strong>
+            <em>{candidateNotice}</em>
+          </span>
+          <button
+            className="desktop-region-add-button"
+            type="button"
+            disabled={!selectedRegionCandidate || selectedLocationCount >= MAX_PREFERRED_REGIONS}
+            onClick={() => selectedRegionCandidate && addRegion(selectedRegionCandidate)}
+          >
+            <Plus size={16} />
+            추가
+          </button>
+        </div>
         <div className="desktop-region-workspace">
           <div className="desktop-region-results">
             {regionResults.length ? regionResults.map((location) => {
@@ -564,7 +917,7 @@ function DesktopProfileEdit() {
                   key={location.id}
                   type="button"
                   className={isSelected ? "is-selected" : ""}
-                  onClick={() => setSelectedRegionCandidate(location)}
+                  onClick={() => selectRegionCandidate(location)}
                 >
                   <MapPin size={15} />
                   <span>
@@ -581,12 +934,14 @@ function DesktopProfileEdit() {
               </div>
             )}
           </div>
-          <div className="desktop-profile-map-preview">
+          <div className="desktop-profile-map-shell">
+            <ProfilePreferredLocationMap
+              clientId={mapClientId}
+              selectedLocation={mapLocation}
+              results={regionResults}
+              onSelect={selectRegionCandidate}
+            />
             <div className="map-current-label"><MapPin size={15} />{pendingRegion}</div>
-            <div className="map-pin p1"><MapPin size={19} /></div>
-            <div className="map-pin p2"><MapPin size={19} /></div>
-            <div className="map-pin p3"><MapPin size={19} /></div>
-            <div className="map-center" />
             {mapLocation ? (
               <div className="desktop-map-place-card">
                 <strong>{mapLocation.name}</strong>
@@ -594,24 +949,6 @@ function DesktopProfileEdit() {
               </div>
             ) : null}
           </div>
-        </div>
-        <button
-          className="desktop-region-add-button"
-          type="button"
-          disabled={!selectedRegionCandidate || selectedLocationCount >= MAX_PREFERRED_REGIONS}
-          onClick={() => selectedRegionCandidate && addRegion(selectedRegionCandidate)}
-        >
-          <Plus size={16} />
-          선호지역 추가
-        </button>
-        <div className="desktop-region-selected">
-          {form.selected_regions.length ? form.selected_regions.map((regionName) => (
-            <button key={regionName} type="button" onClick={() => removeRegion(regionName)}>
-              {regionName}
-              <X size={14} />
-            </button>
-          )) : <span>선택한 선호지역이 없습니다.</span>}
-          <em>{selectedLocationCount}/{MAX_PREFERRED_REGIONS}</em>
         </div>
       </section>
 
@@ -725,7 +1062,7 @@ function DesktopProfileEdit() {
         <div className="desktop-security-section">
           <span>
             <strong>비밀번호</strong>
-            <small>비밀번호 변경은 백엔드 API 연결 후 사용할 수 있습니다.</small>
+            <small>현재 비밀번호 확인 후 새 비밀번호로 변경합니다.</small>
           </span>
           <button type="button" onClick={() => setPasswordModalOpen(true)}>비밀번호 변경</button>
         </div>
@@ -739,29 +1076,62 @@ function DesktopProfileEdit() {
       </section>
 
       {passwordModalOpen && (
-        <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setPasswordModalOpen(false)}>
+        <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closePasswordModal()}>
           <section className="profile-auth-modal password-change-modal">
-            <button className="schedule-modal-close" type="button" onClick={() => setPasswordModalOpen(false)}><X size={18} /></button>
+            <button className="schedule-modal-close" type="button" onClick={closePasswordModal} disabled={passwordSaving}><X size={18} /></button>
             <h2>비밀번호 변경</h2>
-            <p>현재는 화면 흐름만 확인할 수 있습니다. 백엔드 API가 추가되면 실제 변경으로 연결됩니다.</p>
+            <p>회원가입과 같은 기준으로 새 비밀번호를 설정합니다.</p>
             <label>
               현재 비밀번호
-              <input type="password" value={passwordForm.current} onChange={(event) => updatePassword("current", event.target.value)} />
+              <span className="password-change-input">
+                <LockKeyhole size={17} />
+                <input type="password" value={passwordForm.current} onChange={(event) => updatePassword("current", event.target.value)} autoComplete="current-password" />
+              </span>
             </label>
             <label>
               새 비밀번호
-              <input type="password" value={passwordForm.next} onChange={(event) => updatePassword("next", event.target.value)} />
+              <span className="password-change-input">
+                <LockKeyhole size={17} />
+                <input type="password" minLength="8" value={passwordForm.next} onChange={(event) => updatePassword("next", event.target.value)} placeholder="대소문자, 숫자, 특수문자 포함" autoComplete="new-password" />
+              </span>
             </label>
+            <section className={`desktop-auth-password-meter desktop-auth-password-meter--${newPasswordStrength.level}`}>
+              <div className="desktop-auth-password-meter__head">
+                <strong>비밀번호 안전도</strong>
+                <span>{newPasswordStrength.label}</span>
+              </div>
+              <div className="desktop-auth-password-meter__bar" aria-hidden="true">
+                <i style={{ width: `${newPasswordStrength.percent}%` }} />
+              </div>
+              <ul className="desktop-auth-password-rules">
+                {newPasswordChecks.map((item) => (
+                  <li key={item.id} className={item.passed ? "is-passed" : ""}>
+                    {item.passed ? <CheckCircle2 size={15} /> : <CircleAlert size={15} />}
+                    {item.label}
+                  </li>
+                ))}
+              </ul>
+            </section>
             <label>
               새 비밀번호 확인
-              <input type="password" value={passwordForm.confirm} onChange={(event) => updatePassword("confirm", event.target.value)} />
+              <span className={`password-change-input ${hasPasswordConfirm ? (passwordMatches ? "is-valid" : "is-invalid") : ""}`}>
+                <LockKeyhole size={17} />
+                <input type="password" minLength="8" value={passwordForm.confirm} onChange={(event) => updatePassword("confirm", event.target.value)} placeholder="비밀번호를 한 번 더 입력" autoComplete="new-password" />
+              </span>
             </label>
-            {passwordStatus === "empty" && <em className="nickname-check warn">모든 비밀번호 항목을 입력해주세요.</em>}
-            {passwordStatus === "mismatch" && <em className="nickname-check warn">새 비밀번호가 일치하지 않습니다.</em>}
-            {passwordStatus === "success" && <em className="nickname-check ok">비밀번호 변경 흐름이 확인되었습니다.</em>}
-            <div>
-              <button className="ghost-btn" type="button" onClick={() => setPasswordModalOpen(false)}>취소</button>
-              <button className="primary-small" type="button" onClick={submitPasswordChange}>변경하기</button>
+            {hasPasswordConfirm ? (
+              <p className={`desktop-auth-match ${passwordMatches ? "is-valid" : "is-invalid"}`}>
+                {passwordMatches ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
+                {passwordMatches ? "비밀번호가 일치합니다." : "비밀번호가 일치하지 않습니다."}
+              </p>
+            ) : null}
+            {passwordMessage ? <em className={`nickname-check ${passwordStatus === "success" ? "ok" : "warn"}`}>{passwordMessage}</em> : null}
+            <div className="profile-auth-actions">
+              <button className="ghost-btn" type="button" onClick={closePasswordModal} disabled={passwordSaving}>취소</button>
+              <button className="primary-small" type="button" onClick={submitPasswordChange} disabled={passwordSaving}>
+                {passwordSaving ? <span className="profile-action-spinner" aria-hidden="true" /> : null}
+                변경하기
+              </button>
             </div>
           </section>
         </div>
@@ -786,7 +1156,7 @@ function DesktopProfileEdit() {
             </label>
             {withdrawStatus === "mismatch" && <em className="nickname-check warn">확인 문구를 정확히 입력해주세요.</em>}
             {withdrawStatus === "success" && <em className="nickname-check ok">회원 탈퇴 확인 흐름이 완료되었습니다.</em>}
-            <div>
+            <div className="profile-auth-actions">
               <button className="ghost-btn" type="button" onClick={() => setWithdrawModalOpen(false)}>취소</button>
               <button className="primary-small danger-small" type="button" onClick={submitWithdraw}>탈퇴 확인</button>
             </div>

@@ -689,10 +689,53 @@
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
 }
 
-.profile-auth-modal > div {
+.profile-auth-modal > .profile-auth-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.password-change-modal {
+  width: min(480px, 100%);
+}
+
+.password-change-input {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #94a3b8;
+  padding: 0 12px;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.password-change-input:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
+.password-change-input.is-valid {
+  border-color: #93c5fd;
+}
+
+.password-change-input.is-invalid {
+  border-color: #fca5a5;
+}
+
+.password-change-input input {
+  min-height: 42px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+.password-change-input input:focus {
+  border: 0;
+  box-shadow: none;
 }
 
 /* 2026-07-01: PC 내 정보 일정 모달을 실제 내 모임 데이터 목록으로 확인할 수 있게 보정. */
@@ -1216,10 +1259,11 @@
 
 .desktop-region-picker {
   display: grid;
-  grid-template-columns: minmax(360px, 560px) 92px;
+  grid-template-columns: minmax(360px, 560px) 84px;
   gap: 12px;
   align-items: end;
   justify-content: start;
+  width: min(100%, 656px);
 }
 
 .desktop-region-picker label,
@@ -1292,11 +1336,12 @@
 }
 
 .desktop-region-picker .primary-small {
-  width: 92px;
-  min-width: 92px;
-  height: 44px;
-  min-height: 44px;
-  border-radius: 12px;
+  width: 84px;
+  min-width: 84px;
+  height: 40px;
+  min-height: 40px;
+  border-radius: 10px;
+  font-size: 13px;
 }
 
 .desktop-region-picker .desktop-map-toggle {
@@ -1320,18 +1365,49 @@
   transform: translateY(-1px);
 }
 
+.desktop-profile-edit .profile-action-spinner,
+.desktop-prototype .profile-action-spinner {
+  display: inline-flex;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 999px;
+  opacity: 0.78;
+  animation: profile-action-spin 0.72s linear infinite;
+}
+
+.desktop-profile-edit button:has(.profile-action-spinner),
+.desktop-prototype button:has(.profile-action-spinner) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+@keyframes profile-action-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .desktop-region-workspace {
   display: grid;
   grid-template-columns: minmax(300px, 0.9fr) minmax(360px, 1.1fr);
   gap: 16px;
-  align-items: stretch;
+  align-items: start;
   margin-top: 4px;
 }
 
 .desktop-region-results {
   display: grid;
+  align-content: start;
   gap: 8px;
+  height: 420px;
   min-height: 360px;
+  max-height: 420px;
+  overflow-y: auto;
   border: 1px solid #e2e8f0;
   border-radius: 14px;
   background: #f8fafc;
@@ -1410,24 +1486,24 @@
 .desktop-region-add-button {
   display: inline-flex;
   width: fit-content;
-  min-height: 42px;
+  min-height: 32px;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  border: 1px solid #4f46e5;
-  border-radius: 12px;
-  background: #4f46e5;
+  gap: 5px;
+  border: 1px solid #2563eb;
+  border-radius: 9px;
+  background: #2563eb;
   color: #ffffff;
-  padding: 0 16px;
-  font-size: 13px;
+  padding: 0 10px;
+  font-size: 12px;
   font-weight: 800;
   cursor: pointer;
   transition: border-color 140ms ease, background 140ms ease, opacity 140ms ease, transform 140ms ease;
 }
 
 .desktop-region-add-button:hover:not(:disabled) {
-  border-color: #4338ca;
-  background: #4338ca;
+  border-color: #1d4ed8;
+  background: #1d4ed8;
   transform: translateY(-1px);
 }
 
@@ -1436,10 +1512,57 @@
   opacity: 0.48;
 }
 
+.desktop-region-add-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.desktop-region-candidate {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-start;
+  width: min(100%, 656px);
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #eff6ff;
+  padding: 9px 10px 9px 12px;
+}
+
+.desktop-region-candidate > span {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: calc(100% - 64px);
+  align-items: center;
+  gap: 8px;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.desktop-region-candidate strong {
+  flex: 0 0 auto;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.desktop-region-candidate em {
+  overflow: hidden;
+  color: #334155;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .desktop-region-selected {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  width: min(100%, 656px);
   min-height: 42px;
   border: 1px solid #e2e8f0;
   border-radius: 14px;
@@ -1482,7 +1605,7 @@
   display: inline-flex;
   min-height: 34px;
   align-items: center;
-  margin-left: auto;
+  margin-left: 4px;
   color: #64748b;
   font-size: 12px;
   font-style: normal;
@@ -1491,6 +1614,7 @@
 
 .desktop-profile-map-preview {
   position: relative;
+  height: 420px;
   min-height: 360px;
   overflow: hidden;
   border: 1px solid #e2e8f0;
@@ -1502,6 +1626,47 @@
     radial-gradient(circle at 68% 62%, rgba(14, 165, 233, 0.16), transparent 18%),
     #f8fafc;
   background-size: 44px 44px, 44px 44px, auto, auto, auto;
+}
+
+.desktop-profile-map-shell {
+  position: relative;
+  height: 420px;
+  min-height: 360px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.desktop-profile-map-shell .desktop-profile-map-preview {
+  height: 100%;
+  min-height: 360px;
+  border: 0;
+  border-radius: 0;
+}
+
+.desktop-profile-map-preview--real {
+  display: grid;
+  place-items: center;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.desktop-profile-map-preview--empty {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+}
+
+.desktop-profile-map-shell .map-current-label {
+  position: absolute;
+  z-index: 2;
+  top: 16px;
+  left: 16px;
 }
 
 .desktop-profile-map-preview .map-current-label {

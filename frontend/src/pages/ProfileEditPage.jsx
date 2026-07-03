@@ -599,6 +599,7 @@ function hasLinkedEmailProvider(user) {
 function ProfileEditPage() {
   const { isMobile } = useResponsive();
   const { user } = useAuth();
+  const [desktopEditUnlocked] = useState(() => isProfileEditVerified());
   // 2026-07-02: 모바일 흐름은 유지하고, PC에서만 DB provider의 email 연동 상태를 기준으로 보호.
   const canVerifyPassword = hasLinkedEmailProvider(user);
 
@@ -610,7 +611,7 @@ function ProfileEditPage() {
     return <Navigate to="/mypage/account-link" replace />;
   }
 
-  if (user && canVerifyPassword && !isProfileEditVerified()) {
+  if (user && canVerifyPassword && !desktopEditUnlocked) {
     return <Navigate to="/mypage" replace />;
   }
 

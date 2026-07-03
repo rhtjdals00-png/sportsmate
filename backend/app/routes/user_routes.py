@@ -30,6 +30,15 @@ def normalize_phone_number(value):
     return f"{digits[:3]}-{digits[3:7]}-{digits[7:]}"
 
 
+def nullable_float(value):
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def append_provider(current_provider, next_provider):
     providers = [item.strip() for item in (current_provider or "").split(",") if item.strip()]
     if next_provider not in providers:
@@ -58,14 +67,28 @@ def update_me():
         if field in data:
             setattr(user, field, normalize_phone_number(data[field]) if field == "phone_number" else data[field])
 
-    profile_fields = ["region", "bio", "exercise_level", "preferred_sports", "preferred_sport_levels"]
+    profile_fields = [
+        "region",
+        "region_latitude",
+        "region_longitude",
+        "region_2",
+        "region_2_latitude",
+        "region_2_longitude",
+        "bio",
+        "exercise_level",
+        "preferred_sports",
+        "preferred_sport_levels"
+    ]
     if any(field in data for field in profile_fields) and not user.profile:
         user.profile = UserProfile()
 
     if user.profile:
-        for field in ["region", "bio", "exercise_level", "preferred_sports"]:
+        for field in ["region", "region_2", "bio", "exercise_level", "preferred_sports"]:
             if field in data:
                 setattr(user.profile, field, data[field])
+        for field in ["region_latitude", "region_longitude", "region_2_latitude", "region_2_longitude"]:
+            if field in data:
+                setattr(user.profile, field, nullable_float(data[field]))
         if "preferred_sport_levels" in data:
             user.profile.preferred_sport_levels = json.dumps(data["preferred_sport_levels"] or {}, ensure_ascii=False)
 

@@ -53,6 +53,11 @@ class User(db.Model, TimestampMixin):
             "has_password": "email" in provider_values,
             "profile": {
                 "region": profile.region if profile else "",
+                "region_latitude": profile.region_latitude if profile else None,
+                "region_longitude": profile.region_longitude if profile else None,
+                "region_2": profile.region_2 if profile else "",
+                "region_2_latitude": profile.region_2_latitude if profile else None,
+                "region_2_longitude": profile.region_2_longitude if profile else None,
                 "bio": profile.bio if profile else "",
                 "exercise_level": profile.exercise_level if profile else "",
                 "preferred_sports": profile.preferred_sports if profile else "",
@@ -69,6 +74,11 @@ class UserProfile(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
     region = db.Column(db.String(120), default="서울")
+    region_latitude = db.Column(db.Float)
+    region_longitude = db.Column(db.Float)
+    region_2 = db.Column(db.String(120), default="")
+    region_2_latitude = db.Column(db.Float)
+    region_2_longitude = db.Column(db.Float)
     bio = db.Column(db.String(160), default="")
     exercise_level = db.Column(db.String(40), default="beginner")
     preferred_sports = db.Column(db.String(255), default="")

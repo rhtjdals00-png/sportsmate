@@ -478,7 +478,10 @@ function DesktopMyPage() {
                   />
                   <div>
                     <span>{introDraft.length}/{PROFILE_INTRO_MAX_LENGTH}</span>
-                    <button type="button" onClick={saveIntro} disabled={savingIntro}>{savingIntro ? "저장 중" : "저장"}</button>
+                    <button type="button" onClick={saveIntro} disabled={savingIntro}>
+                      {savingIntro ? <span className="profile-action-spinner" aria-hidden="true" /> : null}
+                      저장
+                    </button>
                     <button type="button" onClick={() => { setIntroDraft(savedIntro); setIntroEdit(false); }}>취소</button>
                   </div>
                 </div>
@@ -571,9 +574,12 @@ function DesktopMyPage() {
             <p>중요한 프로필 정보를 수정하기 전에 비밀번호 확인이 필요합니다.</p>
             <input type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} placeholder="비밀번호 입력" />
             {authError && <em className="nickname-check warn">{authError}</em>}
-            <div>
+            <div className="profile-auth-actions">
               <button className="ghost-btn" type="button" onClick={() => setAuthOpen(false)}>취소</button>
-              <button className="primary-small" type="submit" disabled={authChecking}>{authChecking ? "확인 중" : "확인"}</button>
+              <button className="primary-small" type="submit" disabled={authChecking}>
+                {authChecking ? <span className="profile-action-spinner" aria-hidden="true" /> : null}
+                확인
+              </button>
             </div>
           </form>
         </div>
@@ -585,7 +591,7 @@ function DesktopMyPage() {
             <ShieldCheck size={26} />
             <h2>계정 연동이 필요합니다</h2>
             <p>소셜 로그인 계정은 이름, 핸드폰 번호, 이메일 로그인 정보를 등록한 뒤 프로필 수정을 이용할 수 있습니다.</p>
-            <div>
+            <div className="profile-auth-actions">
               <button className="ghost-btn" type="button" onClick={() => setAuthOpen(false)}>나중에 하기</button>
               <button className="primary-small" type="button" onClick={() => navigate("/mypage/account-link")}>연동하기</button>
             </div>
