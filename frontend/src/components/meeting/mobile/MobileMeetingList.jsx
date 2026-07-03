@@ -1,4 +1,5 @@
 import { SlidersHorizontal } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import MeetingCard from "../shared/MeetingCard.jsx";
@@ -8,6 +9,7 @@ import { meetingApi } from "../../../api/meetingApi";
 import { sportApi } from "../../../api/sportApi";
 import { locationApi } from "../../../api/locationApi";
 import { useAsync } from "../../../hooks/useAsync";
+import { koreaRegions } from "../../../data/koreaRegions";
 
 const fallbackCategories = [
   { id: "ball", name: "구기 종목" },
@@ -54,6 +56,7 @@ const fallbackSidoRegions = [
   { code: "31", name: "울산광역시" },
   { code: "36", name: "세종특별자치시" },
   { code: "41", name: "경기도" },
+  { code: "42", name: "강원특별자치도" },
   { code: "43", name: "충청북도" },
   { code: "44", name: "충청남도" },
   { code: "45", name: "전북특별자치도" },
@@ -65,8 +68,19 @@ const fallbackSidoRegions = [
 
 const isNumericId = (value) => /^\d+$/.test(String(value || ""));
 
+const mergeByName = (primary = [], fallback = []) => {
+  const seen = new Set();
+  return [...primary, ...fallback].filter((item) => {
+    const name = item?.name;
+    if (!name || seen.has(name)) return false;
+    seen.add(name);
+    return true;
+  });
+};
+
 function MobileMeetingList() {
   const [params, setParams] = useSearchParams();
+  const [filterOpen, setFilterOpen] = useState(false);
   const query = Object.fromEntries(params.entries());
   const meetings = useAsync(() => meetingApi.list({ limit: 10, ...query }), [params.toString()]);
   const categories = useAsync(() => sportApi.categories(), []);
@@ -79,6 +93,25 @@ function MobileMeetingList() {
     () => params.get("sido") ? locationApi.regions({ level: "sigungu", parent_code: params.get("sido") }) : Promise.resolve({ items: [] }),
     [params.get("sido")]
   );
+  const categoryItems = categories.data?.items?.length ? categories.data.items : fallbackCategories;
+  const sportItems = sports.data?.items?.length
+    ? sports.data.items
+    : fallbackSports.filter((sport) => !params.get("category") || String(sport.category_id) === String(params.get("category")));
+  const sidoItems = mergeByName(sidoRegions.data?.items || [], fallbackSidoRegions);
+  const currentCategory = categoryItems.find((category) => String(category.id) === String(params.get("category")));
+  const currentSport = sportItems.find((sport) => String(sport.id) === String(params.get("sport")));
+  const currentSido = sidoItems.find((region) => String(region.code) === String(params.get("sido")));
+  const fallbackSigunguRegions = currentSido
+    ? (koreaRegions.find((region) => region.name === currentSido.name)?.areas || []).map((name) => ({ code: name, name }))
+    : [];
+  const sigunguItems = mergeByName(sigunguRegions.data?.items || [], fallbackSigunguRegions);
+  const currentSigungu = sigunguItems.find((region) => String(region.code) === String(params.get("sigungu")));
+  const filterSummary = useMemo(() => [
+    currentCategory?.name,
+    currentSport?.name,
+    currentSido?.name,
+    currentSigungu?.name
+  ].filter(Boolean).join(" · ") || "상세 설정", [currentCategory, currentSport, currentSido, currentSigungu]);
 
   const setCategory = (categoryId) => {
     const next = new URLSearchParams(params);
@@ -119,80 +152,43 @@ function MobileMeetingList() {
             setParams(next);
           }}
         />
-        <button type="button" aria-label="필터">
+        <button type="button" aria-label="상세 설정" onClick={() => setFilterOpen((value) => !value)} className={filterOpen ? "is-active" : ""}>
           <SlidersHorizontal size={20} />
         </button>
       </section>
 
-      <div className="chip-scroll chip-scroll--nested">
-        <button type="button" onClick={() => setCategory("")} className={!params.get("category") ? "active" : ""}>
-          전체
-        </button>
-        {(categories.data?.items?.length ? categories.data.items : fallbackCategories).map((category) => (
-          <button
-            type="button"
-            key={category.id}
-            onClick={() => setCategory(String(category.id))}
-            className={params.get("category") === String(category.id) ? "active" : ""}
-          >
-            {category.name}
-          </button>
-        ))}
-      </div>
-
-      <div className="chip-scroll">
-        <button type="button" onClick={() => setSport("")} className={!params.get("sport") ? "active" : ""}>
-          종목 전체
-        </button>
-        {(sports.data?.items?.length
-          ? sports.data.items
-          : fallbackSports.filter((sport) => !params.get("category") || String(sport.category_id) === String(params.get("category")))
-        ).map((sport) => (
-          <button
-            type="button"
-            key={sport.id}
-            onClick={() => setSport(String(sport.id))}
-            className={params.get("sport") === String(sport.id) ? "active" : ""}
-            disabled={!isNumericId(sport.id)}
-          >
-            {sport.name}
-          </button>
-        ))}
-      </div>
-
-      <div className="chip-scroll chip-scroll--muted">
-        <button type="button" onClick={() => setRegion("sido", "")} className={!params.get("sido") ? "active" : ""}>
-          전국
-        </button>
-        {(sidoRegions.data?.items?.length ? sidoRegions.data.items : fallbackSidoRegions).map((region) => (
-          <button
-            type="button"
-            key={region.code}
-            onClick={() => setRegion("sido", region.code)}
-            className={params.get("sido") === region.code ? "active" : ""}
-          >
-            {region.name.replace("특별시", "").replace("광역시", "").replace("특별자치도", "").replace("특별자치시", "")}
-          </button>
-        ))}
-      </div>
-
-      {params.get("sido") && (
-        <div className="chip-scroll chip-scroll--muted">
-          <button type="button" onClick={() => setRegion("sigungu", "")} className={!params.get("sigungu") ? "active" : ""}>
-            시군구 전체
-          </button>
-          {(sigunguRegions.data?.items || []).map((region) => (
-            <button
-              type="button"
-              key={region.code}
-              onClick={() => setRegion("sigungu", region.code)}
-              className={params.get("sigungu") === region.code ? "active" : ""}
-            >
-              {region.name}
-            </button>
-          ))}
-        </div>
-      )}
+      {filterOpen ? (
+        <section className="mobile-filter-panel" aria-label={filterSummary}>
+          <label>
+            종목 카테고리
+            <select value={params.get("category") || ""} onChange={(event) => setCategory(event.target.value)}>
+              <option value="">카테고리 선택</option>
+              {categoryItems.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+            </select>
+          </label>
+          <label>
+            종목
+            <select value={params.get("sport") || ""} onChange={(event) => setSport(event.target.value)}>
+              <option value="">종목 선택</option>
+              {sportItems.map((sport) => <option key={sport.id} value={sport.id} disabled={!isNumericId(sport.id)}>{sport.name}</option>)}
+            </select>
+          </label>
+          <label>
+            지역
+            <select value={params.get("sido") || ""} onChange={(event) => setRegion("sido", event.target.value)}>
+              <option value="">지역 선택</option>
+              {sidoItems.map((region) => <option key={region.code} value={region.code}>{region.name}</option>)}
+            </select>
+          </label>
+          <label>
+            시/군/구
+            <select value={params.get("sigungu") || ""} onChange={(event) => setRegion("sigungu", event.target.value)} disabled={!params.get("sido")}>
+              <option value="">전체</option>
+              {sigunguItems.map((region) => <option key={region.code} value={region.code}>{region.name}</option>)}
+            </select>
+          </label>
+        </section>
+      ) : null}
 
       {meetings.loading ? (
         <LoadingCards />

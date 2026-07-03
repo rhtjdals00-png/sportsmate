@@ -1,10 +1,11 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required, verify_jwt_in_request
+from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import Attendance, Meeting, Notice, Participant, Review, Sport, User, Vote, VoteOption
-from app.services.meeting_service import create_meeting, create_review, join_meeting, list_meetings, update_application, update_meeting
+from app.models import Attendance, Meeting, Notice, Participant, Review, Sport, User, Vote, VoteOption, VoteResponse
+from app.services.meeting_service import close_expired_one_time_meetings, create_meeting, create_review, join_meeting, list_meetings, update_application, update_meeting
 
 meeting_bp = Blueprint("meetings", __name__)
 
@@ -16,6 +17,29 @@ def current_user_id_optional():
         return int(identity) if identity else None
     except Exception:
         return None
+
+
+def host_summary(host):
+    profile = host.profile
+    hosted_query = Meeting.query.filter(Meeting.host_id == host.id)
+    review_count = (
+        Review.query
+        .join(Meeting, Review.meeting_id == Meeting.id)
+        .filter(Meeting.host_id == host.id)
+        .count()
+    )
+    return {
+        "rating_average": round(profile.rating_average, 1) if profile else 0,
+        "attendance_rate": int(profile.attendance_rate) if profile else 0,
+        "hosted_count": hosted_query.count(),
+        "active_hosted_count": hosted_query.filter(Meeting.status == "open").count(),
+        "completed_hosted_count": hosted_query.filter(Meeting.status == "closed").count(),
+        "review_count": review_count,
+        "region": profile.region if profile else "",
+        "exercise_level": profile.exercise_level if profile else "",
+        "preferred_sports": profile.preferred_sports if profile else "",
+        "bio": profile.bio if profile else "",
+    }
 
 
 @meeting_bp.get("")
@@ -37,6 +61,7 @@ def create():
 
 @meeting_bp.get("/<int:meeting_id>")
 def show(meeting_id):
+    close_expired_one_time_meetings()
     current_user_id = current_user_id_optional()
     meeting = Meeting.query.options(
         joinedload(Meeting.host).joinedload(User.profile),
@@ -46,7 +71,10 @@ def show(meeting_id):
     ).get_or_404(meeting_id)
     meeting.view_count += 1
     db.session.commit()
-    return jsonify({"meeting": meeting.to_dict(current_user_id=current_user_id)})
+    data = meeting.to_dict(current_user_id=current_user_id)
+    if meeting.host:
+        data["host_summary"] = host_summary(meeting.host)
+    return jsonify({"meeting": data})
 
 
 @meeting_bp.patch("/<int:meeting_id>")
@@ -96,7 +124,17 @@ def applicants(meeting_id):
     meeting = Meeting.query.get_or_404(meeting_id)
     if meeting.host_id != int(get_jwt_identity()):
         return jsonify({"message": "방장만 조회할 수 있습니다."}), 403
-    items = Participant.query.filter_by(meeting_id=meeting_id, status="pending").all()
+    items = (
+        Participant.query
+        .options(
+            joinedload(Participant.user).joinedload(User.profile),
+            joinedload(Participant.meeting).joinedload(Meeting.host).joinedload(User.profile),
+            joinedload(Participant.meeting).joinedload(Meeting.sport).joinedload(Sport.category),
+            joinedload(Participant.meeting).joinedload(Meeting.chat_room),
+        )
+        .filter_by(meeting_id=meeting_id, status="pending")
+        .all()
+    )
     return jsonify({"items": [item.to_dict() for item in items]})
 
 
@@ -165,7 +203,16 @@ def post_notice(meeting_id):
 def votes(meeting_id):
     Meeting.query.get_or_404(meeting_id)
     items = Vote.query.options(joinedload(Vote.options)).filter_by(meeting_id=meeting_id).order_by(Vote.created_at.desc()).all()
-    return jsonify({"items": [item.to_dict() for item in items]})
+    option_ids = [option.id for item in items for option in item.options]
+    response_counts = {}
+    if option_ids:
+        response_counts = dict(
+            db.session.query(VoteResponse.option_id, func.count(VoteResponse.id))
+            .filter(VoteResponse.option_id.in_(option_ids))
+            .group_by(VoteResponse.option_id)
+            .all()
+        )
+    return jsonify({"items": [item.to_dict(response_counts) for item in items]})
 
 
 @meeting_bp.post("/<int:meeting_id>/votes")
@@ -194,8 +241,23 @@ def attendance(meeting_id):
     is_participant = Participant.query.filter_by(meeting_id=meeting_id, user_id=user_id, status="approved").first()
     if not is_host and not is_participant:
         return jsonify({"message": "승인된 참여자만 출석 정보를 볼 수 있습니다."}), 403
-    rows = Attendance.query.filter_by(meeting_id=meeting_id).all()
-    approved = Participant.query.filter_by(meeting_id=meeting_id, status="approved").all()
+    rows = (
+        Attendance.query
+        .options(joinedload(Attendance.user).joinedload(User.profile))
+        .filter_by(meeting_id=meeting_id)
+        .all()
+    )
+    approved = (
+        Participant.query
+        .options(
+            joinedload(Participant.user).joinedload(User.profile),
+            joinedload(Participant.meeting).joinedload(Meeting.host).joinedload(User.profile),
+            joinedload(Participant.meeting).joinedload(Meeting.sport).joinedload(Sport.category),
+            joinedload(Participant.meeting).joinedload(Meeting.chat_room),
+        )
+        .filter_by(meeting_id=meeting_id, status="approved")
+        .all()
+    )
     return jsonify({
         "items": [row.to_dict() for row in rows],
         "approved_participants": [row.to_dict() for row in approved]

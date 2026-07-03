@@ -71,12 +71,8 @@ function MobileMeetingDetail() {
     }
     setJoining(true);
     try {
-      const data = await meetingApi.join(meeting.id, { join_message: "함께 운동하고 싶습니다." });
-      if (!meeting.approval_required && (data.meeting?.chat_room_id || chatRoomId)) {
-        navigate(`/chats/${data.meeting?.chat_room_id || chatRoomId}`);
-        return;
-      }
-      setMessage({ text: meeting.approval_required ? "참여 신청이 완료되었습니다." : "모임 참여가 완료되었습니다.", tone: "notice" });
+      await meetingApi.join(meeting.id, { join_message: "함께 운동하고 싶습니다." });
+      setMessage({ text: "참여 신청이 완료되었습니다.", tone: "notice" });
       setRefreshKey((value) => value + 1);
     } catch (error) {
       setMessage({ text: error.response?.data?.message || "참여 신청을 처리하지 못했습니다.", tone: "error" });

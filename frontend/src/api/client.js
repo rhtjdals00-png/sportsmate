@@ -17,3 +17,21 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      const msg = error.response.data?.message || error.response.data?.msg;
+      if (msg === "정지된 회원입니다.") {
+        if (!window.hasAlertedSuspended) {
+          window.hasAlertedSuspended = true;
+          alert("정지된 회원입니다.");
+          localStorage.removeItem("sportsmate_token");
+          window.location.href = "/login";
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+

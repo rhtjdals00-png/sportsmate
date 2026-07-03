@@ -34,6 +34,17 @@ class Meeting(db.Model, TimestampMixin):
     participants = db.relationship("Participant", back_populates="meeting", cascade="all, delete-orphan")
     chat_room = db.relationship("ChatRoom", back_populates="meeting", uselist=False, cascade="all, delete-orphan")
 
+    def status_label(self):
+        if self.status == "open":
+            return "모집중"
+        if self.status == "full":
+            return "모집 마감"
+        if self.status == "closed":
+            return "기간 마감"
+        if self.status == "cancelled":
+            return "취소됨"
+        return "마감"
+
     def to_dict(self, current_user_id=None):
         data = {
             "id": self.id,
@@ -54,7 +65,8 @@ class Meeting(db.Model, TimestampMixin):
             "max_participants": self.max_participants,
             "current_participants": self.current_participants,
             "status": self.status,
-            "approval_required": self.approval_required,
+            "status_label": self.status_label(),
+            "approval_required": True,
             "cover_image_url": self.cover_image_url,
             "view_count": self.view_count,
             "chat_room_id": self.chat_room.id if self.chat_room else None,
@@ -88,6 +100,7 @@ class Meeting(db.Model, TimestampMixin):
             "max_participants": self.max_participants,
             "current_participants": self.current_participants,
             "status": self.status,
+            "status_label": self.status_label(),
             "cover_image_url": self.cover_image_url,
             "chat_room_id": self.chat_room.id if self.chat_room else None,
             "host": {

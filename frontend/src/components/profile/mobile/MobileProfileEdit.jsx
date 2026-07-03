@@ -427,7 +427,7 @@ function MobileProfileEdit() {
               </button>
             ))}
           </div>
-          <div className="mobile-profile-sport-grid">
+          <div className="mobile-profile-sport-grid" key={activeSportGroup?.id}>
             {(activeSportGroup?.sports || []).map((sportName) => (
               <button
                 key={sportName}

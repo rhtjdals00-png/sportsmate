@@ -1,5 +1,5 @@
-import { Bell, Search, Settings } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { ArrowLeft, Bell, Search, Settings } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 const titles = {
   "/": "SportsMate",
@@ -10,30 +10,43 @@ const titles = {
   "/host": "방장 관리"
 };
 
-function MobileHeader({ title, showLogo = false }) {
+function MobileHeader({ title, showLogo = false, actions = null, showBack = true }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const resolvedTitle = title || titles[location.pathname] || "SportsMate";
+  const canGoBack = showBack && location.pathname !== "/";
+
+  const goBack = () => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate("/");
+  };
 
   return (
     <header className="mobile-header">
+      {canGoBack ? (
+        <button className="mobile-header__back" type="button" onClick={goBack} aria-label="뒤로가기">
+          <ArrowLeft size={20} />
+        </button>
+      ) : null}
       <Link to="/" className="mobile-header__brand">
         {showLogo && <img src="/images/logo.png" alt="SportsMate" />}
         <span>{resolvedTitle}</span>
       </Link>
-      <div className="mobile-header__actions">
-        <Link to="/meetings" aria-label="검색">
-          <Search size={20} />
-        </Link>
-        <Link to="/notifications" aria-label="알림">
-          <Bell size={20} />
-        </Link>
-        <Link to="/mypage/profile" aria-label="설정">
-          <Settings size={20} />
-        </Link>
-      </div>
+      {actions || (
+        <div className="mobile-header__actions">
+          <Link to="/meetings" aria-label="검색">
+            <Search size={20} />
+          </Link>
+          <Link to="/notifications" aria-label="알림">
+            <Bell size={20} />
+          </Link>
+          <Link to="/mypage/profile" aria-label="설정">
+            <Settings size={20} />
+          </Link>
+        </div>
+      )}
     </header>
   );
 }
 
 export default MobileHeader;
-

@@ -118,6 +118,24 @@ def _kakao_request(url, keyword, size=10):
         return json.loads(response.read().decode("utf-8"))
 
 
+def _kakao_coord_request(longitude, latitude):
+    api_key = current_app.config.get("KAKAO_REST_API_KEY")
+    url = current_app.config.get("KAKAO_COORD2ADDRESS_URL")
+    if not api_key or not url:
+        return None
+
+    params = urlencode({"x": longitude, "y": latitude})
+    request = Request(
+        f"{url}?{params}",
+        headers={
+            "Authorization": f"KakaoAK {api_key}",
+            "User-Agent": "SportsMate/0.1",
+        },
+    )
+    with urlopen(request, timeout=8) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
 def search_kakao_keyword(keyword, size=10):
     payload = _kakao_request(current_app.config.get("KAKAO_KEYWORD_SEARCH_URL"), keyword, size=size)
     if payload is None:
@@ -225,6 +243,112 @@ def search_naver_places(keyword, size=10):
             source="naver-local",
         ))
     return {"source": "naver-local", "items": items}
+
+
+def _naver_region_address(region, land, include_road=False):
+    parts = []
+    for key in ("area1", "area2", "area3", "area4"):
+        name = (region.get(key) or {}).get("name")
+        if name:
+            parts.append(name)
+
+    road_name = land.get("name") if include_road else ""
+    if road_name:
+        parts.append(road_name)
+
+    number1 = land.get("number1")
+    number2 = land.get("number2")
+    if number1:
+        parts.append(f"{number1}-{number2}" if number2 else str(number1))
+
+    return " ".join(parts).strip()
+
+
+def reverse_naver_geocode(latitude, longitude):
+    client_id = current_app.config.get("NAVER_MAP_CLIENT_ID")
+    client_secret = current_app.config.get("NAVER_MAP_CLIENT_SECRET")
+    url = current_app.config.get("NAVER_REVERSE_GEOCODE_URL")
+    if not client_id or not client_secret or not url:
+        return None
+
+    params = urlencode({
+        "coords": f"{longitude},{latitude}",
+        "orders": "roadaddr,addr",
+        "output": "json",
+    })
+    request = Request(
+        f"{url}?{params}",
+        headers={
+            "X-NCP-APIGW-API-KEY-ID": client_id,
+            "X-NCP-APIGW-API-KEY": client_secret,
+            "User-Agent": "SportsMate/0.1",
+        },
+    )
+    with urlopen(request, timeout=8) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+
+    for item in payload.get("results", []):
+        region = item.get("region") or {}
+        land = item.get("land") or {}
+        is_road = item.get("name") == "roadaddr"
+        address = _naver_region_address(region, land, include_road=is_road)
+        if not address:
+            continue
+        building = ((land.get("addition0") or {}).get("value") or "").strip()
+        title = building or address
+        return _local_result(
+            title,
+            address,
+            latitude=latitude,
+            longitude=longitude,
+            road_address=address if is_road else "",
+            category="주소",
+            source="naver-reverse",
+        )
+    return None
+
+
+def reverse_kakao_geocode(latitude, longitude):
+    payload = _kakao_coord_request(longitude, latitude)
+    if payload is None:
+        return None
+
+    for item in payload.get("documents", []):
+        road = item.get("road_address") or {}
+        jibun = item.get("address") or {}
+        road_address = road.get("address_name") or ""
+        address = road_address or jibun.get("address_name") or ""
+        if not address:
+            continue
+        title = road.get("building_name") or address
+        return _local_result(
+            title,
+            address,
+            latitude=latitude,
+            longitude=longitude,
+            road_address=road_address,
+            category="주소",
+            source="kakao-reverse",
+        )
+    return None
+
+
+def reverse_geocode(latitude, longitude):
+    for reverser in (reverse_naver_geocode, reverse_kakao_geocode):
+        try:
+            result = reverser(latitude, longitude)
+        except Exception:
+            continue
+        if result:
+            return result
+    return _local_result(
+        "지도에서 선택한 위치",
+        "지도에서 선택한 위치",
+        latitude=latitude,
+        longitude=longitude,
+        category="좌표",
+        source="reverse-unavailable",
+    )
 
 
 def search_places(keyword, size=10):

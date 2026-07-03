@@ -1,4 +1,4 @@
-import { CalendarClock, Crown, FileText, Map, MapPin, RotateCcw, Search, Users } from "lucide-react";
+import { CalendarClock, Crown, FileText, Map, MapPin, Plus, RotateCcw, Search, Users } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import EmptyState from "../../common/EmptyState.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
@@ -47,7 +47,8 @@ function isHostMeeting(meeting) {
 }
 
 function getStatusLabel(status) {
-  if (status === "closed" || status === "full") return "모집마감";
+  if (status === "full") return "모집 마감";
+  if (status === "closed") return "기간 마감";
   if (status === "cancelled") return "취소됨";
   return "모집중";
 }
@@ -77,7 +78,11 @@ function DesktopMeetingList() {
   );
 
   const viewMode = params.get("view") || "list";
-  const items = getItems(meetings.data);
+  const selectedStatus = params.get("status") || "";
+  const items = getItems(meetings.data).filter((meeting) => {
+    if (selectedStatus) return meeting.status === selectedStatus;
+    return meeting.status === "open";
+  });
   const categoryItems = getItems(categories.data);
   const sportItems = getItems(sports.data);
   const sidoItems = getItems(sidoRegions.data);
@@ -110,10 +115,16 @@ function DesktopMeetingList() {
           <h1>모임 게시판</h1>
           <span>내 주변에서 함께할 운동 모임을 찾아보세요.</span>
         </div>
-        <button className="desktop-meeting-board__view-toggle" type="button" onClick={() => setParam("view", viewMode === "map" ? "list" : "map")}>
-          {viewMode === "map" ? <FileText size={16} /> : <Map size={16} />}
-          {viewMode === "map" ? "리스트로 보기" : "지도로 보기"}
-        </button>
+        <div className="desktop-meeting-board__title-actions">
+          <Link className="desktop-meeting-board__create-link" to="/meetings/create">
+            <Plus size={16} />
+            모임 만들기
+          </Link>
+          <button className="desktop-meeting-board__view-toggle" type="button" onClick={() => setParam("view", viewMode === "map" ? "list" : "map")}>
+            {viewMode === "map" ? <FileText size={16} /> : <Map size={16} />}
+            {viewMode === "map" ? "리스트로 보기" : "지도로 보기"}
+          </button>
+        </div>
       </div>
 
       <section className="desktop-meeting-board__filters">
@@ -129,7 +140,7 @@ function DesktopMeetingList() {
           <button type="button" className={!params.get("status") ? "is-active" : ""} onClick={() => setParam("status", "")}>
             전체
           </button>
-          <button type="button" className={params.get("status") === "open" ? "is-active" : ""} onClick={() => setParam("status", "open")}>
+          <button type="button" className={selectedStatus === "open" ? "is-active" : ""} onClick={() => setParam("status", "open")}>
             모집중
           </button>
           <select value={params.get("category") || ""} onChange={(event) => setParam("category", event.target.value, ["sport"])}>

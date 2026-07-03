@@ -151,8 +151,7 @@ const initialForm = {
   start_time: "",
   end_date: "",
   end_time: "",
-  max_participants: 6,
-  approval_required: true
+  max_participants: 6
 };
 
 const fallbackSportGroups = [
@@ -350,7 +349,6 @@ function MobileMeetingCreate() {
         purpose: form.purpose.trim(),
         location_name: form.location_name.trim(),
         address: form.address.trim(),
-        approval_required: true,
         start_at: hasStartSchedule ? combineDateTime(form.start_date, form.start_time) : null,
         end_at: hasEndSchedule ? combineDateTime(form.end_date, form.end_time) : null,
         meeting_type: hasEndSchedule || !hasStartSchedule ? "regular" : form.meeting_type,

@@ -50,12 +50,13 @@ class Vote(db.Model, TimestampMixin):
     title = db.Column(db.String(120), nullable=False)
     options = db.relationship("VoteOption", backref="vote", cascade="all, delete-orphan")
 
-    def to_dict(self):
+    def to_dict(self, response_counts=None):
+        response_counts = response_counts or getattr(self, "_response_counts", {})
         return {
             "id": self.id,
             "meeting_id": self.meeting_id,
             "title": self.title,
-            "options": [option.to_dict() for option in self.options],
+            "options": [option.to_dict(response_counts.get(option.id)) for option in self.options],
             "created_at": self.created_at.isoformat()
         }
 
@@ -65,9 +66,12 @@ class VoteOption(db.Model):
     vote_id = db.Column(db.Integer, db.ForeignKey("votes.id"), nullable=False)
     text = db.Column(db.String(120), nullable=False)
 
-    def to_dict(self):
-        count = VoteResponse.query.filter_by(option_id=self.id).count()
-        return {"id": self.id, "vote_id": self.vote_id, "text": self.text, "response_count": count}
+    def to_dict(self, response_count=None):
+        if response_count is None:
+            response_count = getattr(self, "_response_count", None)
+        if response_count is None:
+            response_count = VoteResponse.query.filter_by(option_id=self.id).count()
+        return {"id": self.id, "vote_id": self.vote_id, "text": self.text, "response_count": response_count}
 
 class VoteResponse(db.Model):
     __tablename__ = "vote_responses"

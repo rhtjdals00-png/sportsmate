@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Button from "../components/common/Button.jsx";
 import DesktopAuthPage from "../components/auth/desktop/DesktopAuthPage.jsx";
@@ -39,7 +39,7 @@ function LoginPage() {
       sessionStorage.setItem("sportsmate_flash", "로그인하셨습니다.");
       navigate(location.state?.from || "/");
     } catch (submitError) {
-      setError(submitError.message || submitError.response?.data?.message || "로그인에 실패했습니다.");
+      setError(submitError.response?.data?.message || submitError.message || "로그인에 실패했습니다.");
     } finally {
       setLoading(false);
     }
