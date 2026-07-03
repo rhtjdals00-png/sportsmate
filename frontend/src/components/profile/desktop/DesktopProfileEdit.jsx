@@ -1,12 +1,12 @@
-import { Check, MapPin, Pencil, Search, X } from "lucide-react";
+import { Check, MapPin, Pencil, Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { locationApi } from "../../../api/locationApi";
 import { sportApi } from "../../../api/sportApi";
 import { userApi } from "../../../api/userApi";
 import { useAuth } from "../../../contexts/AuthContext";
 
 const NICKNAME_MAX_LENGTH = 12;
+const MAX_PREFERRED_REGIONS = 2;
 
 const levelOptions = [
   { value: "beginner", label: "입문" },
@@ -20,6 +20,49 @@ const fallbackSportCategories = [
   { id: "outdoor", name: "러닝 / 야외", sports: ["러닝", "등산", "트래킹", "자전거", "산책"] },
   { id: "fitness", name: "피트니스", sports: ["헬스", "크로스핏", "클라이밍", "요가", "필라테스"] },
   { id: "etc", name: "기타", sports: ["볼링", "댄스", "골프", "수영"] }
+];
+
+const mockLocationResults = [
+  {
+    id: "olympic-park",
+    type: "place",
+    name: "올림픽공원",
+    address: "서울 송파구 올림픽로 424",
+    region: "서울 송파구",
+    category: "공원 / 체육시설"
+  },
+  {
+    id: "jamsil-stadium",
+    type: "place",
+    name: "잠실종합운동장",
+    address: "서울 송파구 올림픽로 25",
+    region: "서울 송파구",
+    category: "경기장"
+  },
+  {
+    id: "yeouido-park",
+    type: "place",
+    name: "여의도한강공원",
+    address: "서울 영등포구 여의동로 330",
+    region: "서울 영등포구",
+    category: "공원"
+  },
+  {
+    id: "gangnam",
+    type: "region",
+    name: "서울 강남구",
+    address: "",
+    region: "서울 강남구",
+    category: "지역"
+  },
+  {
+    id: "bundang",
+    type: "region",
+    name: "경기 성남시 분당구",
+    address: "",
+    region: "경기 성남시 분당구",
+    category: "지역"
+  }
 ];
 
 function mergeSportNames(baseSports, apiSports) {
@@ -78,6 +121,24 @@ function splitList(value) {
     .filter(Boolean);
 }
 
+function locationLabel(location) {
+  if (!location) return "";
+  return location.type === "place"
+    ? `${location.name} · ${location.region}`
+    : location.region || location.name;
+}
+
+function regionToMockLocation(regionName, index) {
+  return {
+    id: `saved-${index}-${regionName}`,
+    type: "region",
+    name: regionName,
+    address: "",
+    region: regionName,
+    category: "저장된 지역"
+  };
+}
+
 function normalizeLevels(value) {
   if (!value) return {};
   if (typeof value === "object") return value;
@@ -127,12 +188,16 @@ function DesktopProfileEdit() {
   const [categories, setCategories] = useState([]);
   const [sports, setSports] = useState([]);
   const [activeCategoryId, setActiveCategoryId] = useState(fallbackSportCategories[0].id);
-  const [showMapPreview, setShowMapPreview] = useState(false);
-
+  const [selectedSportName, setSelectedSportName] = useState("");
+  const [useSportLevels, setUseSportLevels] = useState(() => {
+    const levels = form.preferred_sport_levels || {};
+    return form.preferred_sports.some((sportName) => Boolean(levels[sportName]));
+  });
   const [regionQuery, setRegionQuery] = useState("");
   const [regionResults, setRegionResults] = useState([]);
   const [regionSearching, setRegionSearching] = useState(false);
   const [regionMessage, setRegionMessage] = useState("");
+  const [selectedRegionCandidate, setSelectedRegionCandidate] = useState(null);
 
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" });
@@ -171,7 +236,11 @@ function DesktopProfileEdit() {
         if (!mounted) return;
         setLoadedUser(data.user);
         setCurrentUser?.(data.user);
-        setForm(buildFormFromUser(data.user));
+        const nextForm = buildFormFromUser(data.user);
+        setForm(nextForm);
+        setUseSportLevels(
+          nextForm.preferred_sports.some((sportName) => Boolean(nextForm.preferred_sport_levels?.[sportName]))
+        );
       })
       .catch((error) => {
         if (!mounted) return;
@@ -203,19 +272,34 @@ function DesktopProfileEdit() {
   const sportCategoryGroups = useMemo(() => buildSportGroups(categories, sports), [categories, sports]);
 
   const activeSportGroup = sportCategoryGroups.find((group) => String(group.id) === String(activeCategoryId)) || sportCategoryGroups[0];
+  const selectableSports = activeSportGroup?.sports || [];
   const displayTag = tagLabel(loadedUser);
   const savedIntro = loadedUser?.profile?.bio || "아직 한 줄 소개가 없습니다.";
-  const pendingRegion = regionQuery || form.selected_regions[0] || "선호 지역";
+  const selectedLocationCount = form.selected_regions.length;
+  const mapLocation = selectedRegionCandidate || (form.selected_regions[0] ? regionToMockLocation(form.selected_regions[0], 0) : null);
+  const pendingRegion = mapLocation ? locationLabel(mapLocation) : (regionQuery || "검색 결과를 선택하면 지도에서 확인할 수 있습니다");
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+
+  useEffect(() => {
+    if (!sportCategoryGroups.length) return;
+    if (!sportCategoryGroups.some((group) => String(group.id) === String(activeCategoryId))) {
+      setActiveCategoryId(sportCategoryGroups[0].id);
+      setSelectedSportName("");
+    }
+  }, [activeCategoryId, sportCategoryGroups]);
 
   const updateNickname = (value) => {
     update("nickname", value.slice(0, NICKNAME_MAX_LENGTH));
   };
 
-  const addRegion = (regionName) => {
-    const nextRegion = regionName.trim();
+  const addRegion = (location) => {
+    const nextRegion = locationLabel(location).trim();
     if (!nextRegion) return;
+    if (form.selected_regions.length >= MAX_PREFERRED_REGIONS && !form.selected_regions.includes(nextRegion)) {
+      setRegionMessage(`선호지역은 최대 ${MAX_PREFERRED_REGIONS}개까지 선택할 수 있습니다.`);
+      return;
+    }
 
     setForm((current) => {
       const nextRegions = current.selected_regions.includes(nextRegion)
@@ -228,8 +312,8 @@ function DesktopProfileEdit() {
       };
     });
     setRegionQuery("");
-    setRegionResults([]);
     setRegionMessage("");
+    setSelectedRegionCandidate(location);
   };
 
   const removeRegion = (regionName) => {
@@ -248,42 +332,55 @@ function DesktopProfileEdit() {
     setRegionMessage("");
     if (!keyword) {
       setRegionResults([]);
+      setSelectedRegionCandidate(null);
       setRegionMessage("검색할 지역이나 장소를 입력해주세요.");
       return;
     }
 
     setRegionSearching(true);
-    try {
-      const data = await locationApi.searchPlaces({ keyword, size: 8 });
-      const items = data.items || [];
-      const nextResults = items
-        .map((item) => item.address || item.title || "")
-        .filter(Boolean);
-      setRegionResults(nextResults.length ? nextResults : [keyword]);
-      if (!nextResults.length) setRegionMessage("검색 결과가 없어 입력한 문구를 그대로 추가할 수 있습니다.");
-    } catch {
-      setRegionResults([keyword]);
-      setRegionMessage("주소 검색 API에 연결할 수 없어 입력한 문구를 그대로 추가할 수 있습니다.");
-    } finally {
+    window.setTimeout(() => {
+      const normalizedKeyword = keyword.toLowerCase();
+      const nextResults = mockLocationResults.filter((item) =>
+        [item.name, item.address, item.region, item.category]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedKeyword)
+      );
+      setRegionResults(nextResults);
+      setSelectedRegionCandidate(nextResults[0] || null);
+      if (!nextResults.length) {
+        setRegionMessage("목업 데이터에서 검색 결과를 찾지 못했습니다. 올림픽공원, 잠실, 강남구로 검색해보세요.");
+      }
       setRegionSearching(false);
-    }
+    }, 250);
   };
 
-  const toggleSport = (sportName) => {
+  // 2026-07-03: profile/setup의 대분류-소주제-추가 흐름과 맞춰 PC 프로필 수정의 종목 선택 방식을 통일.
+  const addSelectedSport = () => {
+    if (!selectedSportName) return;
     setForm((current) => {
-      const exists = current.preferred_sports.includes(sportName);
-      const nextSports = exists
-        ? current.preferred_sports.filter((name) => name !== sportName)
-        : [...current.preferred_sports, sportName];
+      if (current.preferred_sports.includes(selectedSportName)) return current;
+      return {
+        ...current,
+        preferred_sports: [...current.preferred_sports, selectedSportName],
+        preferred_sport_levels: {
+          ...current.preferred_sport_levels,
+          [selectedSportName]: current.preferred_sport_levels[selectedSportName] || current.exercise_level
+        }
+      };
+    });
+    setSelectedSportName("");
+  };
+
+  const removeSport = (sportName) => {
+    setForm((current) => {
       const nextLevels = { ...current.preferred_sport_levels };
-
-      if (exists) {
-        delete nextLevels[sportName];
-      } else {
-        nextLevels[sportName] = nextLevels[sportName] || current.exercise_level;
-      }
-
-      return { ...current, preferred_sports: nextSports, preferred_sport_levels: nextLevels };
+      delete nextLevels[sportName];
+      return {
+        ...current,
+        preferred_sports: current.preferred_sports.filter((name) => name !== sportName),
+        preferred_sport_levels: nextLevels
+      };
     });
   };
 
@@ -346,10 +443,9 @@ function DesktopProfileEdit() {
         region: form.region,
         exercise_level: form.exercise_level,
         preferred_sports: form.preferred_sports.join(", "),
-        preferred_sport_levels: {
-          ...form.preferred_sport_levels,
-          all: form.exercise_level
-        }
+        preferred_sport_levels: useSportLevels
+          ? { ...form.preferred_sport_levels, all: form.exercise_level }
+          : { all: form.exercise_level }
       });
       setCurrentUser?.(data.user);
       navigate("/mypage");
@@ -436,7 +532,10 @@ function DesktopProfileEdit() {
 
       <section className="page-card desktop-profile-edit-panel">
         <div className="section-head">
-          <h2>선호 지역</h2>
+          <div>
+            <h2>선호 지역</h2>
+            <span>장소명이나 지역명을 검색하고 지도 위치를 확인한 뒤 최대 2개까지 추가할 수 있습니다.</span>
+          </div>
         </div>
         <div className="desktop-region-picker">
           <label className="desktop-region-search-field">
@@ -454,89 +553,152 @@ function DesktopProfileEdit() {
           <button className="primary-small" type="button" onClick={searchRegion} disabled={regionSearching}>
             {regionSearching ? "검색 중" : "검색"}
           </button>
-          <button className="desktop-map-toggle" type="button" onClick={() => setShowMapPreview((current) => !current)}>
-            <MapPin size={14} />
-            {showMapPreview ? "지도 접기" : "지도에서 선택"}
-          </button>
         </div>
         {regionMessage && <em className="nickname-check warn">{regionMessage}</em>}
-        {regionResults.length > 0 && (
+        <div className="desktop-region-workspace">
           <div className="desktop-region-results">
-            {regionResults.map((regionName) => (
-              <button key={regionName} type="button" onClick={() => addRegion(regionName)}>
-                <MapPin size={14} />
-                {regionName}
-              </button>
-            ))}
+            {regionResults.length ? regionResults.map((location) => {
+              const isSelected = selectedRegionCandidate?.id === location.id;
+              return (
+                <button
+                  key={location.id}
+                  type="button"
+                  className={isSelected ? "is-selected" : ""}
+                  onClick={() => setSelectedRegionCandidate(location)}
+                >
+                  <MapPin size={15} />
+                  <span>
+                    <strong>{location.name}</strong>
+                    <small>{location.address || location.region}</small>
+                  </span>
+                  <em>{location.category}</em>
+                </button>
+              );
+            }) : (
+              <div className="desktop-region-empty">
+                <Search size={18} />
+                <span>검색 결과가 여기에 표시됩니다.</span>
+              </div>
+            )}
           </div>
-        )}
+          <div className="desktop-profile-map-preview">
+            <div className="map-current-label"><MapPin size={15} />{pendingRegion}</div>
+            <div className="map-pin p1"><MapPin size={19} /></div>
+            <div className="map-pin p2"><MapPin size={19} /></div>
+            <div className="map-pin p3"><MapPin size={19} /></div>
+            <div className="map-center" />
+            {mapLocation ? (
+              <div className="desktop-map-place-card">
+                <strong>{mapLocation.name}</strong>
+                <span>{mapLocation.address || mapLocation.region}</span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <button
+          className="desktop-region-add-button"
+          type="button"
+          disabled={!selectedRegionCandidate || selectedLocationCount >= MAX_PREFERRED_REGIONS}
+          onClick={() => selectedRegionCandidate && addRegion(selectedRegionCandidate)}
+        >
+          <Plus size={16} />
+          선호지역 추가
+        </button>
         <div className="desktop-region-selected">
           {form.selected_regions.length ? form.selected_regions.map((regionName) => (
             <button key={regionName} type="button" onClick={() => removeRegion(regionName)}>
               {regionName}
               <X size={14} />
             </button>
-          )) : <span>선택한 지역이 없습니다.</span>}
+          )) : <span>선택한 선호지역이 없습니다.</span>}
+          <em>{selectedLocationCount}/{MAX_PREFERRED_REGIONS}</em>
         </div>
-        {showMapPreview && (
-          <div className="desktop-profile-map-preview">
-            <div className="map-current-label"><MapPin size={15} />{pendingRegion} 기준</div>
-            <div className="map-pin p1"><MapPin size={19} /></div>
-            <div className="map-pin p2"><MapPin size={19} /></div>
-            <div className="map-pin p3"><MapPin size={19} /></div>
-            <div className="map-center" />
-          </div>
-        )}
       </section>
 
       <section className="page-card desktop-profile-edit-panel">
         <div className="section-head">
           <h2>운동 설정</h2>
         </div>
-        <div className="desktop-profile-form-grid desktop-level-grid">
-          <label>
-            기본 운동 수준
-            <select value={form.exercise_level} onChange={(event) => update("exercise_level", event.target.value)}>
-              {levelOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </label>
+        <div className="desktop-level-field">
+          <span className="desktop-subsection-title">기본 운동 수준</span>
+          <div className="desktop-level-segment" role="radiogroup" aria-label="기본 운동 수준">
+            {levelOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={form.exercise_level === option.value}
+                className={form.exercise_level === option.value ? "is-active" : ""}
+                onClick={() => update("exercise_level", option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="desktop-profile-sport-section">
-          <span className="desktop-subsection-title">관심 종목</span>
-          <div className="desktop-sport-category-tabs">
-            {sportCategoryGroups.map((group) => (
-              <button
-                key={group.id}
-                className={String(activeSportGroup?.id) === String(group.id) ? "is-active" : ""}
-                type="button"
-                onClick={() => setActiveCategoryId(group.id)}
-              >
-                {group.name}
-              </button>
-            ))}
+          <div className="desktop-profile-sport-head">
+            <span className="desktop-subsection-title">관심 종목</span>
+            <em>{form.preferred_sports.length}개 선택</em>
           </div>
-          <div className="desktop-profile-sport-grid">
-            {(activeSportGroup?.sports || []).map((sportName) => (
-              <button
-                key={sportName}
-                className={form.preferred_sports.includes(sportName) ? "is-active" : ""}
-                type="button"
-                onClick={() => toggleSport(sportName)}
+          <div className="desktop-sport-select-row">
+            <label>
+              대분류
+              <select
+                value={activeCategoryId}
+                onChange={(event) => {
+                  setActiveCategoryId(event.target.value);
+                  setSelectedSportName("");
+                }}
               >
-                {sportName}
-              </button>
-            ))}
+                {sportCategoryGroups.map((group) => (
+                  <option key={group.id} value={group.id}>{group.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              소주제
+              <select value={selectedSportName} onChange={(event) => setSelectedSportName(event.target.value)}>
+                <option value="">소주제 선택</option>
+                {selectableSports.map((sportName) => (
+                  <option key={sportName} value={sportName} disabled={form.preferred_sports.includes(sportName)}>
+                    {sportName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className="desktop-sport-add-button" type="button" onClick={addSelectedSport} disabled={!selectedSportName}>
+              <Plus size={16} />
+              추가
+            </button>
+          </div>
+          <div className="desktop-profile-sport-tags">
+            {form.preferred_sports.length ? form.preferred_sports.map((sportName) => {
+              const levelLabel = levelOptions.find((option) => option.value === (form.preferred_sport_levels[sportName] || form.exercise_level))?.label;
+              return (
+                <button key={sportName} type="button" onClick={() => removeSport(sportName)}>
+                  {sportName}{useSportLevels && levelLabel ? `:${levelLabel}` : ""}
+                  <X size={14} />
+                </button>
+              );
+            }) : <span>선택한 종목이 없습니다.</span>}
           </div>
         </div>
-        {form.preferred_sports.length > 0 && (
+        <label className="desktop-sport-level-toggle">
+          <input
+            type="checkbox"
+            checked={useSportLevels}
+            onChange={(event) => setUseSportLevels(event.target.checked)}
+          />
+          <span>종목별 수준 선택하기</span>
+        </label>
+        {useSportLevels && form.preferred_sports.length > 0 && (
           <>
             <span className="desktop-subsection-title">선택한 종목별 수준</span>
             <div className="desktop-profile-selected-sports">
               {form.preferred_sports.map((sportName) => (
                 <div key={sportName}>
-                  <button type="button" onClick={() => toggleSport(sportName)}>
+                  <button type="button" onClick={() => removeSport(sportName)}>
                     {sportName}
                     <X size={14} />
                   </button>

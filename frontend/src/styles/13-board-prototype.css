@@ -99,7 +99,7 @@
 }
 
 .desktop-prototype .proto-board-row strong {
-  color: #4f46e5;
+  color: #2563eb;
   font-weight: 950;
 }
 
@@ -128,7 +128,7 @@
 
 .desktop-prototype .board-badge.joined {
   background: #eef2ff;
-  color: #4f46e5;
+  color: #2563eb;
 }
 
 .desktop-prototype .board-badge.open {
@@ -152,7 +152,7 @@
   gap: 8px;
   border: 0;
   border-radius: 8px;
-  background: #4f46e5;
+  background: #2563eb;
   color: #ffffff;
   font-size: 13px;
   font-weight: 950;
@@ -197,7 +197,7 @@
 .desktop-meeting-board__create-link {
   min-height: 42px;
   border: 0;
-  background: #4f46e5;
+  background: #2563eb;
   color: #ffffff;
   padding: 0 18px;
   text-decoration: none;
@@ -215,6 +215,7 @@
 .desktop-meeting-board__create-link:hover,
 .desktop-meeting-board__view-toggle:hover,
 .desktop-meeting-board__search button:hover {
+  background: #1d4ed8;
   transform: translateY(-1px);
 }
 
@@ -266,8 +267,8 @@
 }
 
 .desktop-meeting-board__search label:focus-within {
-  border-color: rgba(79, 70, 229, 0.55);
-  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+  border-color: rgba(37, 99, 235, 0.55);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
 }
 
 .desktop-meeting-board__search input {
@@ -282,7 +283,7 @@
 
 .desktop-meeting-board__search button {
   border: 0;
-  background: #4f46e5;
+  background: #2563eb;
   color: #ffffff;
 }
 
@@ -312,13 +313,13 @@
 
 .desktop-meeting-board__quick-filters button:hover,
 .desktop-meeting-board__quick-filters select:hover {
-  border-color: rgba(79, 70, 229, 0.5);
-  color: #4f46e5;
+  border-color: rgba(37, 99, 235, 0.5);
+  color: #2563eb;
 }
 
 .desktop-meeting-board__quick-filters button.is-active {
-  border-color: #4f46e5;
-  background: #4f46e5;
+  border-color: #2563eb;
+  background: #2563eb;
   color: #ffffff;
 }
 
@@ -340,7 +341,7 @@
 
 .desktop-meeting-board__results .desktop-section__head span,
 .desktop-meeting-map__list .desktop-section__head span {
-  color: #4f46e5;
+  color: #2563eb;
   font-size: 13px;
   font-weight: 950;
 }
@@ -364,7 +365,7 @@
 }
 
 .desktop-meeting-row:hover {
-  border-color: rgba(79, 70, 229, 0.28);
+  border-color: rgba(37, 99, 235, 0.28);
   background: #fbfcff;
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
   transform: translateY(-1px);
@@ -375,7 +376,7 @@
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: linear-gradient(135deg, #4f46e5, #0ea5e9);
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
   background-position: center;
   background-size: cover;
   color: #ffffff;
@@ -418,7 +419,7 @@
   overflow: hidden;
   border-radius: 999px;
   background: #eef2ff;
-  color: #4f46e5;
+  color: #2563eb;
   padding: 0 9px;
   font-size: 11px;
   font-style: normal;
@@ -445,7 +446,7 @@
 
 .desktop-meeting-status.is-joined {
   background: #eef2ff;
-  color: #4f46e5;
+  color: #2563eb;
 }
 
 .desktop-meeting-status.is-closed {
@@ -495,7 +496,7 @@
 .desktop-meeting-row__meta svg,
 .desktop-meeting-row__people svg {
   flex: 0 0 auto;
-  color: #4f46e5;
+  color: #2563eb;
 }
 
 .desktop-meeting-row__meta b {
@@ -530,7 +531,7 @@
 }
 
 .desktop-meeting-map__canvas svg {
-  color: #4f46e5;
+  color: #2563eb;
 }
 
 .desktop-meeting-map__canvas strong {
@@ -572,7 +573,7 @@
 }
 
 .desktop-meeting-map__list a:hover {
-  border-color: rgba(79, 70, 229, 0.3);
+  border-color: rgba(37, 99, 235, 0.3);
   background: #fbfcff;
 }
 
@@ -643,8 +644,8 @@
   overflow: hidden;
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgba(79, 70, 229, 0.92), rgba(14, 165, 233, 0.86)),
-    #4f46e5;
+    linear-gradient(135deg, rgba(37, 99, 235, 0.92), rgba(14, 165, 233, 0.86)),
+    #2563eb;
   background-position: center;
   background-size: cover;
   color: #ffffff;
@@ -948,7 +949,7 @@
   place-items: center;
   border-radius: 999px;
   background: #eef2ff;
-  color: #4f46e5;
+  color: #2563eb;
 }
 
 .desktop-meeting-detail__host:hover > span,
@@ -1086,7 +1087,7 @@
 }
 
 .desktop-meeting-detail__info svg {
-  color: #4f46e5;
+  color: #2563eb;
 }
 
 .desktop-meeting-detail__info span {
@@ -1134,4 +1135,5 @@
     position: static;
   }
 }
+
 

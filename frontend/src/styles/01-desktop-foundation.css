@@ -1,4 +1,4 @@
-.desktop-main {
+﻿.desktop-main {
   min-width: 0;
   background: #f8fafc;
   padding: 32px;
@@ -520,7 +520,7 @@
   border-radius: 8px;
   background: #ffffff;
   padding: 24px;
-  box-shadow: 0 20px 55px rgba(79, 70, 229, 0.09);
+  box-shadow: 0 20px 55px rgba(37, 99, 235, 0.09);
 }
 
 .section-head,
@@ -541,7 +541,7 @@
 
 .section-head a,
 .section-head span {
-  color: #4f46e5;
+  color: #2563eb;
   font-size: 13px;
   font-weight: 900;
 }
@@ -560,8 +560,8 @@
 }
 
 .primary-small {
-  border: 1px solid #4f46e5;
-  background: #4f46e5;
+  border: 1px solid #2563eb;
+  background: #2563eb;
   color: #fff;
 }
 
@@ -639,8 +639,8 @@
 .desktop-form-grid input:focus,
 .desktop-form-grid select:focus,
 .desktop-form-grid textarea:focus {
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.14);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
 }
 
 .desktop-form-actions--submit-only {
@@ -678,14 +678,14 @@
 .mobile-schedule-toggles input {
   width: 18px;
   height: 18px;
-  accent-color: #4f46e5;
+  accent-color: #2563eb;
 }
 
 .desktop-schedule-toggles label:has(input:checked),
 .mobile-schedule-toggles label:has(input:checked) {
   border-color: #c7d2fe;
   background: #eef2ff;
-  color: #3730a3;
+  color: #1e40af;
 }
 
 .desktop-schedule-toggles label:has(input:disabled),
@@ -707,7 +707,7 @@
 
 .desktop-icon-input > svg {
   flex: 0 0 auto;
-  color: #4f46e5;
+  color: #2563eb;
 }
 
 .desktop-icon-input input,
@@ -754,7 +754,7 @@
 
 .mobile-icon-input > svg {
   flex: 0 0 auto;
-  color: #4f46e5;
+  color: #2563eb;
 }
 
 .mobile-icon-input input,
@@ -877,7 +877,7 @@
 
 .meeting-calendar-trigger svg {
   flex: 0 0 auto;
-  color: #4f46e5;
+  color: #2563eb;
 }
 
 .meeting-calendar-trigger span {
@@ -932,7 +932,7 @@
 
 .meeting-calendar-head button:hover {
   background: #eef2ff;
-  color: #4f46e5;
+  color: #2563eb;
 }
 
 .meeting-calendar-weekdays,
@@ -963,11 +963,11 @@
 
 .meeting-calendar-days button:not(:disabled):hover {
   background: #eef2ff;
-  color: #3730a3;
+  color: #1e40af;
 }
 
 .meeting-calendar-days button.selected {
-  background: #4f46e5;
+  background: #2563eb;
   color: #fff;
 }
 
@@ -1003,7 +1003,7 @@
 
 .desktop-location-picker label > span svg {
   flex: 0 0 auto;
-  color: #4f46e5;
+  color: #2563eb;
 }
 
 .desktop-location-picker input {
@@ -1049,7 +1049,7 @@
 
 .desktop-location-results button > svg {
   grid-row: 1 / 3;
-  color: #4f46e5;
+  color: #2563eb;
   margin-top: 1px;
 }
 
@@ -1156,7 +1156,7 @@
 }
 
 .desktop-location-map-toolbar span svg {
-  color: #4f46e5;
+  color: #2563eb;
 }
 
 .desktop-location-map-toolbar small {
@@ -1204,7 +1204,7 @@
 }
 
 .desktop-location-map-empty svg {
-  color: #4f46e5;
+  color: #2563eb;
   flex: 0 0 auto;
 }
 
@@ -1234,7 +1234,7 @@
 }
 
 .desktop-location-scope svg {
-  color: #4f46e5;
+  color: #2563eb;
   flex: 0 0 auto;
 }
 
@@ -1247,7 +1247,7 @@
 }
 
 .desktop-location-scope strong {
-  color: #312e81;
+  color: #1e3a8a;
   font-weight: 950;
 }
 
@@ -1256,9 +1256,10 @@
   border: 1px solid #c7d2fe;
   border-radius: 7px;
   background: #fff;
-  color: #4338ca;
+  color: #1d4ed8;
   padding: 5px 8px;
   font-size: 12px;
   font-weight: 900;
   cursor: pointer;
 }
+

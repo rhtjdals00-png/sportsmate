@@ -558,7 +558,13 @@ function DesktopMyPage() {
 
       {authOpen === true && (
         <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setAuthOpen(false)}>
-          <section className="profile-auth-modal">
+          <form
+            className="profile-auth-modal"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!authChecking) confirmProtectedEdit();
+            }}
+          >
             <button className="schedule-modal-close" type="button" onClick={() => setAuthOpen(false)}><X size={18} /></button>
             <ShieldCheck size={26} />
             <h2>프로필 수정 확인</h2>
@@ -567,9 +573,9 @@ function DesktopMyPage() {
             {authError && <em className="nickname-check warn">{authError}</em>}
             <div>
               <button className="ghost-btn" type="button" onClick={() => setAuthOpen(false)}>취소</button>
-              <button className="primary-small" type="button" onClick={confirmProtectedEdit} disabled={authChecking}>{authChecking ? "확인 중" : "확인"}</button>
+              <button className="primary-small" type="submit" disabled={authChecking}>{authChecking ? "확인 중" : "확인"}</button>
             </div>
-          </section>
+          </form>
         </div>
       )}
       {authOpen === "account-link" && (
