@@ -1,9 +1,10 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
+from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import ChatRoom, Meeting, Participant, Sport
+from app.models import ChatMessage, ChatRoom, Meeting, Participant, Sport, User
 from app.services.chat_service import ensure_chat_access, send_message
 
 chat_bp = Blueprint("chat", __name__)
@@ -22,6 +23,7 @@ def rooms():
     user_id = int(get_jwt_identity())
     approved_meetings = (
         Meeting.query
+        .options(joinedload(Meeting.chat_room))
         .join(Participant, Participant.meeting_id == Meeting.id)
         .filter(Participant.user_id == user_id, Participant.status == "approved")
         .all()
@@ -37,7 +39,23 @@ def rooms():
         .filter(Participant.user_id == user_id, Participant.status == "approved")
         .all()
     )
-    return jsonify({"items": [room.to_list_dict() for room in items]})
+    room_ids = [room.id for room in items]
+    latest_by_room = {}
+    if room_ids:
+        latest_ids = (
+            db.session.query(func.max(ChatMessage.id).label("id"))
+            .filter(ChatMessage.chat_room_id.in_(room_ids))
+            .group_by(ChatMessage.chat_room_id)
+            .subquery()
+        )
+        latest_messages = (
+            ChatMessage.query
+            .options(joinedload(ChatMessage.sender).joinedload(User.profile))
+            .join(latest_ids, ChatMessage.id == latest_ids.c.id)
+            .all()
+        )
+        latest_by_room = {message.chat_room_id: message for message in latest_messages}
+    return jsonify({"items": [room.to_list_dict(latest_by_room.get(room.id)) for room in items]})
 
 
 @chat_bp.get("/<int:room_id>/messages")

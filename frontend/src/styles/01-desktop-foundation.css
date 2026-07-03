@@ -1116,6 +1116,14 @@
   align-items: stretch;
 }
 
+.desktop-location-workspace.is-map-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.desktop-location-workspace.is-map-only .desktop-location-map-panel {
+  grid-column: 1 / -1;
+}
+
 .desktop-location-search-column {
   display: grid;
   align-content: start;
@@ -1125,7 +1133,7 @@
 
 .desktop-location-map-panel {
   display: grid;
-  grid-template-rows: auto minmax(420px, 1fr);
+  grid-template-rows: auto minmax(440px, 1fr);
   gap: 8px;
   min-width: 0;
 }
@@ -1161,7 +1169,7 @@
 .desktop-location-map {
   position: relative;
   overflow: hidden;
-  min-height: 420px;
+  min-height: 440px;
   border: 1px solid #d8e1ef;
   border-radius: 10px;
   background: #e2e8f0;

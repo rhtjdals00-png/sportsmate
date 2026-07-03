@@ -52,7 +52,7 @@ function AdminMeetingsPage() {
             emoji: m.sport ? (m.sport.name === "축구" ? "⚽" : m.sport.name === "러닝" ? "🏃" : m.sport.name === "테니스" ? "🎾" : m.sport.name === "농구" ? "🏀" : "👟") : "👟",
             date: m.start_at ? new Date(m.start_at).toLocaleDateString().replace(/\s/g, "").replace(/\.$/, "") : "2023.11.04",
             capacity: `${m.current_participants || 0} / ${m.max_participants || 0}`,
-            status: m.status === "closed" || m.current_participants === m.max_participants ? "마감" : "모집중"
+            status: m.status_label || (m.status === "full" || m.current_participants === m.max_participants ? "모집 마감" : m.status === "closed" ? "기간 마감" : m.status === "cancelled" ? "취소됨" : "모집중")
           }));
           setMeetings(formatted);
         }

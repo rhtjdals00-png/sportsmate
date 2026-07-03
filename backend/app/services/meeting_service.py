@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
@@ -13,7 +14,36 @@ def parse_datetime(value):
     return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
 
 
+def close_expired_one_time_meetings(now=None):
+    now = now or datetime.now()
+    expired_updated = (
+        Meeting.query
+        .filter(
+            Meeting.status.in_(["open", "full"]),
+            Meeting.meeting_type == "one_time",
+            or_(
+                and_(Meeting.end_at.isnot(None), Meeting.end_at < now),
+                and_(Meeting.end_at.is_(None), Meeting.start_at.isnot(None), Meeting.start_at < now),
+            )
+        )
+        .update({"status": "closed"}, synchronize_session=False)
+    )
+    full_updated = (
+        Meeting.query
+        .filter(
+            Meeting.status == "open",
+            Meeting.current_participants >= Meeting.max_participants,
+        )
+        .update({"status": "full"}, synchronize_session=False)
+    )
+    updated = expired_updated + full_updated
+    if updated:
+        db.session.commit()
+    return updated
+
+
 def list_meetings(params, current_user_id=None):
+    close_expired_one_time_meetings()
     load_options = [
         joinedload(Meeting.host),
         joinedload(Meeting.sport).joinedload(Sport.category),
@@ -45,11 +75,15 @@ def list_meetings(params, current_user_id=None):
     if params.get("keyword"):
       keyword = f"%{params['keyword']}%"
       query = query.filter(Meeting.title.ilike(keyword) | Meeting.location_name.ilike(keyword) | Meeting.address.ilike(keyword))
+    if params.get("status"):
+      query = query.filter(Meeting.status == params["status"])
+    else:
+      query = query.filter(Meeting.status == "open")
     if params.get("mine") == "host" and current_user_id:
       query = query.filter(Meeting.host_id == current_user_id)
     if params.get("mine") == "joined" and current_user_id:
       query = query.join(Participant).filter(Participant.user_id == current_user_id, Participant.status == "approved")
-    limit = min(int(params.get("limit", 20)), 50)
+    limit = max(1, min(int(params.get("limit", 20)), 50))
     return query.order_by(Meeting.start_at.is_(None), Meeting.start_at.asc()).limit(limit).all()
 
 
@@ -71,7 +105,6 @@ def update_meeting(meeting_id, host_id, data):
         "latitude",
         "longitude",
         "max_participants",
-        "approval_required",
         "cover_image_url",
         "status"
     ]
@@ -107,7 +140,7 @@ def create_meeting(data, host_id):
         start_at=parse_datetime(data.get("start_at")),
         end_at=parse_datetime(data.get("end_at")),
         max_participants=data.get("max_participants", 6),
-        approval_required=data.get("approval_required", True),
+        approval_required=True,
         cover_image_url=data.get("cover_image_url")
     )
     db.session.add(meeting)
@@ -119,6 +152,7 @@ def create_meeting(data, host_id):
 
 
 def join_meeting(meeting_id, user_id, join_message=""):
+    close_expired_one_time_meetings()
     meeting = Meeting.query.get_or_404(meeting_id)
     if meeting.status != "open":
         raise ValueError("모집 중인 모임만 신청할 수 있습니다.")
@@ -127,11 +161,7 @@ def join_meeting(meeting_id, user_id, join_message=""):
     if Participant.query.filter_by(meeting_id=meeting.id, user_id=user_id).first():
         raise ValueError("이미 신청한 모임입니다.")
 
-    status = "pending" if meeting.approval_required else "approved"
-    participant = Participant(meeting_id=meeting.id, user_id=user_id, status=status, join_message=join_message)
-    if status == "approved":
-        participant.approved_at = datetime.utcnow()
-        meeting.current_participants += 1
+    participant = Participant(meeting_id=meeting.id, user_id=user_id, status="pending", join_message=join_message)
     db.session.add(participant)
     create_notification(meeting.host_id, "join_request", "새 참여 신청", f"{meeting.title}에 새 참여 신청이 있습니다.", f"/host/meetings/{meeting.id}/applicants", send_push=False)
     db.session.commit()
@@ -152,6 +182,8 @@ def update_application(meeting_id, applicant_user_id, host_id, status):
         participant.status = "approved"
         participant.approved_at = datetime.utcnow()
         meeting.current_participants += 1
+        if meeting.current_participants >= meeting.max_participants:
+            meeting.status = "full"
         title = "참여 신청 승인"
         message = f"{meeting.title} 참여 신청이 승인되었습니다."
     else:

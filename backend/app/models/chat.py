@@ -16,13 +16,16 @@ class ChatRoom(db.Model, TimestampMixin):
         last_message = self.messages[-1].to_dict() if self.messages else None
         return {"id": self.id, "meeting": self.meeting.to_dict(), "last_message": last_message, "unread_count": 0}
 
-    def to_list_dict(self):
-        last_message = (
-            ChatMessage.query
-            .filter_by(chat_room_id=self.id)
-            .order_by(ChatMessage.created_at.desc())
-            .first()
-        )
+    def to_list_dict(self, last_message=None):
+        if last_message is None:
+            last_message = getattr(self, "_last_message", None)
+        if last_message is None:
+            last_message = (
+                ChatMessage.query
+                .filter_by(chat_room_id=self.id)
+                .order_by(ChatMessage.created_at.desc())
+                .first()
+            )
         meeting = self.meeting
         return {
             "id": self.id,

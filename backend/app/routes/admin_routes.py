@@ -1,20 +1,42 @@
 from datetime import datetime
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
+from sqlalchemy.orm import joinedload
 
-from app.models import Meeting, Report, User, Participant
+from app.models import Meeting, Report, User, Participant, Sport
 
 admin_bp = Blueprint("admin", __name__)
 
 
+def admin_limit(default=200, maximum=500):
+    try:
+        return max(1, min(int(request.args.get("limit", default)), maximum))
+    except (TypeError, ValueError):
+        return default
+
+
+ADMIN_MEETING_OPTIONS = (
+    joinedload(Meeting.host).joinedload(User.profile),
+    joinedload(Meeting.sport).joinedload(Sport.category),
+    joinedload(Meeting.chat_room),
+)
+
+
 @admin_bp.get("/users")
 def users():
-    return jsonify({"items": [user.to_dict() for user in User.query.order_by(User.created_at.desc()).all()]})
+    items = (
+        User.query
+        .options(joinedload(User.profile))
+        .order_by(User.created_at.desc())
+        .limit(admin_limit())
+        .all()
+    )
+    return jsonify({"items": [user.to_dict() for user in items]})
 
 
 @admin_bp.get("/users/<int:user_id>")
 def user_detail(user_id):
-    user = User.query.get_or_404(user_id)
+    user = User.query.options(joinedload(User.profile)).get_or_404(user_id)
     
     now = datetime.utcnow()
     
@@ -34,6 +56,8 @@ def user_detail(user_id):
         Participant.user_id == user.id,
         Participant.status == "approved",
         Meeting.end_at < now
+    ).options(
+        joinedload(Participant.meeting).joinedload(Meeting.sport).joinedload(Sport.category)
     ).order_by(Meeting.end_at.desc()).limit(5).all()
     
     for p in participants:
@@ -54,7 +78,7 @@ def user_detail(user_id):
             "date": r.created_at.strftime("%Y.%m.%d") if r.created_at else "",
             "reason": r.reason
         }
-        for r in Report.query.filter_by(target_type="user", target_id=user.id).all()
+        for r in Report.query.filter_by(target_type="user", target_id=user.id).order_by(Report.created_at.desc()).limit(50).all()
     ]
     
     res_data = user.to_dict()
@@ -71,14 +95,26 @@ def user_detail(user_id):
 
 @admin_bp.get("/meetings")
 def meetings():
-    return jsonify({"items": [meeting.to_dict() for meeting in Meeting.query.order_by(Meeting.created_at.desc()).all()]})
+    items = (
+        Meeting.query
+        .options(*ADMIN_MEETING_OPTIONS)
+        .order_by(Meeting.created_at.desc())
+        .limit(admin_limit())
+        .all()
+    )
+    return jsonify({"items": [meeting.to_dict() for meeting in items]})
 
 
 @admin_bp.get("/meetings/<int:meeting_id>")
 def meeting_detail(meeting_id):
-    meeting = Meeting.query.get_or_404(meeting_id)
+    meeting = Meeting.query.options(*ADMIN_MEETING_OPTIONS).get_or_404(meeting_id)
     from app.models import Participant, Report
-    participants = Participant.query.filter_by(meeting_id=meeting.id, status="approved").all()
+    participants = (
+        Participant.query
+        .options(joinedload(Participant.user).joinedload(User.profile))
+        .filter_by(meeting_id=meeting.id, status="approved")
+        .all()
+    )
     
     reports = [
         {
@@ -86,7 +122,7 @@ def meeting_detail(meeting_id):
             "date": r.created_at.strftime("%Y.%m.%d") if r.created_at else "",
             "reason": r.reason
         }
-        for r in Report.query.filter_by(target_type="meeting", target_id=meeting.id).all()
+        for r in Report.query.filter_by(target_type="meeting", target_id=meeting.id).order_by(Report.created_at.desc()).limit(50).all()
     ]
     
     members_list = [
@@ -119,7 +155,7 @@ def reports():
                 "status": item.status,
                 "created_at": item.created_at.isoformat() if item.created_at else None
             }
-            for item in Report.query.order_by(Report.created_at.desc()).all()
+            for item in Report.query.order_by(Report.created_at.desc()).limit(admin_limit()).all()
         ]
     })
 
@@ -145,7 +181,6 @@ def update_meeting(meeting_id):
         "latitude",
         "longitude",
         "max_participants",
-        "approval_required",
         "cover_image_url",
         "status"
     ]
@@ -213,11 +248,11 @@ def kick_member(meeting_id, user_id):
 def update_user(user_id):
     from flask_jwt_extended import get_jwt_identity
     current_user_id = get_jwt_identity()
-    admin_user = User.query.get(current_user_id)
+    admin_user = User.query.options(joinedload(User.profile)).get(current_user_id)
     if not admin_user or admin_user.role not in ["superadmin", "admin"]:
         return jsonify({"message": "관리자 권한이 필요합니다."}), 403
         
-    user = User.query.get_or_404(user_id)
+    user = User.query.options(joinedload(User.profile)).get_or_404(user_id)
     from flask import request
     from app.extensions import db
     from app.models import UserProfile

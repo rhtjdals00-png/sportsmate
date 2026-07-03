@@ -27,8 +27,7 @@ function MeetingEditPage() {
       address: meeting.address,
       start_at: meeting.start_at?.slice(0, 16),
       end_at: meeting.end_at?.slice(0, 16) || "",
-      max_participants: meeting.max_participants,
-      approval_required: meeting.approval_required
+      max_participants: meeting.max_participants
     });
   }, [detail.data]);
 

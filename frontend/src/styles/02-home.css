@@ -221,18 +221,41 @@
   scroll-behavior: smooth;
   scroll-padding: 2px;
   scroll-snap-type: x proximity;
+  touch-action: pan-y;
   user-select: none;
   -webkit-overflow-scrolling: touch;
 }
 
-.home-card-carousel:active {
+.home-card-carousel:active,
+.home-card-carousel.is-dragging {
   cursor: grabbing;
 }
 
-.home-card-carousel .meeting-card {
+.home-card-drag-target {
   flex: 0 0 calc((100% - 54px) / 4);
   min-width: 252px;
+  cursor: grab;
   scroll-snap-align: start;
+  user-select: none;
+}
+
+.home-card-drag-target:focus-visible {
+  outline: 3px solid rgba(79, 70, 229, 0.24);
+  outline-offset: 3px;
+}
+
+.home-card-drag-target .meeting-card {
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+}
+
+.home-card-drag-target .meeting-card * {
+  user-select: none;
+}
+
+.home-recommend-card {
+  cursor: inherit;
 }
 
 .home-card-carousel::-webkit-scrollbar {
@@ -249,3 +272,30 @@
   background: #c7d2fe;
 }
 
+
+.home-recommend-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.home-recommend-error-actions button,
+.home-recommend-error-actions a {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #4f46e5;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.home-recommend-error-actions button {
+  background: #4f46e5;
+  color: #fff;
+}

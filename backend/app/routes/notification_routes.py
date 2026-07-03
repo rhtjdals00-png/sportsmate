@@ -11,7 +11,17 @@ notification_bp = Blueprint("notifications", __name__)
 @notification_bp.get("/notifications")
 @jwt_required()
 def notifications():
-    items = Notification.query.filter_by(user_id=int(get_jwt_identity())).order_by(Notification.created_at.desc()).all()
+    try:
+        limit = max(1, min(int(request.args.get("limit", 100)), 200))
+    except (TypeError, ValueError):
+        limit = 100
+    items = (
+        Notification.query
+        .filter_by(user_id=int(get_jwt_identity()))
+        .order_by(Notification.created_at.desc())
+        .limit(limit)
+        .all()
+    )
     return jsonify({"items": [item.to_dict() for item in items]})
 
 
