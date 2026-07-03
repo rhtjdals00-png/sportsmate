@@ -26,6 +26,9 @@ def ensure_chat_access(room_id, user_id, include_messages=False):
 
 def send_message(room_id, user_id, content):
     room = ensure_chat_access(room_id, user_id)
+    sender = User.query.options(joinedload(User.profile)).get(user_id)
+    sender_name = sender.profile.nickname if sender and sender.profile and sender.profile.nickname else (sender.name if sender else "참여자")
+    meeting_title = room.meeting.title if room.meeting else "모임"
     message = ChatMessage(chat_room_id=room.id, user_id=user_id, content=content)
     db.session.add(message)
 
@@ -33,10 +36,17 @@ def send_message(room_id, user_id, content):
     for participant in participants:
         if participant.user_id == user_id:
             continue
-        create_notification(participant.user_id, "chat", "새 채팅 메시지", content[:80], f"/chats/{room.id}", send_push=False)
+        create_notification(
+            participant.user_id,
+            "chat",
+            f"{meeting_title} 새 채팅",
+            f"{sender_name}님이 메시지를 보냈습니다. {content[:60]}",
+            f"/chats/{room.id}",
+            send_push=False
+        )
 
     db.session.commit()
     for participant in participants:
         if participant.user_id != user_id:
-            send_web_push(participant.user_id, "새 채팅 메시지", content[:80], f"/chats/{room.id}")
+            send_web_push(participant.user_id, f"{meeting_title} 새 채팅", f"{sender_name}님: {content[:60]}", f"/chats/{room.id}")
     return message

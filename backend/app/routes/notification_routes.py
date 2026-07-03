@@ -1,28 +1,65 @@
+import re
+from datetime import timedelta
+
 from flask import Blueprint, jsonify, request
 from flask import current_app
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
-from app.models import Notification, PushSubscription
+from app.models import ChatMessage, ChatRoom, Meeting, Notification, Participant, PushSubscription
 
 notification_bp = Blueprint("notifications", __name__)
+
+
+def _display_name(user):
+    if not user:
+        return "알 수 없는 사용자"
+    if user.profile and user.profile.nickname:
+        return user.profile.nickname
+    return user.name or user.email or "알 수 없는 사용자"
+
+
+def _enrich_notification(item, user_id):
+    data = item.to_dict()
+    if item.type == "chat" and item.link_url:
+        match = re.search(r"/chats/(\d+)", item.link_url)
+        if match:
+            room_id = int(match.group(1))
+            message = (
+                ChatMessage.query
+                .filter(ChatMessage.chat_room_id == room_id, ChatMessage.user_id != user_id)
+                .filter(ChatMessage.created_at <= item.created_at + timedelta(seconds=10))
+                .order_by(ChatMessage.created_at.desc())
+                .first()
+            )
+            room = ChatRoom.query.get(room_id)
+            meeting_title = room.meeting.title if room and room.meeting else "모임"
+            if message:
+                data["title"] = f"{meeting_title} 새 채팅"
+                data["message"] = f"{_display_name(message.sender)}님이 메시지를 보냈습니다. {message.content[:60]}"
+    if item.type == "join_request" and item.link_url:
+        match = re.search(r"/host/meetings/(\d+)/applicants", item.link_url)
+        if match:
+            meeting_id = int(match.group(1))
+            participant = (
+                Participant.query
+                .filter(Participant.meeting_id == meeting_id)
+                .filter(Participant.requested_at <= item.created_at + timedelta(seconds=10))
+                .order_by(Participant.requested_at.desc())
+                .first()
+            )
+            meeting = Meeting.query.get(meeting_id)
+            if participant and meeting:
+                data["message"] = f"{_display_name(participant.user)}님이 {meeting.title}에 참여 신청을 보냈습니다."
+    return data
 
 
 @notification_bp.get("/notifications")
 @jwt_required()
 def notifications():
-    try:
-        limit = max(1, min(int(request.args.get("limit", 100)), 200))
-    except (TypeError, ValueError):
-        limit = 100
-    items = (
-        Notification.query
-        .filter_by(user_id=int(get_jwt_identity()))
-        .order_by(Notification.created_at.desc())
-        .limit(limit)
-        .all()
-    )
-    return jsonify({"items": [item.to_dict() for item in items]})
+    user_id = int(get_jwt_identity())
+    items = Notification.query.filter_by(user_id=user_id).order_by(Notification.created_at.desc()).all()
+    return jsonify({"items": [_enrich_notification(item, user_id) for item in items]})
 
 
 @notification_bp.patch("/notifications/<int:notification_id>/read")

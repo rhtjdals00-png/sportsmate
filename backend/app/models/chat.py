@@ -1,7 +1,19 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from app.extensions import db
 from .common import TimestampMixin
+
+
+def get_kst_now():
+    kst = timezone(timedelta(hours=9))
+    return datetime.now(kst)
+
+
+def to_kst_iso(value):
+    if not value:
+        return ""
+    return (value + timedelta(hours=9)).isoformat()
+
 
 class ChatRoom(db.Model, TimestampMixin):
     __tablename__ = "chat_rooms"
@@ -12,9 +24,14 @@ class ChatRoom(db.Model, TimestampMixin):
     meeting = db.relationship("Meeting", back_populates="chat_room")
     messages = db.relationship("ChatMessage", back_populates="room", cascade="all, delete-orphan")
 
-    def to_dict(self):
+    def to_dict(self, current_user_id=None):
         last_message = self.messages[-1].to_dict() if self.messages else None
-        return {"id": self.id, "meeting": self.meeting.to_dict(), "last_message": last_message, "unread_count": 0}
+        return {
+            "id": self.id,
+            "meeting": self.meeting.to_dict(current_user_id=current_user_id) if self.meeting else None,
+            "last_message": last_message,
+            "unread_count": 0
+        }
 
     def to_list_dict(self, last_message=None):
         if last_message is None:
@@ -55,5 +72,5 @@ class ChatMessage(db.Model):
             "sender": self.sender.to_dict(),
             "content": self.content,
             "message_type": self.message_type,
-            "created_at": self.created_at.isoformat()
+            "created_at": to_kst_iso(self.created_at)
         }
