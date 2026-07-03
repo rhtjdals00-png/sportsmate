@@ -43,9 +43,10 @@ def rooms():
 @chat_bp.get("/<int:room_id>/messages")
 @jwt_required()
 def messages(room_id):
+    user_id = int(get_jwt_identity())
     try:
-        room = ensure_chat_access(room_id, int(get_jwt_identity()), include_messages=True)
-        return jsonify({"room": room.to_dict(), "items": [message.to_dict() for message in room.messages]})
+        room = ensure_chat_access(room_id, user_id, include_messages=True)
+        return jsonify({"room": room.to_dict(current_user_id=user_id), "items": [message.to_dict() for message in room.messages]})
     except PermissionError as error:
         return jsonify({"message": str(error)}), 403
 

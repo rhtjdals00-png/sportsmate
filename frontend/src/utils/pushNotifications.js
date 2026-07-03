@@ -22,6 +22,9 @@ export function getPushSupportState() {
   if (isIosLike() && !isStandalonePwa()) {
     return { supported: false, reason: "iPhone에서는 Safari 공유 버튼으로 홈 화면에 추가한 뒤 앱에서 알림을 켤 수 있습니다." };
   }
+  if (Notification.permission === "denied") {
+    return { supported: false, reason: "브라우저에서 알림 권한이 차단되어 있습니다. 사이트 설정에서 알림 권한을 허용으로 바꾼 뒤 다시 시도해주세요." };
+  }
   return { supported: true, reason: "" };
 }
 

@@ -94,6 +94,7 @@ def link_email_account():
     # 2026-07-02: 소셜 계정이 이메일 로그인 연동을 완료하면 provider에 email을 표시.
     user.name = name
     user.phone_number = phone_number
+    user.set_password(password)
     user.provider = append_provider(user.provider, "email")
     db.session.commit()
     return jsonify({"user": user.to_dict()})

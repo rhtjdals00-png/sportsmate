@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.extensions import db
 from .common import TimestampMixin
@@ -18,6 +18,7 @@ class Notification(db.Model):
     user = db.relationship("User")
 
     def to_dict(self):
+        created_at = self.created_at + timedelta(hours=9) if self.created_at else None
         return {
             "id": self.id,
             "type": self.type,
@@ -25,7 +26,7 @@ class Notification(db.Model):
             "message": self.message,
             "link_url": self.link_url,
             "is_read": self.is_read,
-            "created_at": self.created_at.isoformat()
+            "created_at": created_at.isoformat() if created_at else ""
         }
 
 class PushSubscription(db.Model, TimestampMixin):

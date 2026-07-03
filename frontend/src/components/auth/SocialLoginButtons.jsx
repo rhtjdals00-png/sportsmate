@@ -11,7 +11,7 @@ function normalizeAuthProvider(provider) {
 }
 
 function SocialLoginButtons() {
-  const redirectTo = import.meta.env.VITE_AUTH_REDIRECT_URL || `${window.location.origin}/auth/callback`;
+  const redirectTo = `${window.location.origin}/auth/callback`;
 
   const startSocialLogin = async (provider) => {
     const nextProvider = normalizeAuthProvider(provider);
