@@ -33,6 +33,8 @@ function MobileNotifications() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [pushMessage, setPushMessage] = useState("");
   const [pushLoading, setPushLoading] = useState(false);
+  const [locationMessage, setLocationMessage] = useState("");
+  const [locationLoading, setLocationLoading] = useState(false);
   const notifications = useAsync(() => notificationApi.list(), [refreshKey]);
   const pushSupport = useMemo(() => getPushSupportState(), []);
 
@@ -54,6 +56,27 @@ function MobileNotifications() {
     }
   };
 
+  const enableLocation = () => {
+    setLocationMessage("");
+    if (!("geolocation" in navigator)) {
+      setLocationMessage("현재 브라우저에서는 위치 권한을 사용할 수 없습니다.");
+      return;
+    }
+    setLocationLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      () => {
+        setLocationMessage("위치 권한이 허용되었습니다.");
+        setLocationLoading(false);
+      },
+      (error) => {
+        const denied = error.code === error.PERMISSION_DENIED;
+        setLocationMessage(denied ? "위치 권한이 차단되었습니다. 브라우저 사이트 설정에서 위치 권한을 허용해주세요." : "위치 정보를 확인하지 못했습니다.");
+        setLocationLoading(false);
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+    );
+  };
+
   return (
     <>
       <MobileHeader title="알림" />
@@ -69,6 +92,10 @@ function MobileNotifications() {
             {pushLoading ? "설정 중" : "알림 켜기"}
           </Button>
         )}
+        <Button type="button" variant="secondary" onClick={enableLocation} disabled={locationLoading}>
+          {locationLoading ? "확인 중" : "위치 권한 확인"}
+        </Button>
+        {locationMessage ? <span>{locationMessage}</span> : null}
       </section>
       <div className="notification-list">
         {(notifications.data?.items || []).map((item) => {

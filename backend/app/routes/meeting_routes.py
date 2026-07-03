@@ -19,6 +19,11 @@ def current_user_id_optional():
         return None
 
 
+def can_manage_meeting_tools(meeting_id, user_id):
+    participant = Participant.query.filter_by(meeting_id=meeting_id, user_id=user_id, status="approved").first()
+    return bool(participant and participant.role in ["host", "cohost", "subhost", "assistant"])
+
+
 def host_summary(host):
     profile = host.profile
     hosted_query = Meeting.query.filter(Meeting.host_id == host.id)
@@ -219,8 +224,9 @@ def votes(meeting_id):
 @jwt_required()
 def post_vote(meeting_id):
     meeting = Meeting.query.get_or_404(meeting_id)
-    if meeting.host_id != int(get_jwt_identity()):
-        return jsonify({"message": "방장만 투표를 생성할 수 있습니다."}), 403
+    user_id = int(get_jwt_identity())
+    if meeting.host_id != user_id and not can_manage_meeting_tools(meeting_id, user_id):
+        return jsonify({"message": "모임 운영진만 투표를 생성할 수 있습니다."}), 403
     data = request.get_json() or {}
     vote = Vote(meeting_id=meeting_id, title=data.get("title", ""))
     db.session.add(vote)

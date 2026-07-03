@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Activity, Bike, CalendarPlus, CircleDot, Dribbble, Dumbbell, Footprints, Goal, MapPinned, Mountain, Search, ShieldCheck, Sparkles, Trophy, Volleyball, Waves } from "lucide-react";
+import { CalendarPlus, Dumbbell, MapPinned, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { useMemo } from "react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import MeetingCard from "../../meeting/shared/MeetingCard.jsx";
@@ -8,30 +8,13 @@ import { meetingApi } from "../../../api/meetingApi";
 import { sportApi } from "../../../api/sportApi";
 import { useAsync } from "../../../hooks/useAsync";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
-
-const sportIconRules = [
-  { pattern: /축구|풋살|족구/, icon: Goal },
-  { pattern: /농구/, icon: Dribbble },
-  { pattern: /배구/, icon: Volleyball },
-  { pattern: /야구/, icon: CircleDot },
-  { pattern: /배드민턴|탁구|테니스|스쿼시/, icon: Activity },
-  { pattern: /러닝|마라톤|산책/, icon: Footprints },
-  { pattern: /등산|트레킹/, icon: Mountain },
-  { pattern: /자전거|라이딩/, icon: Bike },
-  { pattern: /헬스|크로스핏|클라이밍|요가|필라테스|피트니스/, icon: Dumbbell },
-  { pattern: /수영|서핑/, icon: Waves },
-  { pattern: /볼링|당구|골프/, icon: Trophy }
-];
+import { getSportIcon } from "../../../utils/sportIcons.jsx";
 
 function splitPreferredSports(value) {
   return (value || "")
     .split(",")
     .map((sport) => sport.trim())
     .filter(Boolean);
-}
-
-function getSportIcon(sportName) {
-  return sportIconRules.find((rule) => rule.pattern.test(sportName))?.icon || Dumbbell;
 }
 
 function isAdminUser(user) {
@@ -109,11 +92,15 @@ function MobileHome() {
           <MapPinned size={18} />
         </div>
         <div className="category-scroll">
-          {(categories.data?.items || []).map((category) => (
-            <Link key={category.id} to={`/meetings?category=${category.id}`}>
-              {category.name}
-            </Link>
-          ))}
+          {(categories.data?.items || []).map((category) => {
+            const Icon = getSportIcon(category.name);
+            return (
+              <Link key={category.id} to={`/meetings?category=${category.id}`}>
+                <Icon size={17} />
+                <span>{category.name}</span>
+              </Link>
+            );
+          })}
         </div>
       </section>
 

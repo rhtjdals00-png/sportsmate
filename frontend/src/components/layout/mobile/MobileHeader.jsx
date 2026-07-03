@@ -7,6 +7,7 @@ const titles = {
   "/chats": "채팅",
   "/notifications": "알림",
   "/mypage": "마이페이지",
+  "/settings": "앱 설정",
   "/host": "방장 관리"
 };
 
@@ -40,7 +41,7 @@ function MobileHeader({ title, showLogo = false, actions = null, showBack = true
           <Link to="/notifications" aria-label="알림">
             <Bell size={20} />
           </Link>
-          <Link to="/mypage/profile" aria-label="설정">
+          <Link to="/settings" aria-label="앱 설정">
             <Settings size={20} />
           </Link>
         </div>

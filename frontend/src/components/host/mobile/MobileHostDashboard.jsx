@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { BarChart3, CalendarCheck, ClipboardCheck, Megaphone, UserCheck, Users, Vote } from "lucide-react";
+import { BarChart3, CalendarCheck, ClipboardCheck, UserCheck, Users, Vote } from "lucide-react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import EmptyState from "../../common/EmptyState.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
@@ -54,14 +54,6 @@ function MobileHostDashboard() {
         ) : (
           <EmptyState title="운영 중인 모임이 없습니다." description="모임을 만들면 신청자와 출석, 공지를 이곳에서 관리할 수 있습니다." />
         )}
-      </section>
-      <section className="detail-card host-tool-panel">
-        <h2>모임 운영 도구</h2>
-        <div>
-          <Link to={meetingItems[0] ? `/host/meetings/${meetingItems[0].id}` : "/host"}><Megaphone size={20} />공지 작성</Link>
-          <Link to={meetingItems[0] ? `/host/meetings/${meetingItems[0].id}/vote` : "/host"}><Vote size={20} />투표 만들기</Link>
-          <Link to={meetingItems[0] ? `/host/meetings/${meetingItems[0].id}/attendance` : "/host"}><ClipboardCheck size={20} />출석 체크</Link>
-        </div>
       </section>
     </>
   );

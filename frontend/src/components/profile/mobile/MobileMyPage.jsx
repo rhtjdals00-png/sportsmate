@@ -159,7 +159,7 @@ function MobileMyPage() {
           <span>후기</span>
           <strong>{reviews.loading ? "확인 중" : `${reviewCount}개`}</strong>
         </div>
-        <Link to="/mypage/meetings">
+        <Link to="/mypage/meetings?tab=pending">
           <CalendarCheck size={18} />
           <span>승인 대기</span>
           <strong>{meetings.loading ? "확인 중" : `${pendingCount}건`}</strong>
@@ -173,11 +173,10 @@ function MobileMyPage() {
           </Link>
         ) : null}
         <Link to="/mypage/profile">프로필 수정</Link>
-        <Link to="/mypage/meetings">내가 만든 모임 <span>{hostedCount}</span></Link>
-        <Link to="/mypage/meetings">참여 중인 모임 <span>{joinedCount}</span></Link>
+        <Link to="/mypage/meetings?tab=hosted">내가 만든 모임 <span>{hostedCount}</span></Link>
+        <Link to="/mypage/meetings?tab=joined">참여 중인 모임 <span>{joinedCount}</span></Link>
         <Link to="/meetings">관심 모임</Link>
         <Link to="/mypage/reviews">내 후기 <span>{reviewCount}</span></Link>
-        <Link to="/host">방장 관리</Link>
       </div>
       <Button variant="secondary" onClick={handleLogout}>로그아웃</Button>
     </>
