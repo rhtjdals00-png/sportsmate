@@ -1,13 +1,24 @@
+from datetime import datetime, timezone
+
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required, verify_jwt_in_request
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import Attendance, Meeting, Notice, Participant, Review, Sport, User, Vote, VoteOption, VoteResponse
+from app.models import Attendance, ChatMessage, ChatRoom, Meeting, Notice, Participant, Review, Sport, User, Vote, VoteOption, VoteResponse
 from app.services.meeting_service import close_expired_one_time_meetings, create_meeting, create_review, join_meeting, list_meetings, update_application, update_meeting
 
 meeting_bp = Blueprint("meetings", __name__)
+
+
+@meeting_bp.get("/config")
+def get_meeting_config():
+    from app.utils.settings import load_system_settings
+    settings = load_system_settings()
+    return jsonify({
+        "defaultMaxParticipants": settings.get("defaultMaxParticipants", 6)
+    })
 
 
 def current_user_id_optional():
@@ -22,6 +33,18 @@ def current_user_id_optional():
 def can_manage_meeting_tools(meeting_id, user_id):
     participant = Participant.query.filter_by(meeting_id=meeting_id, user_id=user_id, status="approved").first()
     return bool(participant and participant.role in ["host", "cohost", "subhost", "assistant"])
+
+
+def parse_client_datetime(value):
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo:
+            parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        return parsed
+    except ValueError:
+        return None
 
 
 def host_summary(host):
@@ -198,6 +221,8 @@ def notices(meeting_id):
 @jwt_required()
 def post_notice(meeting_id):
     meeting = Meeting.query.get_or_404(meeting_id)
+    if meeting.status == "suspended":
+        return jsonify({"message": "폐쇄(비활성화) 처리된 모임입니다."}), 400
     if meeting.host_id != int(get_jwt_identity()):
         return jsonify({"message": "방장만 공지를 작성할 수 있습니다."}), 403
     data = request.get_json() or {}
@@ -208,6 +233,16 @@ def post_notice(meeting_id):
         is_pinned=data.get("is_pinned", False)
     )
     db.session.add(notice)
+    chat_room = meeting.chat_room or ChatRoom(meeting_id=meeting.id)
+    if not meeting.chat_room:
+        db.session.add(chat_room)
+        db.session.flush()
+    db.session.add(ChatMessage(
+        chat_room_id=chat_room.id,
+        user_id=user_id,
+        content=f"공지가 등록되었습니다: {notice.title}",
+        message_type="notice",
+    ))
     db.session.commit()
     return jsonify({"notice": notice.to_dict()}), 201
 
@@ -228,16 +263,38 @@ def votes(meeting_id):
         )
     selected_options = {}
     if current_user_id and items:
-        selected_options = dict(
+        selected_rows = (
             db.session.query(VoteResponse.vote_id, VoteResponse.option_id)
             .filter(VoteResponse.vote_id.in_([item.id for item in items]))
             .filter(VoteResponse.user_id == current_user_id)
             .all()
         )
+        for vote_id, option_id in selected_rows:
+            selected_options.setdefault(vote_id, []).append(option_id)
+    voter_map = {}
+    if items:
+        voter_rows = (
+            db.session.query(VoteResponse.vote_id, VoteResponse.option_id, User.id, User.name, User.nickname, User.user_tag)
+            .join(User, User.id == VoteResponse.user_id)
+            .filter(VoteResponse.vote_id.in_([item.id for item in items]))
+            .all()
+        )
+        for vote_id, option_id, user_id, name, nickname, user_tag in voter_rows:
+            voter_map.setdefault(vote_id, {}).setdefault(option_id, []).append({
+                "id": user_id,
+                "name": name,
+                "nickname": nickname,
+                "user_tag": user_tag,
+            })
     result = []
     for item in items:
         data = item.to_dict(response_counts)
-        data["selected_option_id"] = selected_options.get(item.id)
+        selected_ids = selected_options.get(item.id, [])
+        data["selected_option_ids"] = selected_ids
+        data["selected_option_id"] = selected_ids[0] if selected_ids else None
+        if not item.is_anonymous:
+            for option in data["options"]:
+                option["voters"] = voter_map.get(item.id, {}).get(option["id"], [])
         result.append(data)
     return jsonify({"items": result})
 
@@ -246,11 +303,19 @@ def votes(meeting_id):
 @jwt_required()
 def post_vote(meeting_id):
     meeting = Meeting.query.get_or_404(meeting_id)
+    if meeting.status == "suspended":
+        return jsonify({"message": "폐쇄(비활성화) 처리된 모임입니다."}), 400
     user_id = int(get_jwt_identity())
     if meeting.host_id != user_id and not can_manage_meeting_tools(meeting_id, user_id):
         return jsonify({"message": "모임 운영진만 투표를 생성할 수 있습니다."}), 403
     data = request.get_json() or {}
-    vote = Vote(meeting_id=meeting_id, title=data.get("title", ""))
+    vote = Vote(
+        meeting_id=meeting_id,
+        title=data.get("title", ""),
+        ends_at=parse_client_datetime(data.get("ends_at")),
+        allow_multiple=bool(data.get("allow_multiple", False)),
+        is_anonymous=bool(data.get("is_anonymous", True)),
+    )
     db.session.add(vote)
     db.session.flush()
     for option_text in data.get("options", []):
@@ -296,6 +361,8 @@ def attendance(meeting_id):
 @jwt_required()
 def check_attendance(meeting_id):
     meeting = Meeting.query.get_or_404(meeting_id)
+    if meeting.status == "suspended":
+        return jsonify({"message": "폐쇄(비활성화) 처리된 모임입니다."}), 400
     current_user_id = int(get_jwt_identity())
     data = request.get_json(silent=True) or {}
     target_user_id = int(data.get("user_id") or current_user_id)

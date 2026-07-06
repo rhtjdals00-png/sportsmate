@@ -32,6 +32,7 @@ function formatRating(value) {
 }
 
 function validDate(value) {
+  if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 }
@@ -106,10 +107,10 @@ function MobileMyPage() {
     ...(meetings.data?.hosted || []).map((meeting) => normalizeScheduleMeeting(meeting, "host")),
     ...(meetings.data?.joined || []).map((meeting) => normalizeScheduleMeeting(meeting, "joined"))
   ].filter((item) => validDate(item.start_at)).sort((a, b) => new Date(a.start_at) - new Date(b.start_at)), [meetings.data]);
-  const monthBase = useMemo(() => validDate(scheduleItems[0]?.start_at) || new Date(), [scheduleItems]);
+  const monthBase = useMemo(() => new Date(), []);
   const [selectedScheduleKey, setSelectedScheduleKey] = useState("");
   const calendarCells = useMemo(() => buildMonthCells(monthBase, scheduleItems), [monthBase, scheduleItems]);
-  const activeScheduleKey = selectedScheduleKey || dateKey(scheduleItems[0]?.start_at);
+  const activeScheduleKey = selectedScheduleKey || dateKey(new Date());
   const selectedSchedules = scheduleItems.filter((item) => dateKey(item.start_at) === activeScheduleKey);
 
   const handleLogout = async () => {

@@ -97,7 +97,10 @@ def sync_user():
     try:
         return jsonify(sync_supabase_user(request.get_json() or {}))
     except ValueError as error:
-        return jsonify({"message": str(error)}), 400
+        msg = str(error)
+        if "서비스 점검" in msg:
+            return jsonify({"message": msg, "maintenance": True}), 503
+        return jsonify({"message": msg}), 400
 
 
 @auth_bp.post("/register")
@@ -113,7 +116,10 @@ def login():
     try:
         return jsonify(login_user(request.get_json() or {}))
     except ValueError as error:
-        return jsonify({"message": str(error)}), 401
+        msg = str(error)
+        if "서비스 점검" in msg:
+            return jsonify({"message": msg, "maintenance": True}), 503
+        return jsonify({"message": msg}), 401
 
 
 @auth_bp.post("/social-login")
@@ -121,7 +127,10 @@ def social_login():
     try:
         return jsonify(login_with_supabase(request.get_json() or {}))
     except ValueError as error:
-        return jsonify({"message": str(error)}), 401
+        msg = str(error)
+        if "서비스 점검" in msg:
+            return jsonify({"message": msg, "maintenance": True}), 503
+        return jsonify({"message": msg}), 401
 
 
 @auth_bp.post("/logout")

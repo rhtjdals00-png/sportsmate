@@ -227,7 +227,7 @@ function buildCalendarCells(monthDate, items) {
   });
 }
 
-function CalendarModal({ open, items, onClose, highlightMeetingId, highlightChatRoomId }) {
+function CalendarModal({ open, items, onClose, highlightMeetingId, highlightChatRoomId, autoOpenHighlightedDay }) {
   const [monthDate, setMonthDate] = useState(() => calendarBaseDate(items));
   const [selectedDay, setSelectedDay] = useState(null);
   const cells = useMemo(() => buildCalendarCells(monthDate, items), [monthDate, items]);
@@ -256,10 +256,10 @@ function CalendarModal({ open, items, onClose, highlightMeetingId, highlightChat
   }, [open, items, highlightedItem]);
 
   useEffect(() => {
-    if (!open || !highlightedItem) return;
+    if (!open || !highlightedItem || !autoOpenHighlightedDay) return;
     const matchedCell = cells.find((cell) => cell.items.some(isHighlightedItem));
     if (matchedCell) setSelectedDay(matchedCell);
-  }, [cells, highlightedItem, open]);
+  }, [autoOpenHighlightedDay, cells, highlightedItem, open]);
 
   if (!open) return null;
   return (
@@ -354,7 +354,7 @@ function DesktopMyPage() {
   const [authChecking, setAuthChecking] = useState(false);
   const [savingIntro, setSavingIntro] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [calendarHighlight, setCalendarHighlight] = useState({ meetingId: "", chatRoomId: "" });
+  const [calendarHighlight, setCalendarHighlight] = useState({ meetingId: "", chatRoomId: "", autoOpen: false });
 
   useEffect(() => {
     const panel = searchParams.get("panel");
@@ -365,7 +365,8 @@ function DesktopMyPage() {
       setActiveActivity("schedule");
       setCalendarHighlight({
         meetingId: searchParams.get("meeting") || "",
-        chatRoomId: searchParams.get("chat") || ""
+        chatRoomId: searchParams.get("chat") || "",
+        autoOpen: true
       });
       setCalendarOpen(true);
       const nextParams = new URLSearchParams(searchParams);
@@ -583,7 +584,7 @@ function DesktopMyPage() {
             </div>
             <div className={`profile-schedule-actions ${activeActivity !== "schedule" ? "is-placeholder" : ""}`}>
               {activeActivity === "schedule" ? (
-                <button className="calendar-expand-btn" type="button" onClick={() => setCalendarOpen(true)}><CalendarDays size={15} />달력으로 보기</button>
+                <button className="calendar-expand-btn" type="button" onClick={() => { setCalendarHighlight((current) => ({ ...current, autoOpen: false })); setCalendarOpen(true); }}><CalendarDays size={15} />달력으로 보기</button>
               ) : (
                 <span aria-hidden="true">달력으로 보기</span>
               )}
@@ -655,9 +656,10 @@ function DesktopMyPage() {
       <CalendarModal
         open={calendarOpen}
         items={scheduled}
-        onClose={() => setCalendarOpen(false)}
+        onClose={() => { setCalendarOpen(false); setCalendarHighlight((current) => ({ ...current, autoOpen: false })); }}
         highlightMeetingId={calendarHighlight.meetingId}
         highlightChatRoomId={calendarHighlight.chatRoomId}
+        autoOpenHighlightedDay={calendarHighlight.autoOpen}
       />
     </div>
   );

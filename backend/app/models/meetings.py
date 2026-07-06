@@ -25,6 +25,7 @@ class Meeting(db.Model, TimestampMixin):
     max_participants = db.Column(db.Integer, default=6, nullable=False)
     current_participants = db.Column(db.Integer, default=1, nullable=False)
     status = db.Column(db.String(30), default="open", nullable=False)
+    suspended_at = db.Column(db.DateTime)
     approval_required = db.Column(db.Boolean, default=True, nullable=False)
     cover_image_url = db.Column(db.String(500))
     view_count = db.Column(db.Integer, default=0, nullable=False)
@@ -43,16 +44,23 @@ class Meeting(db.Model, TimestampMixin):
             return "기간 마감"
         if self.status == "cancelled":
             return "취소됨"
+        if self.status == "suspended":
+            return "폐쇄 유예"
         return "마감"
 
     def sync_status(self):
-        if self.status not in ["closed", "cancelled"]:
+        if self.status not in ["closed", "cancelled", "suspended"]:
             if self.current_participants >= self.max_participants:
                 self.status = "full"
             else:
                 self.status = "open"
 
     def to_dict(self, current_user_id=None):
+        remaining_days = None
+        if self.status == "suspended" and self.suspended_at:
+            elapsed = datetime.utcnow() - self.suspended_at
+            remaining_days = max(0, 30 - elapsed.days)
+            
         data = {
             "id": self.id,
             "host": self.host.to_dict(),
@@ -77,6 +85,8 @@ class Meeting(db.Model, TimestampMixin):
             "cover_image_url": self.cover_image_url,
             "view_count": self.view_count,
             "chat_room_id": self.chat_room.id if self.chat_room else None,
+            "suspended_at": self.suspended_at.isoformat() if self.suspended_at else None,
+            "remaining_days": remaining_days,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
@@ -94,6 +104,12 @@ class Meeting(db.Model, TimestampMixin):
         participant = None
         if current_user_id:
             participant = next((item for item in self.participants if item.user_id == current_user_id), None)
+            
+        remaining_days = None
+        if self.status == "suspended" and self.suspended_at:
+            elapsed = datetime.utcnow() - self.suspended_at
+            remaining_days = max(0, 30 - elapsed.days)
+            
         return {
             "id": self.id,
             "sport": self.sport.to_dict() if self.sport else None,
@@ -111,6 +127,8 @@ class Meeting(db.Model, TimestampMixin):
             "cover_image_url": self.cover_image_url,
             "distance_km": getattr(self, "_distance_km", None),
             "chat_room_id": self.chat_room.id if self.chat_room else None,
+            "suspended_at": self.suspended_at.isoformat() if self.suspended_at else None,
+            "remaining_days": remaining_days,
             "host": {
                 "id": self.host.id,
                 "nickname": self.host.nickname,

@@ -209,23 +209,29 @@ def update_meeting(meeting_id):
 def delete_meeting(meeting_id):
     meeting = Meeting.query.get_or_404(meeting_id)
     from app.extensions import db
-    from app.models import Review, Notice, Vote, VoteOption, VoteResponse, Attendance
+    from datetime import datetime
     
-    # Clean up child tables to avoid FK constraint issues
-    Review.query.filter_by(meeting_id=meeting.id).delete()
-    Notice.query.filter_by(meeting_id=meeting.id).delete()
+    meeting.status = "suspended"
+    meeting.suspended_at = datetime.utcnow()
     
-    votes = Vote.query.filter_by(meeting_id=meeting.id).all()
-    for vote in votes:
-        VoteResponse.query.filter_by(vote_id=vote.id).delete()
-        VoteOption.query.filter_by(vote_id=vote.id).delete()
-        db.session.delete(vote)
-        
-    Attendance.query.filter_by(meeting_id=meeting.id).delete()
-    
-    db.session.delete(meeting)
     db.session.commit()
     return jsonify({"success": True})
+
+
+@admin_bp.post("/meetings/<int:meeting_id>/restore")
+def restore_meeting(meeting_id):
+    meeting = Meeting.query.get_or_404(meeting_id)
+    from app.extensions import db
+    
+    if meeting.status != "suspended":
+        return jsonify({"message": "폐쇄 유예 상태가 아닌 모임은 복구할 수 없습니다."}), 400
+        
+    meeting.status = "open"
+    meeting.suspended_at = None
+    meeting.sync_status()
+    
+    db.session.commit()
+    return jsonify({"success": True, "meeting": meeting.to_dict()})
 
 
 @admin_bp.delete("/meetings/<int:meeting_id>/members/<int:user_id>")
@@ -342,3 +348,70 @@ def update_user(user_id):
             
     db.session.commit()
     return jsonify({"user": user.to_dict()})
+
+
+@admin_bp.get("/settings")
+@jwt_required()
+def get_settings():
+    from app.utils.settings import load_system_settings, load_settings_logs
+    settings = load_system_settings()
+    logs = load_settings_logs()
+    last_sync = logs[-1] if logs else None
+    return jsonify({
+        "settings": settings,
+        "last_sync": last_sync
+    })
+
+
+@admin_bp.post("/settings")
+@jwt_required()
+def update_settings():
+    from app.utils.settings import load_system_settings, save_system_settings, add_settings_log
+    from flask_jwt_extended import get_jwt_identity
+    from app.models import User
+    
+    current_admin_id = get_jwt_identity()
+    admin_user = User.query.get(int(current_admin_id))
+    admin_name = admin_user.nickname or admin_user.name or admin_user.email if admin_user else "알 수 없는 관리자"
+
+    data = request.get_json() or {}
+    current_settings = load_system_settings()
+    
+    changes = []
+    labels = {
+        "siteName": "서비스명",
+        "adminEmail": "대표 이메일",
+        "maintenanceMode": "점검 모드",
+        "suspensionGracePeriod": "폐쇄 유예 기간",
+        "defaultMaxParticipants": "기본 개설 최대 정원",
+        "mannerRatingDecrement": "신고 감점량",
+        "autoBanReportCount": "자동 정지 기준",
+        "sessionExpiryMinutes": "세션 만료 시간",
+        "termsVersion": "약관 버전",
+        "supabaseUrl": "Supabase 주소",
+        "kakaoApiKey": "Kakao API 키",
+        "googleClientId": "Google 클라이언트 ID"
+    }
+    
+    for k, v in data.items():
+        if k in current_settings and current_settings[k] != v:
+            label = labels.get(k, k)
+            old_val = "활성" if current_settings[k] is True else ("비활성" if current_settings[k] is False else current_settings[k])
+            new_val = "활성" if v is True else ("비활성" if v is False else v)
+            changes.append(f"{label} 변경: {old_val} ➔ {new_val}")
+            current_settings[k] = v
+
+    if not changes:
+        return jsonify({"success": True, "settings": current_settings})
+
+    if save_system_settings(current_settings):
+        add_settings_log(admin_name, changes)
+        return jsonify({"success": True, "settings": current_settings})
+    return jsonify({"message": "설정 저장 실패"}), 500
+
+
+@admin_bp.get("/settings/logs")
+@jwt_required()
+def get_settings_logs():
+    from app.utils.settings import load_settings_logs
+    return jsonify(load_settings_logs())

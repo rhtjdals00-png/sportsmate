@@ -48,6 +48,9 @@ class Vote(db.Model, TimestampMixin):
     id = db.Column(db.Integer, primary_key=True)
     meeting_id = db.Column(db.Integer, db.ForeignKey("meetings.id"), nullable=False)
     title = db.Column(db.String(120), nullable=False)
+    ends_at = db.Column(db.DateTime, nullable=True)
+    allow_multiple = db.Column(db.Boolean, default=False, nullable=False)
+    is_anonymous = db.Column(db.Boolean, default=True, nullable=False)
     options = db.relationship("VoteOption", backref="vote", cascade="all, delete-orphan")
 
     def to_dict(self, response_counts=None):
@@ -56,6 +59,9 @@ class Vote(db.Model, TimestampMixin):
             "id": self.id,
             "meeting_id": self.meeting_id,
             "title": self.title,
+            "ends_at": self.ends_at.isoformat() if self.ends_at else None,
+            "allow_multiple": self.allow_multiple,
+            "is_anonymous": self.is_anonymous,
             "options": [option.to_dict(response_counts.get(option.id)) for option in self.options],
             "created_at": self.created_at.isoformat()
         }
@@ -79,6 +85,7 @@ class VoteResponse(db.Model):
     vote_id = db.Column(db.Integer, db.ForeignKey("votes.id"), nullable=False)
     option_id = db.Column(db.Integer, db.ForeignKey("vote_options.id"), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    user = db.relationship("User")
 
 class Attendance(db.Model):
     __tablename__ = "attendances"

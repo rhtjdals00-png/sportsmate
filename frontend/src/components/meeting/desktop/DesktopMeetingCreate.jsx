@@ -341,6 +341,7 @@ function DesktopMeetingCreate() {
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationScope, setLocationScope] = useState("");
   const [mapClientId, setMapClientId] = useState("");
+  const [maxLimit, setMaxLimit] = useState(6);
   const locationSearchRequestRef = useRef(0);
   const selectedLocationKeywordRef = useRef("");
   const locationReverseRequestRef = useRef(0);
@@ -355,6 +356,14 @@ function DesktopMeetingCreate() {
     locationApi.mapConfig()
       .then((data) => setMapClientId(data.naver_dynamic_map_client_id || ""))
       .catch(() => setMapClientId(""));
+
+    meetingApi.getConfig()
+      .then((data) => {
+        if (data && data.defaultMaxParticipants) {
+          setMaxLimit(data.defaultMaxParticipants);
+        }
+      })
+      .catch((err) => console.error("Failed to load meeting config", err));
   }, []);
 
 
@@ -600,6 +609,11 @@ function DesktopMeetingCreate() {
       if (endAt <= startAt) return alert("종료 시간은 시작 시간 이후로 설정해주세요.");
     }
 
+    const maxPartCount = Number(form.max_participants);
+    if (maxPartCount > maxLimit) {
+      return alert(`개설 최대 정원은 ${maxLimit}명 이하로만 설정 가능합니다.`);
+    }
+
     const data = await meetingApi.create({
       ...form,
       purpose: trimmedPurpose,
@@ -607,7 +621,7 @@ function DesktopMeetingCreate() {
       end_at: hasEndSchedule ? combineDateTime(form.end_date, form.end_time) : null,
       meeting_type: hasEndSchedule || !hasStartSchedule ? "regular" : form.meeting_type,
       sport_id: Number(form.sport_id),
-      max_participants: Number(form.max_participants)
+      max_participants: maxPartCount
     });
     navigate(`/meetings/${data.meeting.id}`);
   };
@@ -678,7 +692,7 @@ function DesktopMeetingCreate() {
                 <DesktopLocationMap clientId={mapClientId} selectedLocation={form} results={locationResults} onSelect={selectLocation} />
               </div>
             </div>
-            <label>최대 인원<input min="2" type="number" value={form.max_participants} onChange={(event) => update("max_participants", event.target.value)} /></label>
+            <label>최대 인원<input min="2" max={maxLimit} type="number" value={form.max_participants} onChange={(event) => update("max_participants", event.target.value)} /></label>
           </div>
         </section>
 

@@ -4176,33 +4176,33 @@
 .mobile-shell .profile-setup {
   width: 100%;
   max-width: none;
-  gap: 14px;
+  gap: 12px;
 }
 
 .mobile-shell .profile-setup__intro,
 .mobile-shell .profile-setup__panel {
   border: 1px solid var(--mobile-soft-border);
-  border-radius: 22px;
+  border-radius: 20px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
-  padding: 18px;
+  padding: 14px;
 }
 
 .mobile-shell .profile-setup__intro {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .mobile-shell .profile-setup__intro h1 {
-  font-size: 23px;
-  line-height: 1.25;
+  font-size: 18px;
+  line-height: 1.3;
   word-break: keep-all;
 }
 
 .mobile-shell .profile-setup__intro p:not(.profile-setup__eyebrow) {
-  font-size: 14px;
-  font-weight: 800;
-  line-height: 1.65;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 .mobile-shell .profile-setup__status {
@@ -4267,9 +4267,15 @@
 }
 
 .mobile-shell .profile-setup__sport-levels label,
-.mobile-shell .profile-setup__security,
 .mobile-shell .profile-setup__actions {
   grid-template-columns: 1fr;
+}
+
+.mobile-shell .profile-setup__security {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 14px;
 }
 
 .mobile-shell .profile-setup__security button,
@@ -4938,44 +4944,73 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 18px;
-  background: #ffffff;
-  color: var(--mobile-text);
+  gap: 16px;
+  padding: 20px 18px;
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 55%, #4f46e5 100%);
+  border-radius: 20px;
+  box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.35);
+  color: #ffffff;
+  margin-bottom: 16px;
 }
 
 .mobile-shell .profile-card.profile-card--stitch > img {
-  width: 66px;
-  height: 66px;
-  flex: 0 0 66px;
-  border-radius: 22px;
+  width: 72px;
+  height: 72px;
+  flex: 0 0 72px;
+  border-radius: 24px;
+  border: 3px solid #fbbf24;
   object-fit: cover;
-  background: #eef2ff;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .mobile-shell .profile-card.profile-card--stitch > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   min-width: 0;
   flex: 1;
-  color: var(--mobile-text);
+  color: #ffffff;
 }
 
 .mobile-shell .profile-card.profile-card--stitch strong {
   display: block;
-  color: #0f172a;
-  font-size: 18px;
-  font-weight: 900;
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 800;
   line-height: 1.25;
+  text-align: left;
 }
 
 .mobile-shell .profile-card.profile-card--stitch p {
-  margin: 5px 0 8px;
-  color: #64748b;
+  margin: 4px 0 8px;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  color: #c7d2fe;
   font-size: 13px;
   font-weight: 700;
+  text-align: left;
 }
 
 .mobile-shell .mobile-profile-intro-slot {
+  display: flex !important;
+  flex-direction: column;
+  align-items: flex-start;
+  align-self: stretch !important;
   margin-bottom: 9px;
+  width: 100%;
+}
+
+.mobile-shell .mobile-profile-intro-edit {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+}
+
+.mobile-shell .mobile-profile-intro-edit input {
+  width: 100% !important;
+  box-sizing: border-box;
 }
 
 .mobile-shell .mobile-profile-intro-quick {
@@ -4985,11 +5020,16 @@
   gap: 5px;
   border: 0;
   border-radius: 999px;
-  background: #f1f5f9;
-  color: #475569;
-  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  padding: 6px 12px;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
+  transition: background 0.2s ease;
+}
+
+.mobile-shell .mobile-profile-intro-quick:hover {
+  background: rgba(255, 255, 255, 0.20);
 }
 
 .mobile-shell .mobile-profile-intro-quick span {
@@ -4998,10 +5038,15 @@
   white-space: nowrap;
 }
 
+.mobile-shell .mobile-profile-intro-quick svg {
+  color: #fbbf24;
+}
+
 .mobile-shell .profile-sport-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  justify-content: flex-start;
 }
 
 .mobile-shell .profile-sport-tags span {
@@ -5009,23 +5054,139 @@
   align-items: center;
   gap: 5px;
   border-radius: 999px;
-  background: #eef2ff;
-  color: var(--mobile-primary);
-  padding: 6px 9px;
-  font-size: 12px;
-  font-weight: 900;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.mobile-shell .profile-sport-tags svg {
+  color: #fbbf24;
 }
 
 .mobile-shell .profile-edit-shortcut {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 16px;
+  right: 16px;
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   place-items: center;
-  border-radius: 13px;
-  background: #f8fafc;
-  color: #475569;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
   text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.mobile-shell .profile-edit-shortcut:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+/* 모바일용 카테고리 가로 정렬 및 스크롤 */
+.mobile-shell .profile-setup__sports .profile-setup__categories {
+  display: flex !important;
+  flex-direction: row !important;
+  overflow-x: auto !important;
+  flex-wrap: nowrap !important;
+  gap: 5px !important;
+  padding-bottom: 6px !important;
+  scrollbar-width: none;
+}
+
+.mobile-shell .profile-setup__sports .profile-setup__categories::-webkit-scrollbar {
+  display: none !important;
+}
+
+.mobile-shell .profile-setup__sports .profile-setup__categories button {
+  width: auto !important;
+  flex: 0 0 auto !important;
+  border-radius: 999px !important;
+  padding: 5px 9px !important;
+  font-size: 11.5px !important;
+  min-height: auto !important;
+  height: 31px !important;
+  border: 1px solid var(--mobile-soft-border) !important;
+  background: #ffffff !important;
+  color: #52647e !important;
+}
+
+.mobile-shell .profile-setup__sports .profile-setup__categories button.is-active {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+/* 모바일용 스포츠 그리드 바디 간격 조정 */
+.mobile-shell .profile-setup__sport-body {
+  gap: 6px !important;
+}
+
+/* 스르륵 애니메이션을 위한 스타일 */
+.mobile-shell .profile-setup__sport-list-wrapper {
+  display: grid !important;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease-out, visibility 0.25s;
+}
+
+.mobile-shell .profile-setup__sport-body.is-open .profile-setup__sport-list-wrapper {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  margin-top: 0px !important;
+}
+
+.mobile-shell .profile-setup__sport-list-wrapper > div {
+  overflow: hidden;
+}
+
+/* 모바일 하단 리스트 패딩 미세조정 */
+.mobile-shell .profile-setup__sports .profile-setup__sport-list {
+  min-height: auto !important;
+  padding: 8px 4px 4px !important;
+  background: transparent !important;
+}
+
+/* 모바일 카드 내 제목 및 텍스트 폰트 크기 줄임 */
+.mobile-shell .profile-setup__grid-section h2,
+.mobile-shell .profile-setup__section-head h2 {
+  font-size: 15px !important;
+  font-weight: 800 !important;
+}
+
+.mobile-shell .profile-setup__grid-section p,
+.mobile-shell .profile-setup__section-head p {
+  font-size: 12px !important;
+  margin-top: 4px !important;
+  line-height: 1.45 !important;
+}
+
+.mobile-shell .profile-setup__section-head {
+  gap: 12px !important;
+  margin-bottom: 12px !important;
+}
+
+/* 1개 선택 배지 텍스트 줄바꿈 방지 */
+.mobile-shell .profile-setup__section-head > span {
+  white-space: nowrap !important;
+  font-size: 11px !important;
+  padding: 4px 8px !important;
+  height: fit-content !important;
+  align-self: center !important;
+}
+
+/* 세부 종목 버튼 및 선택된 종목 배지 크기 축소 */
+.mobile-shell .profile-setup__sport-list button,
+.mobile-shell .profile-setup__selected button {
+  min-height: auto !important;
+  height: 32px !important;
+  padding: 0 12px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
 }

@@ -164,7 +164,7 @@ function MobileProfileEditPage() {
     [displayCategories, displaySports]
   );
 
-  const selectedCategory = groupedSports.find((category) => String(category.id) === String(openCategoryId)) || groupedSports[0];
+  const selectedCategory = openCategoryId ? (groupedSports.find((category) => String(category.id) === String(openCategoryId)) || null) : null;
   const selectedRegion = koreaRegions.find((region) => region.name === form.region_sido);
   const selectedLevelLabel = levelOptions.find((level) => level.value === form.exercise_level)?.label || levelOptions[0].label;
 
@@ -373,10 +373,6 @@ function MobileProfileEditPage() {
                 <span>{T.phone}</span>
                 <input value={form.phone_number} onChange={(event) => updateField("phone_number", event.target.value)} placeholder={T.optional} />
               </label>
-              <label className="profile-setup__wide-field">
-                <span>{T.bio}</span>
-                <textarea value={form.bio} onChange={(event) => updateField("bio", event.target.value)} placeholder={T.bioPlaceholder} rows={3} />
-              </label>
             </div>
           </section>
 
@@ -465,33 +461,37 @@ function MobileProfileEditPage() {
               </div>
               <span>{form.preferred_sports.length}{T.selectedUnit}</span>
             </div>
-            <div className="profile-setup__sport-body">
+            <div className={`profile-setup__sport-body ${selectedCategory ? "is-open" : ""}`}>
               <nav className="profile-setup__categories" aria-label={T.categoryLabel}>
                 {groupedSports.map((category) => (
                   <button
                     type="button"
                     key={category.id}
                     className={(selectedCategory?.id === category.id) ? "is-active" : ""}
-                    onClick={() => setOpenCategoryId(category.id)}
+                    onClick={() => setOpenCategoryId((prev) => (prev === category.id ? null : category.id))}
                   >
                     {category.name}
                   </button>
                 ))}
               </nav>
-              <div className="profile-setup__sport-list">
-                {(selectedCategory?.sports || []).map((sport) => {
-                  const checked = form.preferred_sports.includes(sport.name);
-                  return (
-                    <button
-                      type="button"
-                      key={sport.id}
-                      className={checked ? "is-selected" : ""}
-                      onClick={() => toggleSport(sport.name)}
-                    >
-                      {sport.name}
-                    </button>
-                  );
-                })}
+              <div className="profile-setup__sport-list-wrapper">
+                <div>
+                  <div className="profile-setup__sport-list">
+                    {(selectedCategory?.sports || []).map((sport) => {
+                      const checked = form.preferred_sports.includes(sport.name);
+                      return (
+                        <button
+                          type="button"
+                          key={sport.id}
+                          className={checked ? "is-selected" : ""}
+                          onClick={() => toggleSport(sport.name)}
+                        >
+                          {sport.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
             <label className="profile-setup__level-toggle">

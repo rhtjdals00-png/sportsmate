@@ -13,6 +13,32 @@ const mockReports = [
 function AdminReportsPage() {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchField, setSearchField] = useState("all");
+  const [tempSearchQuery, setTempSearchQuery] = useState("");
+  const [activeSearchField, setActiveSearchField] = useState("all");
+  const [activeSearchQuery, setActiveSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const handleSearch = () => {
+    setActiveSearchField(searchField);
+    setActiveSearchQuery(tempSearchQuery);
+    setCurrentPage(1);
+  };
+
+  const handleReset = () => {
+    setSearchField("all");
+    setTempSearchQuery("");
+    setActiveSearchField("all");
+    setActiveSearchQuery("");
+    setCurrentPage(1);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      handleSearch();
+    }
+  };
 
   useEffect(() => {
     async function fetchReports() {
@@ -40,6 +66,11 @@ function AdminReportsPage() {
     fetchReports();
   }, []);
 
+  // Reset to first page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeSearchQuery, activeSearchField]);
+
   const handleProcess = (reportId) => {
     setReports(prev => prev.map(r => {
       if (r.id === reportId) {
@@ -54,10 +85,128 @@ function AdminReportsPage() {
     }));
   };
 
+  const filteredReports = reports.filter(r => {
+    if (!activeSearchQuery) return true;
+    const query = activeSearchQuery.toLowerCase();
+    
+    const typeText = r.type ? r.type.toLowerCase() : "";
+    const targetText = r.target ? r.target.toLowerCase() : "";
+    const reporterText = r.reporter ? r.reporter.toLowerCase() : "";
+    const reasonText = r.reason ? r.reason.toLowerCase() : "";
+    const statusText = r.status ? r.status.toLowerCase() : "";
+
+    if (activeSearchField === "type") {
+      return typeText.includes(query);
+    } else if (activeSearchField === "target") {
+      return targetText.includes(query);
+    } else if (activeSearchField === "reporter") {
+      return reporterText.includes(query);
+    } else if (activeSearchField === "reason") {
+      return reasonText.includes(query);
+    } else if (activeSearchField === "status") {
+      return statusText.includes(query);
+    } else {
+      return (
+        typeText.includes(query) ||
+        targetText.includes(query) ||
+        reporterText.includes(query) ||
+        reasonText.includes(query) ||
+        statusText.includes(query)
+      );
+    }
+  });
+
+  // Pagination slice
+  const totalPages = Math.max(1, Math.ceil(filteredReports.length / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedReports = filteredReports.slice(startIndex, startIndex + itemsPerPage);
+
   return (
     <div className="admin-panel-card">
-      <div className="admin-panel-card__header">
-        <h2 className="admin-panel-card__title">전체 신고 내역 목록 ({reports.length}건)</h2>
+      <div className="admin-panel-card__header" style={{ display: "flex", justifyContent: "flex-start", alignItems: "center", flexWrap: "wrap", gap: "24px" }}>
+        <h2 className="admin-panel-card__title" style={{ margin: 0 }}>전체 신고 내역 목록 ({filteredReports.length}건)</h2>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <select 
+            value={searchField} 
+            onChange={(e) => setSearchField(e.target.value)}
+            style={{ 
+              padding: "6px 12px", 
+              borderRadius: "6px", 
+              border: "1px solid #cbd5e1", 
+              fontSize: "14px", 
+              backgroundColor: "#ffffff",
+              color: "#334155",
+              outline: "none"
+            }}
+          >
+            <option value="all">전체</option>
+            <option value="type">유형</option>
+            <option value="target">신고 대상</option>
+            <option value="reporter">신고자</option>
+            <option value="reason">상세 사유</option>
+            <option value="status">상태</option>
+          </select>
+          <input 
+            type="text" 
+            placeholder="검색어 입력..." 
+            value={tempSearchQuery}
+            onChange={(e) => setTempSearchQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+            style={{ 
+              padding: "6px 12px", 
+              borderRadius: "6px", 
+              border: "1px solid #cbd5e1", 
+              fontSize: "14px", 
+              width: "350px",
+              outline: "none",
+              color: "#334155"
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleSearch}
+            style={{
+              padding: "6px 16px",
+              borderRadius: "6px",
+              border: "none",
+              backgroundColor: "#3b82f6",
+              color: "#ffffff",
+              fontSize: "14px",
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "background-color 0.15s ease"
+            }}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#2563eb"}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#3b82f6"}
+          >
+            검색하기
+          </button>
+          <button
+            type="button"
+            onClick={handleReset}
+            style={{
+              padding: "6px 16px",
+              borderRadius: "6px",
+              border: "1px solid #cbd5e1",
+              backgroundColor: "#f8fafc",
+              color: "#475569",
+              fontSize: "14px",
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "all 0.15s ease"
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = "#f1f5f9";
+              e.currentTarget.style.borderColor = "#94a3b8";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = "#f8fafc";
+              e.currentTarget.style.borderColor = "#cbd5e1";
+            }}
+          >
+            초기화
+          </button>
+        </div>
       </div>
       <div className="admin-panel-card__body">
         <div className="admin-table-wrapper">
@@ -97,14 +246,14 @@ function AdminReportsPage() {
                     </div>
                   </td>
                 </tr>
-              ) : reports.length === 0 ? (
+              ) : paginatedReports.length === 0 ? (
                 <tr>
                   <td colSpan="8" style={{ textAlign: "center", color: "#64748b", padding: "48px 24px" }}>
                     접수된 신고 내역이 없습니다.
                   </td>
                 </tr>
               ) : (
-                reports.map((r) => {
+                paginatedReports.map((r) => {
                   const isWaiting = r.status === "대기 중";
                   const badgeType = 
                     r.type === "욕설" 
@@ -161,6 +310,71 @@ function AdminReportsPage() {
             </tbody>
           </table>
         </div>
+
+        {totalPages >= 1 && (
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "6px", marginTop: "24px" }}>
+            <button
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+              style={{
+                padding: "6px 12px",
+                borderRadius: "6px",
+                border: "1px solid #e2e8f0",
+                backgroundColor: currentPage === 1 ? "#f8fafc" : "#ffffff",
+                color: currentPage === 1 ? "#94a3b8" : "#475569",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                transition: "all 0.15s ease"
+              }}
+            >
+              이전
+            </button>
+            
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+              <button
+                key={pageNum}
+                onClick={() => setCurrentPage(pageNum)}
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "6px",
+                  border: "1px solid",
+                  borderColor: currentPage === pageNum ? "#2563eb" : "#e2e8f0",
+                  backgroundColor: currentPage === pageNum ? "#2563eb" : "#ffffff",
+                  color: currentPage === pageNum ? "#ffffff" : "#475569",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                {pageNum}
+              </button>
+            ))}
+
+            <button
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+              style={{
+                padding: "6px 12px",
+                borderRadius: "6px",
+                border: "1px solid #e2e8f0",
+                backgroundColor: currentPage === totalPages ? "#f8fafc" : "#ffffff",
+                color: currentPage === totalPages ? "#94a3b8" : "#475569",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: currentPage === totalPages ? "not-allowed" : "pointer",
+                transition: "all 0.15s ease"
+              }}
+            >
+              다음
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
