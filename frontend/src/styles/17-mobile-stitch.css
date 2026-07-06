@@ -857,7 +857,7 @@
 
 .mobile-shell .message-row {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 8px;
 }
 
@@ -866,19 +866,29 @@
 }
 
 .mobile-shell .message-avatar {
+  display: flex;
+  width: 34px;
+  flex: 0 0 34px;
+  justify-content: center;
+}
+
+.mobile-shell .message-avatar button {
   display: grid;
   width: 32px;
   height: 32px;
-  flex: 0 0 auto;
-  place-items: center;
+  min-width: 0;
   border: 1px solid var(--mobile-soft-border);
+  padding: 0;
+  place-items: center;
   border-radius: 999px;
   background: #fff;
   color: var(--mobile-primary);
   overflow: hidden;
+  box-shadow: none;
 }
 
 .mobile-shell .message-avatar img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1128,28 +1138,63 @@
   font-weight: 800;
 }
 
-.mobile-shell .chat-profile-sheet__actions {
+.mobile-shell .chat-profile-sheet__notice {
+  border-radius: 14px;
+  background: #f8faff;
+  padding: 8px 10px;
+  color: #52647e;
+}
+
+.mobile-shell .chat-profile-sheet__facts {
   display: grid;
   width: 100%;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
+  gap: 8px;
   margin-top: 10px;
 }
 
-.mobile-shell .chat-profile-sheet__actions button {
-  min-height: 46px;
-  border: 1px solid rgba(79, 70, 229, 0.16);
+.mobile-shell .chat-profile-sheet__facts span {
+  display: grid;
+  gap: 4px;
   border-radius: 16px;
-  background: #eef2ff;
-  color: var(--mobile-primary);
-  font-size: 14px;
+  background: #f8faff;
+  color: #334155;
+  padding: 10px;
+  font-size: 13px;
   font-weight: 900;
 }
 
-.mobile-shell .chat-profile-sheet__actions button:last-child {
-  border-color: rgba(239, 68, 68, 0.18);
-  background: #fef2f2;
-  color: #dc2626;
+.mobile-shell .chat-profile-sheet__facts b {
+  color: var(--mobile-muted);
+  font-size: 11px;
+}
+
+.mobile-shell .chat-profile-sheet__sports {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: center;
+}
+
+.mobile-shell .chat-profile-sheet__sports span {
+  border-radius: 999px;
+  background: #eef2ff;
+  color: var(--mobile-primary);
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.mobile-shell .chat-profile-sheet__close {
+  width: 100%;
+  min-height: 46px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--mobile-primary);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
 }
 
 .mobile-shell .chat-vote-modal {
@@ -1234,11 +1279,20 @@
   color: var(--mobile-primary);
 }
 
-.mobile-shell .chat-vote-modal__error {
+.mobile-shell .chat-vote-modal__error,
+.mobile-shell .chat-vote-modal__notice {
   border-radius: 14px;
+  padding: 9px 11px;
+}
+
+.mobile-shell .chat-vote-modal__error {
   background: #fef2f2;
   color: #b91c1c;
-  padding: 9px 11px;
+}
+
+.mobile-shell .chat-vote-modal__notice {
+  background: #ecfdf5;
+  color: #047857;
 }
 
 .mobile-shell .chat-vote-create {
@@ -1318,6 +1372,12 @@
   padding: 0 12px;
   font-size: 13px;
   font-weight: 900;
+}
+
+.mobile-shell .chat-vote-list button.selected {
+  border-color: rgba(79, 70, 229, 0.36);
+  background: #eef2ff;
+  color: var(--mobile-primary);
 }
 
 .mobile-shell .chat-vote-list em {
@@ -1912,6 +1972,132 @@
   font-weight: 900;
 }
 
+.mobile-shell .mobile-my-calendar {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 16px;
+  border: 1px solid var(--mobile-soft-border);
+  border-radius: 22px;
+  background: #fff;
+  padding: 16px;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.055);
+}
+
+.mobile-shell .mobile-my-calendar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobile-shell .mobile-my-calendar__head span {
+  color: var(--mobile-primary);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.mobile-shell .mobile-my-calendar__head h2 {
+  margin: 3px 0 0;
+  color: var(--mobile-text);
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.mobile-shell .mobile-my-calendar__head a {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: var(--mobile-primary);
+  padding: 8px 11px;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.mobile-shell .mobile-my-calendar__week,
+.mobile-shell .mobile-my-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.mobile-shell .mobile-my-calendar__week span {
+  color: var(--mobile-muted);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.mobile-shell .mobile-my-calendar__grid button,
+.mobile-shell .mobile-my-calendar__grid > span {
+  position: relative;
+  min-height: 40px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  background: #f8fafc;
+  color: var(--mobile-muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.mobile-shell .mobile-my-calendar__grid button.has-event {
+  border-color: rgba(79, 70, 229, 0.2);
+  background: #eef2ff;
+  color: var(--mobile-primary);
+}
+
+.mobile-shell .mobile-my-calendar__grid button.is-active {
+  background: var(--mobile-primary);
+  color: #fff;
+}
+
+.mobile-shell .mobile-my-calendar__grid button:disabled {
+  opacity: 1;
+}
+
+.mobile-shell .mobile-my-calendar__grid em {
+  position: absolute;
+  right: 5px;
+  bottom: 4px;
+  font-size: 10px;
+  font-style: normal;
+}
+
+.mobile-shell .mobile-my-calendar__list {
+  display: grid;
+  gap: 8px;
+}
+
+.mobile-shell .mobile-my-calendar__list a,
+.mobile-shell .mobile-my-calendar__list p {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  border-radius: 16px;
+  background: #f8faff;
+  color: inherit;
+  padding: 12px;
+  text-decoration: none;
+}
+
+.mobile-shell .mobile-my-calendar__list span {
+  color: var(--mobile-primary);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.mobile-shell .mobile-my-calendar__list strong {
+  color: var(--mobile-text);
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.mobile-shell .mobile-my-calendar__list p {
+  color: var(--mobile-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .mobile-shell .menu-list {
   gap: 10px;
 }
@@ -2498,6 +2684,120 @@
 
 .mobile-shell .auth-form .button {
   width: 100%;
+}
+
+.mobile-shell .mobile-auth-inline-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 74px;
+  gap: 8px;
+  align-items: center;
+}
+
+.mobile-shell .mobile-auth-inline-action input {
+  min-width: 0;
+}
+
+.mobile-shell .mobile-auth-inline-action button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 46px;
+  border: 1px solid rgba(79, 70, 229, 0.22);
+  border-radius: 14px;
+  background: #eef2ff;
+  color: var(--mobile-primary);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.mobile-shell .mobile-auth-inline-action button:disabled {
+  opacity: 0.55;
+}
+
+.mobile-shell .mobile-availability-message {
+  display: block;
+  margin-top: 8px;
+  color: var(--mobile-muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.mobile-shell .mobile-availability-message.is-ok {
+  color: #2563eb;
+}
+
+.mobile-shell .mobile-availability-message.is-error {
+  color: #dc2626;
+}
+
+.mobile-shell .mobile-password-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.mobile-shell .mobile-password-rules span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  border: 1px solid var(--mobile-border);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: var(--mobile-muted);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.mobile-shell .mobile-password-rules span.is-passed {
+  border-color: rgba(79, 70, 229, 0.24);
+  background: #eef2ff;
+  color: var(--mobile-primary);
+}
+
+.mobile-shell .mobile-password-match {
+  margin: -4px 0 0;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.mobile-shell .mobile-password-match.is-valid {
+  color: #2563eb;
+}
+
+.mobile-shell .mobile-password-match.is-invalid {
+  color: #dc2626;
+}
+
+.mobile-shell .mobile-auth-agreements {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--mobile-border);
+  border-radius: 18px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.mobile-shell .mobile-auth-agreements label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 9px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.mobile-shell .mobile-auth-agreements input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--mobile-primary);
 }
 
 .mobile-shell .mobile-auth-message {
@@ -3166,7 +3466,7 @@
 
 .mobile-shell .mobile-map-search {
   display: grid;
-  grid-template-columns: 1fr 46px;
+  grid-template-columns: minmax(0, 1fr) 58px 46px;
   gap: 9px;
 }
 
@@ -3183,12 +3483,31 @@
 
 .mobile-shell .mobile-map-search button {
   display: grid;
+  min-width: 0;
   border: 0;
   border-radius: 16px;
   background: var(--mobile-primary);
   color: #fff;
+  font-size: 13px;
+  font-weight: 900;
   place-items: center;
   box-shadow: 0 12px 22px rgba(79, 70, 229, 0.24);
+}
+
+.mobile-shell .mobile-map-search button:last-child {
+  background: #eef2ff;
+  color: var(--mobile-primary);
+  box-shadow: none;
+}
+
+.mobile-shell .mobile-map-status {
+  margin: -4px 0 0;
+  border-radius: 14px;
+  background: #f8faff;
+  color: #52647e;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .mobile-shell .mobile-map-canvas {
@@ -3628,7 +3947,7 @@
 .mobile-shell .message-row {
   display: flex;
   gap: 8px;
-  align-items: flex-end;
+  align-items: flex-start;
 }
 
 .mobile-shell .message-row.mine {
@@ -3636,29 +3955,29 @@
 }
 
 .mobile-shell .message-avatar {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 auto;
-  place-items: center;
-  overflow: hidden;
-  border-radius: 999px;
-  background: #e0f2fe;
-  color: #0369a1;
+  display: flex;
+  width: 34px;
+  flex: 0 0 34px;
+  justify-content: center;
 }
 
 .mobile-shell .message-avatar button {
   display: grid;
-  width: 100%;
-  height: 100%;
+  width: 32px;
+  height: 32px;
+  min-width: 0;
   place-items: center;
-  border: 0;
-  background: transparent;
-  color: inherit;
+  overflow: hidden;
+  border: 1px solid var(--mobile-soft-border);
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #0369a1;
   padding: 0;
+  box-shadow: none;
 }
 
 .mobile-shell .message-avatar img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -3992,11 +4311,18 @@
 
 .mobile-shell .mobile-admin-meetings {
   display: grid;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   gap: 14px;
+  overflow-x: hidden;
 }
 
 .mobile-shell .mobile-admin-list-head {
   display: grid;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   gap: 12px;
   border: 1px solid var(--mobile-soft-border);
   border-radius: 22px;
@@ -4018,7 +4344,9 @@
 
 .mobile-shell .mobile-admin-list-head > div {
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr) 58px;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(78px, 0.42fr) minmax(0, 1fr) 54px;
   gap: 8px;
 }
 
@@ -4036,6 +4364,11 @@
 }
 
 .mobile-shell .mobile-admin-list-head button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 42px;
   border: 0;
   border-radius: 14px;
   background: var(--mobile-primary);
@@ -4051,6 +4384,10 @@
 
 .mobile-shell .mobile-admin-meeting-list article {
   display: grid;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
   gap: 10px;
   border: 1px solid var(--mobile-soft-border);
   border-radius: 20px;
@@ -4088,12 +4425,14 @@
 .mobile-shell .mobile-admin-meeting-list dl {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
   gap: 8px;
   margin: 0;
 }
 
 .mobile-shell .mobile-admin-meeting-list dl div {
   display: grid;
+  min-width: 0;
   gap: 3px;
   border-radius: 14px;
   background: #f8faff;
@@ -4137,6 +4476,26 @@
   text-align: center;
   font-size: 14px;
   font-weight: 900;
+}
+
+@media (max-width: 380px) {
+  .mobile-shell .mobile-admin-list-head {
+    padding: 14px;
+  }
+
+  .mobile-shell .mobile-admin-list-head h2 {
+    font-size: 18px;
+  }
+
+  .mobile-shell .mobile-admin-list-head > div {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-shell .mobile-admin-list-head select,
+  .mobile-shell .mobile-admin-list-head input,
+  .mobile-shell .mobile-admin-list-head button {
+    width: 100%;
+  }
 }
 
 .mobile-shell .mobile-sport-category-tabs {
@@ -4438,4 +4797,235 @@
   border: 1px solid #dbe5f3;
   background: #fff;
   color: #52647e;
+}
+
+.mobile-my-calendar {
+  margin: 16px 20px;
+  padding: 18px;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+}
+
+.mobile-my-calendar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.mobile-my-calendar__head span {
+  display: block;
+  margin-bottom: 4px;
+  color: #6366f1;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mobile-my-calendar__head h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.mobile-my-calendar__head a {
+  color: #4f46e5;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.mobile-my-calendar__week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 8px;
+  color: #94a3b8;
+  font-size: 12px;
+  text-align: center;
+}
+
+.mobile-my-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.mobile-my-calendar__grid > span,
+.mobile-my-calendar__grid button {
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 14px;
+  background: #f8fafc;
+  color: #334155;
+  font: inherit;
+}
+
+.mobile-my-calendar__grid button {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.mobile-my-calendar__grid button.has-event {
+  background: #eef2ff;
+  color: #4338ca;
+  font-weight: 800;
+}
+
+.mobile-my-calendar__grid button.is-active {
+  background: #4f46e5;
+  color: #ffffff;
+}
+
+.mobile-my-calendar__grid button em {
+  position: absolute;
+  right: 5px;
+  bottom: 4px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: currentColor;
+  color: #ffffff;
+  font-size: 10px;
+  font-style: normal;
+  line-height: 16px;
+}
+
+.mobile-my-calendar__grid button.is-active em {
+  background: #ffffff;
+  color: #4f46e5;
+}
+
+.mobile-my-calendar__list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.mobile-my-calendar__list a {
+  display: block;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: #f8fafc;
+  color: inherit;
+  text-decoration: none;
+}
+
+.mobile-my-calendar__list span {
+  display: block;
+  margin-bottom: 4px;
+  color: #6366f1;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mobile-my-calendar__list strong {
+  display: block;
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.mobile-my-calendar__list p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+/* 마이페이지 프로필 카드 가독성 보정 */
+.mobile-shell .profile-card.profile-card--stitch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  background: #ffffff;
+  color: var(--mobile-text);
+}
+
+.mobile-shell .profile-card.profile-card--stitch > img {
+  width: 66px;
+  height: 66px;
+  flex: 0 0 66px;
+  border-radius: 22px;
+  object-fit: cover;
+  background: #eef2ff;
+}
+
+.mobile-shell .profile-card.profile-card--stitch > div {
+  min-width: 0;
+  flex: 1;
+  color: var(--mobile-text);
+}
+
+.mobile-shell .profile-card.profile-card--stitch strong {
+  display: block;
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.mobile-shell .profile-card.profile-card--stitch p {
+  margin: 5px 0 8px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mobile-shell .mobile-profile-intro-slot {
+  margin-bottom: 9px;
+}
+
+.mobile-shell .mobile-profile-intro-quick {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mobile-shell .mobile-profile-intro-quick span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-shell .profile-sport-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mobile-shell .profile-sport-tags span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: var(--mobile-primary);
+  padding: 6px 9px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.mobile-shell .profile-edit-shortcut {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 13px;
+  background: #f8fafc;
+  color: #475569;
+  text-decoration: none;
 }

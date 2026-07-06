@@ -8,6 +8,7 @@ from urllib.request import Request, urlopen
 
 from flask import current_app
 from flask_jwt_extended import create_access_token
+from sqlalchemy import text
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
@@ -66,12 +67,26 @@ def merge_auth_providers(primary_provider, existing_provider=""):
     return ",".join(providers) or "email"
 
 
+def supabase_auth_user_exists(auth_user_id):
+    try:
+      result = db.session.execute(
+          text("select 1 from auth.users where id = :auth_user_id limit 1"),
+          {"auth_user_id": auth_user_id},
+      )
+      return result.first() is not None
+    except Exception as error:
+      db.session.rollback()
+      current_app.logger.warning("Supabase auth.users id check failed: %s", error)
+      raise ValueError("Supabase Auth 계정을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.") from error
+
+
 def sync_supabase_user(data):
     auth_user_id = (data.get("auth_user_id") or data.get("id") or "").strip()
     email, name, phone_number, nickname = normalize_profile_payload(data)
     provider = (data.get("provider") or "email").strip() or "email"
     profile_image_url = (data.get("profile_image_url") or data.get("avatar_url") or "").strip() or None
     provider_id = (data.get("provider_id") or "").strip() or auth_user_id
+    force_profile_update = bool(data.get("force_profile_update"))
 
     if not auth_user_id:
         raise ValueError("Supabase Auth 사용자 ID가 필요합니다.")
@@ -81,6 +96,8 @@ def sync_supabase_user(data):
         name = nickname or email.split("@")[0]
     if not nickname:
         raise ValueError("닉네임을 입력해주세요.")
+    if not supabase_auth_user_exists(auth_user_id):
+        raise ValueError("Supabase Auth 계정이 존재하지 않습니다. 다시 로그인해주세요.")
 
     user = User.query.options(joinedload(User.profile)).filter_by(auth_user_id=auth_user_id).first()
     if not user:
@@ -97,9 +114,9 @@ def sync_supabase_user(data):
         user.auth_user_id = user.auth_user_id or auth_user_id
         user.email = email
         # 2026-07-02: Supabase 동기화는 초기값 보강에만 쓰고, SportsMate DB에서 관리하는 계정 정보는 보존.
-        user.name = user.name or name
-        user.phone_number = user.phone_number or phone_number
-        user.nickname = user.nickname or nickname
+        user.name = name if force_profile_update and name else (user.name or name)
+        user.phone_number = phone_number if force_profile_update and phone_number else (user.phone_number or phone_number)
+        user.nickname = nickname if force_profile_update and nickname else (user.nickname or nickname)
         user.user_tag = user.user_tag or generate_user_tag()
 
     # 2026-07-02: Supabase 재동기화가 google,email 같은 SportsMate 연동 상태를 google로 덮어쓰지 않도록 보존.
@@ -259,6 +276,19 @@ def is_profile_complete(user):
         and profile.region != "서울"
         and (profile.bio or profile.preferred_sports)
     )
+
+
+def should_prompt_profile_intro(user):
+    if is_profile_complete(user):
+        return False
+    return not user.profile_intro_dismissed
+
+
 def build_auth_response(user):
     token = create_access_token(identity=str(user.id))
-    return {"access_token": token, "user": user.to_dict()}
+    return {
+        "access_token": token,
+        "user": user.to_dict(),
+        "profile_complete": is_profile_complete(user),
+        "profile_intro_required": should_prompt_profile_intro(user)
+    }

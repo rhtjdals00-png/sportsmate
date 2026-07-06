@@ -109,6 +109,7 @@ class Meeting(db.Model, TimestampMixin):
             "status": self.status,
             "status_label": self.status_label(),
             "cover_image_url": self.cover_image_url,
+            "distance_km": getattr(self, "_distance_km", None),
             "chat_room_id": self.chat_room.id if self.chat_room else None,
             "host": {
                 "id": self.host.id,

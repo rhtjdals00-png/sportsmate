@@ -6,6 +6,8 @@ const AuthContext = createContext(null);
 
 const SUPABASE_CONFIG_ERROR = "Supabase 환경변수가 설정되지 않아 인증 기능을 사용할 수 없습니다.";
 const SUPABASE_AUTH_PROVIDERS = ["google", "kakao"];
+const AUTH_PROVIDER_ORDER = ["email", "google", "kakao"];
+const SUPABASE_TOKEN_ERROR_MESSAGE = "인증번호가 만료되었거나 올바르지 않습니다. 메일함의 최신 인증번호를 다시 입력해주세요.";
 
 function requireSupabase() {
   if (!isSupabaseConfigured || !supabase) {
@@ -26,9 +28,31 @@ function getAuthRedirectUrl(path = "/auth/callback") {
   return `${window.location.origin}${path}`;
 }
 
+function providerListFromSupabaseUser(user, fallback = {}) {
+  const providers = new Set();
+  const addProvider = (value) => {
+    if (typeof value !== "string") return;
+    value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .forEach((item) => providers.add(item));
+  };
+
+  // 2026-07-06: Supabase에 email+google처럼 여러 identity가 연결된 경우 SportsMate provider도 같은 목록으로 동기화.
+  user?.identities?.forEach((identity) => addProvider(identity?.provider));
+  addProvider(user?.app_metadata?.provider);
+  addProvider(fallback.provider);
+  if (!providers.size && user?.email) providers.add("email");
+
+  return AUTH_PROVIDER_ORDER.filter((provider) => providers.has(provider))
+    .concat([...providers].filter((provider) => !AUTH_PROVIDER_ORDER.includes(provider)))
+    .join(",") || "email";
+}
+
 function metadataFromSupabaseUser(user, fallback = {}) {
   const metadata = user?.user_metadata || {};
-  const provider = user?.app_metadata?.provider || fallback.provider || "email";
+  const provider = providerListFromSupabaseUser(user, fallback);
   const providerId = user?.identities?.[0]?.id || user?.id || "user";
   const email = user?.email || metadata.email || fallback.email || `${providerId}@${provider}.sportsmate.local`;
   const emailName = email.split("@")[0];
@@ -43,7 +67,8 @@ function metadataFromSupabaseUser(user, fallback = {}) {
     provider,
     provider_id: providerId,
     profile_image_url: metadata.avatar_url || metadata.picture || "",
-    allow_nickname_suffix: Boolean(fallback.allow_nickname_suffix)
+    allow_nickname_suffix: Boolean(fallback.allow_nickname_suffix),
+    force_profile_update: Boolean(fallback.force_profile_update)
   };
 }
 
@@ -68,7 +93,7 @@ export function AuthProvider({ children }) {
     }
     if (typeof data.is_new_user === "boolean") {
       const currentRedirect = localStorage.getItem("sportsmate_post_auth_redirect");
-      const needsProfile = data.is_new_user || data.profile_complete === false;
+      const needsProfile = data.profile_intro_required ?? (data.is_new_user || data.profile_complete === false);
       if (needsProfile) {
         localStorage.setItem("sportsmate_post_auth_redirect", "/profile/intro");
       } else if (currentRedirect !== "/profile/intro" && currentRedirect !== "/profile/setup") {
@@ -221,9 +246,19 @@ export function AuthProvider({ children }) {
             token,
             type: "signup"
           });
-          if (signupError) throw signupError;
+          if (signupError) {
+            const message = signupError.message || "";
+            if (message.toLowerCase().includes("token")) {
+              throw new Error(SUPABASE_TOKEN_ERROR_MESSAGE);
+            }
+            throw signupError;
+          }
+          const nextSession = signupData.session || (await client.auth.getSession()).data.session;
+          setSession(nextSession);
           return signupData;
         }
+        const nextSession = data.session || (await client.auth.getSession()).data.session;
+        setSession(nextSession);
         return data;
       },
       async registerVerifiedEmail(payload) {
@@ -244,7 +279,7 @@ export function AuthProvider({ children }) {
           }
         });
         if (error) throw error;
-        const synced = await syncProfile(data.user || currentUser, payload);
+        const synced = await syncProfile(data.user || currentUser, { ...payload, force_profile_update: true });
         return synced;
       },
       async socialLogin(provider) {
@@ -259,6 +294,28 @@ export function AuthProvider({ children }) {
         });
         if (error) throw error;
         return data;
+      },
+      async completeOAuthCallback(callbackUrl = window.location.href) {
+        const client = requireSupabase();
+        const searchParams = new URL(callbackUrl).searchParams;
+        let nextUser = null;
+
+        if (searchParams.has("code")) {
+          const { data, error } = await client.auth.exchangeCodeForSession(callbackUrl);
+          if (error) throw error;
+          nextUser = data.session?.user || data.user || null;
+        }
+
+        if (!nextUser) {
+          const { data } = await client.auth.getSession();
+          nextUser = data.session?.user || null;
+        }
+
+        if (!nextUser) {
+          throw new Error("로그인 세션을 확인하지 못했습니다. 다시 로그인해주세요.");
+        }
+
+        return syncProfile(nextUser, { allow_nickname_suffix: true });
       },
       async resendSignupEmail(email) {
         const client = requireSupabase();
@@ -312,4 +369,3 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   return useContext(AuthContext);
 }
-

@@ -21,6 +21,7 @@ class User(db.Model, TimestampMixin):
     profile_image_url = db.Column(db.Text)
     role = db.Column(db.String(30), default="user", nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    profile_intro_dismissed = db.Column(db.Boolean, default=False, nullable=False)
 
     profile = db.relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     hosted_meetings = db.relationship("Meeting", back_populates="host")
@@ -47,6 +48,7 @@ class User(db.Model, TimestampMixin):
             "profile_image_url": self.profile_image_url,
             "role": self.role,
             "is_active": self.is_active,
+            "profile_intro_dismissed": self.profile_intro_dismissed,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "provider": self.provider,
             # 2026-07-02: 소셜 계정의 이메일 연동 여부를 프론트 분기용으로 제공.

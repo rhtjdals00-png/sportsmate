@@ -1,5 +1,4 @@
 import json
-
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy.orm import joinedload
@@ -96,6 +95,23 @@ def update_me():
     return jsonify({"user": user.to_dict()})
 
 
+@user_bp.patch("/me/profile-intro-preference")
+@jwt_required()
+def update_profile_intro_preference():
+    user = user_query().get_or_404(int(get_jwt_identity()))
+    action = (request.get_json() or {}).get("action")
+
+    if action == "dismiss":
+        user.profile_intro_dismissed = True
+    elif action == "clear":
+        user.profile_intro_dismissed = False
+    else:
+        return jsonify({"message": "알 수 없는 요청입니다."}), 400
+
+    db.session.commit()
+    return jsonify({"user": user.to_dict()})
+
+
 @user_bp.patch("/me/account-link")
 @jwt_required()
 def link_email_account():
@@ -151,6 +167,7 @@ def meetings_for_user(user_id, status=None, hosted=False):
         query = query.filter(Meeting.host_id == user_id)
     else:
         query = query.join(Participant, Participant.meeting_id == Meeting.id).filter(Participant.user_id == user_id)
+        query = query.filter(Meeting.host_id != user_id)
         if status:
             query = query.filter(Participant.status == status)
     return query.order_by(Meeting.start_at.is_(None), Meeting.start_at.desc()).limit(bounded_limit()).all()

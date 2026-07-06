@@ -364,7 +364,6 @@ function DesktopProfileEdit() {
   const [categories, setCategories] = useState([]);
   const [sports, setSports] = useState([]);
   const [activeCategoryId, setActiveCategoryId] = useState(fallbackSportCategories[0].id);
-  const [selectedSportName, setSelectedSportName] = useState("");
   const [useSportLevels, setUseSportLevels] = useState(() => {
     const levels = form.preferred_sport_levels || {};
     return form.preferred_sports.some((sportName) => Boolean(levels[sportName]));
@@ -488,7 +487,6 @@ function DesktopProfileEdit() {
     if (!sportCategoryGroups.length) return;
     if (!sportCategoryGroups.some((group) => String(group.id) === String(activeCategoryId))) {
       setActiveCategoryId(sportCategoryGroups[0].id);
-      setSelectedSportName("");
     }
   }, [activeCategoryId, sportCategoryGroups]);
 
@@ -600,20 +598,19 @@ function DesktopProfileEdit() {
   }, []);
 
   // 2026-07-03: profile/setup의 대분류-소주제-추가 흐름과 맞춰 PC 프로필 수정의 종목 선택 방식을 통일.
-  const addSelectedSport = () => {
-    if (!selectedSportName) return;
+  const addSelectedSport = (sportName) => {
+    if (!sportName) return;
     setForm((current) => {
-      if (current.preferred_sports.includes(selectedSportName)) return current;
+      if (current.preferred_sports.includes(sportName)) return current;
       return {
         ...current,
-        preferred_sports: [...current.preferred_sports, selectedSportName],
+        preferred_sports: [...current.preferred_sports, sportName],
         preferred_sport_levels: {
           ...current.preferred_sport_levels,
-          [selectedSportName]: current.preferred_sport_levels[selectedSportName] || current.exercise_level
+          [sportName]: current.preferred_sport_levels[sportName] || current.exercise_level
         }
       };
     });
-    setSelectedSportName("");
   };
 
   const removeSport = (sportName) => {
@@ -792,8 +789,7 @@ function DesktopProfileEdit() {
         <div>
           <Link className="ghost-btn" to="/mypage">취소</Link>
           <button className="primary-small" type="submit" disabled={saving || loading}>
-            {saving ? <span className="profile-action-spinner" aria-hidden="true" /> : <Check size={15} />}
-            저장
+            {saving ? "저장 중..." : <><Check size={15} />저장</>}
           </button>
         </div>
       </div>
@@ -878,8 +874,7 @@ function DesktopProfileEdit() {
             </span>
           </label>
           <button className="primary-small" type="button" onClick={searchRegion} disabled={regionSearching}>
-            {regionSearching ? <span className="profile-action-spinner" aria-hidden="true" /> : null}
-            검색
+            {regionSearching ? "검색 중" : "검색"}
           </button>
         </div>
         {regionMessage && <em className="nickname-check warn">{regionMessage}</em>}
@@ -983,31 +978,29 @@ function DesktopProfileEdit() {
               대분류
               <select
                 value={activeCategoryId}
-                onChange={(event) => {
-                  setActiveCategoryId(event.target.value);
-                  setSelectedSportName("");
-                }}
+                onChange={(event) => setActiveCategoryId(event.target.value)}
               >
                 {sportCategoryGroups.map((group) => (
                   <option key={group.id} value={group.id}>{group.name}</option>
                 ))}
               </select>
             </label>
-            <label>
-              소주제
-              <select value={selectedSportName} onChange={(event) => setSelectedSportName(event.target.value)}>
-                <option value="">소주제 선택</option>
-                {selectableSports.map((sportName) => (
-                  <option key={sportName} value={sportName} disabled={form.preferred_sports.includes(sportName)}>
-                    {sportName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button className="desktop-sport-add-button" type="button" onClick={addSelectedSport} disabled={!selectedSportName}>
-              <Plus size={16} />
-              추가
-            </button>
+            <span>대분류를 선택하면 아래에서 종목을 바로 고를 수 있습니다.</span>
+          </div>
+          <div className="desktop-profile-sport-grid" aria-label={`${activeSportGroup?.name || "선택한 대분류"} 종목`}>
+            {selectableSports.map((sportName) => {
+              const selected = form.preferred_sports.includes(sportName);
+              return (
+                <button
+                  key={sportName}
+                  className={selected ? "is-active" : ""}
+                  type="button"
+                  onClick={() => (selected ? removeSport(sportName) : addSelectedSport(sportName))}
+                >
+                  {sportName}
+                </button>
+              );
+            })}
           </div>
           <div className="desktop-profile-sport-tags">
             {form.preferred_sports.length ? form.preferred_sports.map((sportName) => {
@@ -1129,8 +1122,7 @@ function DesktopProfileEdit() {
             <div className="profile-auth-actions">
               <button className="ghost-btn" type="button" onClick={closePasswordModal} disabled={passwordSaving}>취소</button>
               <button className="primary-small" type="button" onClick={submitPasswordChange} disabled={passwordSaving}>
-                {passwordSaving ? <span className="profile-action-spinner" aria-hidden="true" /> : null}
-                변경하기
+                {passwordSaving ? "변경 중..." : "변경하기"}
               </button>
             </div>
           </section>

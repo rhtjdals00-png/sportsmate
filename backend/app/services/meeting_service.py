@@ -1,5 +1,7 @@
+import math
 from datetime import datetime
 
+from flask import current_app
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import joinedload
 
@@ -42,6 +44,25 @@ def close_expired_one_time_meetings(now=None):
     return updated
 
 
+def _float_param(params, key):
+    try:
+        return float(params.get(key, ""))
+    except (TypeError, ValueError):
+        return None
+
+
+def _distance_km(lat1, lng1, lat2, lng2):
+    if None in (lat1, lng1, lat2, lng2):
+        return None
+    radius = 6371
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lng2 - lng1)
+    a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+    return round(radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)), 1)
+
+
 def list_meetings(params, current_user_id=None):
     close_expired_one_time_meetings()
     load_options = [
@@ -53,7 +74,6 @@ def list_meetings(params, current_user_id=None):
         load_options.append(joinedload(Meeting.participants))
     query = Meeting.query.options(*load_options)
     if params.get("sport"):
-      ######################
         try:
             sport_id = int(params["sport"])
         except (TypeError, ValueError):
@@ -69,21 +89,29 @@ def list_meetings(params, current_user_id=None):
 #            query = query.join(Sport, Meeting.sport_id == Sport.id).filter(Sport.name == sport_value)
 
     if params.get("sido"):
-      query = query.filter(Meeting.region_sido_code == params["sido"])
+        query = query.filter(Meeting.region_sido_code == params["sido"])
     if params.get("sigungu"):
-      query = query.filter(Meeting.region_sigungu_code == params["sigungu"])
+        query = query.filter(Meeting.region_sigungu_code == params["sigungu"])
     if params.get("keyword"):
       keyword = f"%{params['keyword']}%"
       query = query.filter(Meeting.title.ilike(keyword) | Meeting.location_name.ilike(keyword) | Meeting.address.ilike(keyword))
     if params.get("status"):
-      query = query.filter(Meeting.status == params["status"])
+        query = query.filter(Meeting.status == params["status"])
     else:
-      query = query.filter(Meeting.status.in_(["open", "full"]))
+        query = query.filter(Meeting.status.in_(["open", "full"]))
     if params.get("mine") == "host" and current_user_id:
-      query = query.filter(Meeting.host_id == current_user_id)
+        query = query.filter(Meeting.host_id == current_user_id)
     if params.get("mine") == "joined" and current_user_id:
-      query = query.join(Participant).filter(Participant.user_id == current_user_id, Participant.status == "approved")
+        query = query.join(Participant).filter(Participant.user_id == current_user_id, Participant.status == "approved")
     limit = max(1, min(int(params.get("limit", 20)), 50))
+    latitude = _float_param(params, "lat") or _float_param(params, "latitude")
+    longitude = _float_param(params, "lng") or _float_param(params, "longitude")
+    if latitude is not None and longitude is not None:
+        candidates = query.order_by(Meeting.start_at.is_(None), Meeting.start_at.asc()).limit(50).all()
+        for meeting in candidates:
+            meeting._distance_km = _distance_km(latitude, longitude, meeting.latitude, meeting.longitude)
+        candidates.sort(key=lambda meeting: meeting._distance_km if meeting._distance_km is not None else 999999)
+        return candidates[:limit]
     return query.order_by(Meeting.start_at.is_(None), Meeting.start_at.asc()).limit(limit).all()
 
 
@@ -156,7 +184,7 @@ def join_meeting(meeting_id, user_id, join_message=""):
     close_expired_one_time_meetings()
     meeting = Meeting.query.get_or_404(meeting_id)
     applicant = User.query.options(joinedload(User.profile)).get(user_id)
-    applicant_name = applicant.profile.nickname if applicant and applicant.profile and applicant.profile.nickname else (applicant.name if applicant else "신청자")
+    applicant_name = applicant.nickname if applicant and applicant.nickname else (applicant.name if applicant else "신청자")
     if meeting.status != "open":
         raise ValueError("모집 중인 모임만 신청할 수 있습니다.")
     if meeting.current_participants >= meeting.max_participants:
@@ -168,7 +196,10 @@ def join_meeting(meeting_id, user_id, join_message=""):
     db.session.add(participant)
     create_notification(meeting.host_id, "join_request", "새 참여 신청", f"{applicant_name}님이 {meeting.title}에 참여 신청을 보냈습니다.", f"/host/meetings/{meeting.id}/applicants", send_push=False)
     db.session.commit()
-    send_web_push(meeting.host_id, "새 참여 신청", f"{applicant_name}님이 {meeting.title}에 참여 신청을 보냈습니다.", f"/host/meetings/{meeting.id}/applicants")
+    try:
+        send_web_push(meeting.host_id, "새 참여 신청", f"{applicant_name}님이 {meeting.title}에 참여 신청을 보냈습니다.", f"/host/meetings/{meeting.id}/applicants")
+    except Exception as error:
+        current_app.logger.warning("Join request push notification failed: %s", error)
     return participant
 
 
@@ -185,18 +216,26 @@ def update_application(meeting_id, applicant_user_id, host_id, status):
         participant.status = "approved"
         participant.approved_at = datetime.utcnow()
         meeting.current_participants += 1
+        if not meeting.chat_room:
+            meeting.chat_room = ChatRoom(meeting_id=meeting.id)
+            db.session.flush()
         if meeting.current_participants >= meeting.max_participants:
             meeting.status = "full"
         title = "참여 신청 승인"
         message = f"{meeting.title} 참여 신청이 승인되었습니다."
+        link_url = f"/chats/{meeting.chat_room.id}"
     else:
         participant.status = "rejected"
         participant.rejected_at = datetime.utcnow()
         title = "참여 신청 거절"
         message = f"{meeting.title} 참여 신청이 거절되었습니다."
-    create_notification(participant.user_id, status, title, message, f"/meetings/{meeting.id}", send_push=False)
+        link_url = f"/meetings/{meeting.id}"
+    create_notification(participant.user_id, status, title, message, link_url, send_push=False)
     db.session.commit()
-    send_web_push(participant.user_id, title, message, f"/meetings/{meeting.id}")
+    try:
+        send_web_push(participant.user_id, title, message, link_url)
+    except Exception as error:
+        current_app.logger.warning("Application decision push notification failed: %s", error)
     return participant
 
 

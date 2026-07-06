@@ -215,6 +215,7 @@ def post_notice(meeting_id):
 @meeting_bp.get("/<int:meeting_id>/votes")
 def votes(meeting_id):
     Meeting.query.get_or_404(meeting_id)
+    current_user_id = current_user_id_optional()
     items = Vote.query.options(joinedload(Vote.options)).filter_by(meeting_id=meeting_id).order_by(Vote.created_at.desc()).all()
     option_ids = [option.id for item in items for option in item.options]
     response_counts = {}
@@ -225,7 +226,20 @@ def votes(meeting_id):
             .group_by(VoteResponse.option_id)
             .all()
         )
-    return jsonify({"items": [item.to_dict(response_counts) for item in items]})
+    selected_options = {}
+    if current_user_id and items:
+        selected_options = dict(
+            db.session.query(VoteResponse.vote_id, VoteResponse.option_id)
+            .filter(VoteResponse.vote_id.in_([item.id for item in items]))
+            .filter(VoteResponse.user_id == current_user_id)
+            .all()
+        )
+    result = []
+    for item in items:
+        data = item.to_dict(response_counts)
+        data["selected_option_id"] = selected_options.get(item.id)
+        result.append(data)
+    return jsonify({"items": result})
 
 
 @meeting_bp.post("/<int:meeting_id>/votes")
