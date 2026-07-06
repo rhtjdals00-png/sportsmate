@@ -1,0 +1,14 @@
+{
+  "siteName": "SportsMate",
+  "adminEmail": "admin@sportsmate.co.kr",
+  "maintenanceMode": false,
+  "suspensionGracePeriod": 29,
+  "defaultMaxParticipants": 6,
+  "mannerRatingDecrement": 1,
+  "autoBanReportCount": 3,
+  "sessionExpiryMinutes": 50,
+  "termsVersion": "v1.4",
+  "supabaseUrl": "https://rhtjdals00-png.supabase.co",
+  "kakaoApiKey": "8f7b2a9d6e4c3f5b8a0d2f9e4c1b5a7d",
+  "googleClientId": "40413-t9tr8ha.apps.googleusercontent.com"
+}

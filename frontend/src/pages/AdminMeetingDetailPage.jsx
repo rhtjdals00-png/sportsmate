@@ -12,7 +12,8 @@ import {
   ArrowLeft,
   XCircle,
   Clock,
-  Star
+  Star,
+  RotateCcw
 } from "lucide-react";
 import { adminApi } from "../api/adminApi";
 
@@ -154,6 +155,8 @@ function AdminMeetingDetailPage() {
             location_name: m.location_name || "",
             address: m.address || "",
             purpose: m.purpose || "",
+            status: m.status || "open",
+            remaining_days: m.remaining_days,
             stats: {
               totalAttendees: m.current_participants || 0,
               attendeesTrend: `최대 정원 ${m.max_participants || 0}명`,
@@ -208,6 +211,8 @@ function AdminMeetingDetailPage() {
           max_participants: m.max_participants || 0,
           location: m.address || m.location_name || "위치 정보 없음",
           capacity: `${m.current_participants || 0} / ${m.max_participants || 0}`,
+          status: m.status || "open",
+          remaining_days: m.remaining_days,
           stats: {
             ...prev.stats,
             totalAttendees: m.current_participants || 0,
@@ -255,14 +260,96 @@ function AdminMeetingDetailPage() {
 
   const handleDeleteMeeting = async () => {
     if (!meetingData) return;
-    if (window.confirm(`'${meetingData.title}' 모임을 영구히 강제 삭제/폐쇄 처리하시겠습니까? 이 동작은 모임 게시판에도 즉시 반영됩니다.`)) {
+    if (window.confirm(`'${meetingData.title}' 모임을 폐쇄 처리하시겠습니까?\n\n이 모임은 즉시 영구 삭제되지 않고 30일 동안 폐쇄 유예 상태(비활성화)로 보관되며, 이 기간 동안 모든 방 활동이 정지됩니다. 유예 기간 내에 언제든지 복구할 수 있습니다.`)) {
       try {
         await adminApi.deleteMeeting(meetingId);
-        alert("모임이 성공적으로 폐쇄 처리되었습니다.");
-        navigate("/admin/meetings");
+        alert("모임이 성공적으로 폐쇄(비활성화) 처리되었습니다.");
+        
+        // Reload meeting details to show suspended UI
+        const res = await adminApi.meetingDetail(meetingId);
+        if (res && res.meeting) {
+          const m = res.meeting;
+          const fillPercent = m.max_participants ? Math.round((m.current_participants / m.max_participants) * 100) : 0;
+          setMeetingData({
+            title: m.title || "제목 없음",
+            host: m.host ? (m.host.nickname || m.host.name || `방장 #${m.host.id}`) : "알 수 없음",
+            sport: m.sport ? m.sport.name : "일반",
+            emoji: m.sport ? (m.sport.name === "축구" ? "⚽" : m.sport.name === "러닝" ? "🏃" : m.sport.name === "테니스" ? "🎾" : m.sport.name === "농구" ? "🏀" : "👟") : "👟",
+            createdDate: m.created_at ? (() => {
+              const d = new Date(m.created_at);
+              return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
+            })() : "2023.10.15",
+            capacity: `${m.current_participants || 0} / ${m.max_participants || 0}`,
+            max_participants: m.max_participants || 0,
+            location: m.address || m.location_name || "위치 정보 없음",
+            location_name: m.location_name || "",
+            address: m.address || "",
+            purpose: m.purpose || "",
+            status: m.status || "open",
+            remaining_days: m.remaining_days,
+            stats: {
+              totalAttendees: m.current_participants || 0,
+              attendeesTrend: `최대 정원 ${m.max_participants || 0}명`,
+              fillRate: fillPercent,
+              hostRating: "A",
+              hostRatingNote: "신고 및 제재 이력 없음"
+            },
+            members: m.members || [],
+            reports: m.reports || [],
+            memo: m.description || "등록된 상세 소개 설명이 없습니다."
+          });
+        }
       } catch (err) {
         console.error("Failed to delete meeting", err);
         alert("모임 폐쇄에 실패했습니다.");
+      }
+    }
+  };
+
+  const handleRestoreMeeting = async () => {
+    if (!meetingData) return;
+    if (window.confirm(`'${meetingData.title}' 모임을 정상 상태로 복구하시겠습니까?\n\n복구 즉시 모든 방 활동과 채팅방 이용이 다시 활성화됩니다.`)) {
+      try {
+        await adminApi.restoreMeeting(meetingId);
+        alert("모임이 성공적으로 복구되었습니다.");
+        
+        // Reload meeting details
+        const res = await adminApi.meetingDetail(meetingId);
+        if (res && res.meeting) {
+          const m = res.meeting;
+          const fillPercent = m.max_participants ? Math.round((m.current_participants / m.max_participants) * 100) : 0;
+          setMeetingData({
+            title: m.title || "제목 없음",
+            host: m.host ? (m.host.nickname || m.host.name || `방장 #${m.host.id}`) : "알 수 없음",
+            sport: m.sport ? m.sport.name : "일반",
+            emoji: m.sport ? (m.sport.name === "축구" ? "⚽" : m.sport.name === "러닝" ? "🏃" : m.sport.name === "테니스" ? "🎾" : m.sport.name === "농구" ? "🏀" : "👟") : "👟",
+            createdDate: m.created_at ? (() => {
+              const d = new Date(m.created_at);
+              return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
+            })() : "2023.10.15",
+            capacity: `${m.current_participants || 0} / ${m.max_participants || 0}`,
+            max_participants: m.max_participants || 0,
+            location: m.address || m.location_name || "위치 정보 없음",
+            location_name: m.location_name || "",
+            address: m.address || "",
+            purpose: m.purpose || "",
+            status: m.status || "open",
+            remaining_days: m.remaining_days,
+            stats: {
+              totalAttendees: m.current_participants || 0,
+              attendeesTrend: `최대 정원 ${m.max_participants || 0}명`,
+              fillRate: fillPercent,
+              hostRating: "A",
+              hostRatingNote: "신고 및 제재 이력 없음"
+            },
+            members: m.members || [],
+            reports: m.reports || [],
+            memo: m.description || "등록된 상세 소개 설명이 없습니다."
+          });
+        }
+      } catch (err) {
+        console.error("Failed to restore meeting", err);
+        alert("모임 복구에 실패했습니다.");
       }
     }
   };
@@ -306,9 +393,20 @@ function AdminMeetingDetailPage() {
           <div className="admin-detail-header-card__title-row">
             <span className="admin-detail-header-card__name">{meetingData.title}</span>
             <span className="admin-badge admin-badge--blue">{meetingData.sport}</span>
-            <span className={`admin-badge admin-badge--${meetingData.capacity.split(" / ")[0] === meetingData.capacity.split(" / ")[1] ? "gray" : "orange"}`}>
-              {meetingData.capacity.split(" / ")[0] === meetingData.capacity.split(" / ")[1] ? "마감" : "모집중"}
-            </span>
+            {meetingData.status === "suspended" ? (
+              <>
+                <span className="admin-badge" style={{ backgroundColor: "#ef4444", color: "#ffffff", border: "none" }}>
+                  폐쇄 유예
+                </span>
+                <span className="admin-badge" style={{ color: "#ef4444", borderColor: "#fca5a5" }}>
+                  남은 유예기간: {meetingData.remaining_days}일
+                </span>
+              </>
+            ) : (
+              <span className={`admin-badge admin-badge--${meetingData.capacity.split(" / ")[0] === meetingData.capacity.split(" / ")[1] ? "gray" : "orange"}`}>
+                {meetingData.capacity.split(" / ")[0] === meetingData.capacity.split(" / ")[1] ? "마감" : "모집중"}
+              </span>
+            )}
           </div>
           
           <div className="admin-detail-header-card__meta-grid">
@@ -332,23 +430,37 @@ function AdminMeetingDetailPage() {
         </div>
 
         <div className="admin-detail-header-card__actions">
-          <button 
-            type="button" 
-            onClick={handleEditInfo}
-            className="admin-detail-action-btn admin-detail-action-btn--primary"
-          >
-            <Trophy size={15} />
-            <span>모임 정보 수정</span>
-          </button>
-          <button 
-            type="button" 
-            onClick={handleDeleteMeeting}
-            className="admin-detail-action-btn admin-detail-action-btn--outline"
-            style={{ color: "#ef4444", borderColor: "#fca5a5" }}
-          >
-            <Trash2 size={15} />
-            <span>모임 폐쇄</span>
-          </button>
+          {meetingData.status !== "suspended" ? (
+            <>
+              <button 
+                type="button" 
+                onClick={handleEditInfo}
+                className="admin-detail-action-btn admin-detail-action-btn--primary"
+              >
+                <Trophy size={15} />
+                <span>모임 정보 수정</span>
+              </button>
+              <button 
+                type="button" 
+                onClick={handleDeleteMeeting}
+                className="admin-detail-action-btn admin-detail-action-btn--outline"
+                style={{ color: "#ef4444", borderColor: "#fca5a5" }}
+              >
+                <Trash2 size={15} />
+                <span>모임 폐쇄</span>
+              </button>
+            </>
+          ) : (
+            <button 
+              type="button" 
+              onClick={handleRestoreMeeting}
+              className="admin-detail-action-btn admin-detail-action-btn--primary"
+              style={{ backgroundColor: "#10b981", borderColor: "#10b981", color: "#ffffff" }}
+            >
+              <RotateCcw size={15} />
+              <span>모임 복구</span>
+            </button>
+          )}
         </div>
       </section>
 

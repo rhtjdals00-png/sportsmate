@@ -35,6 +35,8 @@ function AdminLayout() {
         return "신고 및 제재 리포트 관리";
       case "/admin/analytics":
         return "전체 통계 대시보드";
+      case "/admin/settings":
+        return "시스템 설정";
       case "/admin":
       default:
         return "관리자 운영 관리";
@@ -96,6 +98,16 @@ function AdminLayout() {
           </NavLink>
 
           <NavLink 
+            to="/admin/reports" 
+            className={({ isActive }) => 
+              `admin-sidebar__nav-item${isActive ? " active" : ""}`
+            }
+          >
+            <AlertTriangle size={18} />
+            <span>리포트 관리</span>
+          </NavLink>
+
+          <NavLink 
             to="/admin/analytics" 
             className={({ isActive }) => 
               `admin-sidebar__nav-item${isActive ? " active" : ""}`
@@ -106,26 +118,14 @@ function AdminLayout() {
           </NavLink>
 
           <NavLink 
-            to="/admin/reports" 
+            to="/admin/settings" 
             className={({ isActive }) => 
               `admin-sidebar__nav-item${isActive ? " active" : ""}`
             }
           >
-            <AlertTriangle size={18} />
-            <span>리포트 관리</span>
-          </NavLink>
-
-          <a 
-            href="#settings" 
-            className="admin-sidebar__nav-item"
-            onClick={(e) => {
-              e.preventDefault();
-              alert("시스템 설정 메뉴는 준비 중입니다.");
-            }}
-          >
             <Settings size={18} />
             <span>시스템 설정</span>
-          </a>
+          </NavLink>
         </nav>
 
 

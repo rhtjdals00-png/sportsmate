@@ -12,6 +12,15 @@ from app.services.meeting_service import close_expired_one_time_meetings, create
 meeting_bp = Blueprint("meetings", __name__)
 
 
+@meeting_bp.get("/config")
+def get_meeting_config():
+    from app.utils.settings import load_system_settings
+    settings = load_system_settings()
+    return jsonify({
+        "defaultMaxParticipants": settings.get("defaultMaxParticipants", 6)
+    })
+
+
 def current_user_id_optional():
     try:
         verify_jwt_in_request(optional=True)
@@ -212,8 +221,9 @@ def notices(meeting_id):
 @jwt_required()
 def post_notice(meeting_id):
     meeting = Meeting.query.get_or_404(meeting_id)
-    user_id = int(get_jwt_identity())
-    if meeting.host_id != user_id and not can_manage_meeting_tools(meeting_id, user_id):
+    if meeting.status == "suspended":
+        return jsonify({"message": "폐쇄(비활성화) 처리된 모임입니다."}), 400
+    if meeting.host_id != int(get_jwt_identity()):
         return jsonify({"message": "방장만 공지를 작성할 수 있습니다."}), 403
     data = request.get_json() or {}
     notice = Notice(
@@ -293,6 +303,8 @@ def votes(meeting_id):
 @jwt_required()
 def post_vote(meeting_id):
     meeting = Meeting.query.get_or_404(meeting_id)
+    if meeting.status == "suspended":
+        return jsonify({"message": "폐쇄(비활성화) 처리된 모임입니다."}), 400
     user_id = int(get_jwt_identity())
     if meeting.host_id != user_id and not can_manage_meeting_tools(meeting_id, user_id):
         return jsonify({"message": "모임 운영진만 투표를 생성할 수 있습니다."}), 403
@@ -349,6 +361,8 @@ def attendance(meeting_id):
 @jwt_required()
 def check_attendance(meeting_id):
     meeting = Meeting.query.get_or_404(meeting_id)
+    if meeting.status == "suspended":
+        return jsonify({"message": "폐쇄(비활성화) 처리된 모임입니다."}), 400
     current_user_id = int(get_jwt_identity())
     data = request.get_json(silent=True) or {}
     target_user_id = int(data.get("user_id") or current_user_id)

@@ -104,6 +104,12 @@ def sync_supabase_user(data):
         user = User.query.options(joinedload(User.profile)).filter_by(email=email).first()
     is_new_user = user is None
 
+    from app.utils.settings import load_system_settings
+    settings = load_system_settings()
+    if settings.get("maintenanceMode") is True:
+        if is_new_user or (user and user.role not in ["superadmin", "admin"]):
+            raise ValueError("현재 서비스 점검 중입니다. 일반 회원은 로그인할 수 없습니다.")
+
 
     if not user:
         user = User(email=email, auth_user_id=auth_user_id, name=name, phone_number=phone_number, nickname=nickname, user_tag=generate_user_tag())
@@ -183,6 +189,12 @@ def login_user(data):
         raise ValueError("이메일 또는 비밀번호가 올바르지 않습니다.")
     if not user.is_active:
         raise ValueError("정지된 회원입니다.")
+        
+    from app.utils.settings import load_system_settings
+    settings = load_system_settings()
+    if settings.get("maintenanceMode") is True and user.role not in ["superadmin", "admin"]:
+        raise ValueError("현재 서비스 점검 중입니다. 일반 회원은 로그인할 수 없습니다.")
+        
     return build_auth_response(user)
 
 def login_with_supabase(data):
@@ -236,6 +248,11 @@ def login_with_supabase(data):
 
     if not user.is_active:
         raise ValueError("정지된 회원입니다.")
+
+    from app.utils.settings import load_system_settings
+    settings = load_system_settings()
+    if settings.get("maintenanceMode") is True and user.role not in ["superadmin", "admin"]:
+        raise ValueError("현재 서비스 점검 중입니다. 일반 회원은 로그인할 수 없습니다.")
 
     db.session.commit()
     response = build_auth_response(user)

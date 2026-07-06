@@ -19,6 +19,8 @@ def _room_options(include_messages=False):
 
 def ensure_chat_access(room_id, user_id, include_messages=False):
     room = ChatRoom.query.options(*_room_options(include_messages)).get_or_404(room_id)
+    if room.meeting and room.meeting.status == "suspended":
+        raise PermissionError("폐쇄(비활성화) 처리된 모임의 채팅방입니다.")
     if room.meeting and room.meeting.host_id == user_id:
         return room
     participant = Participant.query.filter_by(meeting_id=room.meeting_id, user_id=user_id, status="approved").first()

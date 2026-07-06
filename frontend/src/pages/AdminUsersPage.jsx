@@ -112,7 +112,7 @@ function AdminUsersPage() {
   });
 
   // Pagination slice
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedUsers = filteredUsers.slice(startIndex, startIndex + itemsPerPage);
 
@@ -315,7 +315,7 @@ function AdminUsersPage() {
           </table>
         </div>
 
-        {totalPages > 1 && (
+        {totalPages >= 1 && (
           <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "6px", marginTop: "24px" }}>
             <button
               disabled={currentPage === 1}

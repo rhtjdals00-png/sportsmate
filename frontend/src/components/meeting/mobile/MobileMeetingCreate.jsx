@@ -220,6 +220,18 @@ function MobileMeetingCreate() {
   const selectedCategory = useMemo(() => displayCategories.find((category) => String(category.id) === String(form.category_id)), [displayCategories, form.category_id]);
   const purposeOptions = useMemo(() => uniqueValues([...(selectedCategory?.purpose?.split("/") || []), ...DEFAULT_PURPOSE_OPTIONS]), [selectedCategory?.purpose]);
 
+  const [maxLimit, setMaxLimit] = useState(6);
+
+  useEffect(() => {
+    meetingApi.getConfig()
+      .then((data) => {
+        if (data && data.defaultMaxParticipants) {
+          setMaxLimit(data.defaultMaxParticipants);
+        }
+      })
+      .catch((err) => console.error("Failed to load meeting config", err));
+  }, []);
+
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
   useEffect(() => {
@@ -324,6 +336,7 @@ function MobileMeetingCreate() {
       if (hasEndSchedule && (!form.end_date || !form.end_time)) return "종료 일정이 있는 모임은 종료일과 종료 시간을 입력해주세요.";
       if (hasEndSchedule && new Date(combineDateTime(form.end_date, form.end_time)) <= new Date(combineDateTime(form.start_date, form.start_time))) return "종료 시간은 시작 시간 이후로 선택해주세요.";
       if (Number(form.max_participants) < 2) return "정원은 최소 2명 이상이어야 합니다.";
+      if (Number(form.max_participants) > maxLimit) return `개설 최대 정원은 ${maxLimit}명 이하로만 설정 가능합니다.`;
     }
     return "";
   };
@@ -390,7 +403,7 @@ function MobileMeetingCreate() {
           <div className="mobile-schedule-toggles"><label><input type="checkbox" checked={hasStartSchedule} onChange={(event) => toggleStartSchedule(event.target.checked)} /> 시작 일정 있음</label><label><input type="checkbox" checked={hasEndSchedule} disabled={!hasStartSchedule} onChange={(event) => toggleEndSchedule(event.target.checked)} /> 종료 일정 있음</label></div>
           {hasStartSchedule && <div className="date-time-row"><label>{"\uc2dc\uc791 \ub0a0\uc9dc"}<CalendarSelect label={"\uc2dc\uc791\uc77c"} min={today} value={form.start_date} onChange={updateStartDate} icon={<CalendarClock size={17} />} /></label><label>{"\uc2dc\uc791 \uc2dc\uac04"}<span className="mobile-icon-input"><AlarmClock size={17} /><TimeSelect required min={form.start_date === today ? nowTime : undefined} value={form.start_time} onChange={updateStartTime} /></span></label></div>}
           {hasEndSchedule && <div className="date-time-row"><label>{"\uc885\ub8cc \ub0a0\uc9dc"}<CalendarSelect label={"\uc885\ub8cc\uc77c"} min={form.start_date || today} value={form.end_date} onChange={updateEndDate} icon={<CalendarClock size={17} />} /></label><label>{"\uc885\ub8cc \uc2dc\uac04"}<span className="mobile-icon-input"><AlarmClock size={17} /><TimeSelect required min={form.end_date === form.start_date ? form.start_time : undefined} value={form.end_time} onChange={updateEndTime} /></span></label></div>}
-          <label>정원<input type="number" min="2" max="50" value={form.max_participants} onChange={(event) => update("max_participants", event.target.value)} /></label>
+          <label>정원<input type="number" min="2" max={maxLimit} value={form.max_participants} onChange={(event) => update("max_participants", event.target.value)} /></label>
         </section>}
         <div className="form-actions">{step > 1 && <Button type="button" variant="secondary" onClick={() => setStep(step - 1)}>이전</Button>}{step < 3 ? <Button type="button" onClick={goNext}>다음</Button> : <Button type="submit" disabled={submitting}>{submitting ? "등록 중..." : "모임 등록"}</Button>}</div>
       </form>
