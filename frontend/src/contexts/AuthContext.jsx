@@ -297,7 +297,8 @@ export function AuthProvider({ children }) {
       },
       async completeOAuthCallback(callbackUrl = window.location.href) {
         const client = requireSupabase();
-        const searchParams = new URL(callbackUrl).searchParams;
+        const url = new URL(callbackUrl);
+        const searchParams = url.searchParams;
         let nextUser = null;
 
         if (searchParams.has("code")) {
@@ -307,6 +308,23 @@ export function AuthProvider({ children }) {
         }
 
         if (!nextUser) {
+          const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
+          const accessToken = hashParams.get("access_token");
+          const refreshToken = hashParams.get("refresh_token");
+
+          if (accessToken && refreshToken) {
+            const { data, error } = await client.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken
+            });
+
+            if (error) throw error;
+            nextUser = data.session?.user || data.user || null;
+          }
+        }
+
+        if (!nextUser) {
+          await new Promise((resolve) => window.setTimeout(resolve, 300));
           const { data } = await client.auth.getSession();
           nextUser = data.session?.user || null;
         }
