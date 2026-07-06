@@ -24,4 +24,6 @@ def participate(vote_id):
     else:
         db.session.add(VoteResponse(vote_id=vote.id, option_id=option.id, user_id=user_id))
     db.session.commit()
-    return jsonify({"vote": vote.to_dict()})
+    data = vote.to_dict()
+    data["selected_option_id"] = option.id
+    return jsonify({"vote": data})

@@ -10,6 +10,7 @@ import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { meetingApi } from "../../../api/meetingApi";
 import { voteApi } from "../../../api/voteApi";
+import { userApi } from "../../../api/userApi";
 
 function formatMessageTime(value) {
   if (!value) return "";
@@ -30,6 +31,13 @@ function isTodayKst(value) {
   return messageDateKey(value) === messageDateKey(new Date().toISOString());
 }
 
+function splitCommaText(value) {
+  return (value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function MobileChatRoom() {
   const { chatRoomId } = useParams();
   const { user } = useAuth();
@@ -45,9 +53,12 @@ function MobileChatRoom() {
   const [voteForm, setVoteForm] = useState({ title: "", options: ["참여", "불참"] });
   const [voteSubmitting, setVoteSubmitting] = useState(false);
   const [voteError, setVoteError] = useState("");
+  const [voteNotice, setVoteNotice] = useState("");
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [actionNotice, setActionNotice] = useState("");
   const [profilePreviewUser, setProfilePreviewUser] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileNotice, setProfileNotice] = useState("");
   const fileInputRef = useRef(null);
   const messages = useAsync(() => chatApi.messages(chatRoomId), [chatRoomId, refreshKey]);
   const room = messages.data?.room;
@@ -162,6 +173,7 @@ function MobileChatRoom() {
   const openVoteList = () => {
     setVoteMode("list");
     setVoteError("");
+    setVoteNotice("");
     setVoteOpen(true);
   };
 
@@ -169,6 +181,7 @@ function MobileChatRoom() {
     setActionMenuOpen(false);
     setVoteMode("create");
     setVoteError("");
+    setVoteNotice("");
     setVoteOpen(true);
   };
 
@@ -189,10 +202,12 @@ function MobileChatRoom() {
     }
     setVoteSubmitting(true);
     setVoteError("");
+    setVoteNotice("");
     try {
       await meetingApi.createVote(meeting.id, { title: voteForm.title.trim(), options });
       setVoteForm({ title: "", options: ["참여", "불참"] });
       setVoteMode("list");
+      setVoteNotice("투표가 등록되었습니다.");
       setVoteRefreshKey((value) => value + 1);
     } catch (createError) {
       setVoteError(createError.response?.data?.message || "투표를 생성하지 못했습니다.");
@@ -203,11 +218,29 @@ function MobileChatRoom() {
 
   const participateVote = async (voteId, optionId) => {
     setVoteError("");
+    setVoteNotice("");
     try {
       await voteApi.participate(voteId, { option_id: optionId });
+      setVoteNotice("투표 선택이 반영되었습니다.");
       setVoteRefreshKey((value) => value + 1);
     } catch (participateError) {
       setVoteError(participateError.response?.data?.message || "투표 참여에 실패했습니다.");
+    }
+  };
+
+  const openUserProfile = async (sender) => {
+    if (!sender) return;
+    setProfilePreviewUser(sender);
+    setProfileNotice("");
+    if (!sender.id) return;
+    setProfileLoading(true);
+    try {
+      const data = await userApi.get(sender.id);
+      setProfilePreviewUser(data.user || sender);
+    } catch (profileError) {
+      setProfileNotice("사용자 정보를 불러오지 못했습니다.");
+    } finally {
+      setProfileLoading(false);
     }
   };
 
@@ -261,7 +294,7 @@ function MobileChatRoom() {
                     <div className={`message-row ${mine ? "mine" : ""}`}>
                       {!mine && (
                         <div className="message-avatar">
-                          <button type="button" onClick={() => setProfilePreviewUser(message.sender)} aria-label="사용자 정보 보기">
+                          <button type="button" onClick={() => openUserProfile(message.sender)} aria-label="사용자 정보 보기">
                             {message.sender?.profile_image_url ? <img src={message.sender.profile_image_url} alt="" /> : <UsersRound size={16} />}
                           </button>
                         </div>
@@ -311,11 +344,22 @@ function MobileChatRoom() {
               {profilePreviewUser.profile_image_url ? <img src={profilePreviewUser.profile_image_url} alt="" /> : <UsersRound size={24} />}
             </div>
             <strong>{profilePreviewUser.nickname || profilePreviewUser.name || "참여자"}</strong>
-            <p>{profilePreviewUser.profile?.region || "활동 지역 미설정"}</p>
-            <div className="chat-profile-sheet__actions">
-              <button type="button">1:1 쪽지</button>
-              <button type="button">차단</button>
+            <p>{profilePreviewUser.nickname_with_tag || profilePreviewUser.user_tag_display || "SportsMate 참여자"}</p>
+            {profileLoading ? <p className="chat-profile-sheet__notice">프로필을 불러오는 중입니다.</p> : null}
+            {profileNotice ? <p className="chat-profile-sheet__notice">{profileNotice}</p> : null}
+            <div className="chat-profile-sheet__facts">
+              <span><b>활동 지역</b>{profilePreviewUser.profile?.region || "미설정"}</span>
+              <span><b>운동 수준</b>{profilePreviewUser.profile?.exercise_level || "미설정"}</span>
+              <span><b>평점</b>{Number(profilePreviewUser.profile?.rating_average || 0).toFixed(1)}</span>
+              <span><b>참여율</b>{Math.round(profilePreviewUser.profile?.attendance_rate || 0)}%</span>
             </div>
+            <div className="chat-profile-sheet__sports">
+              {(splitCommaText(profilePreviewUser.profile?.preferred_sports).slice(0, 5)).map((sport) => (
+                <span key={sport}>{sport}</span>
+              ))}
+              {!splitCommaText(profilePreviewUser.profile?.preferred_sports).length ? <span>선호 종목 미설정</span> : null}
+            </div>
+            <button className="chat-profile-sheet__close" type="button" onClick={() => setProfilePreviewUser(null)}>닫기</button>
           </section>
         </div>
       ) : null}
@@ -334,6 +378,7 @@ function MobileChatRoom() {
               </div>
             ) : null}
             {voteError ? <p className="chat-vote-modal__error">{voteError}</p> : null}
+            {voteNotice ? <p className="chat-vote-modal__notice">{voteNotice}</p> : null}
             {voteMode === "create" ? (
               <form className="chat-vote-create" onSubmit={createVote}>
                 <label>투표 제목<input value={voteForm.title} onChange={(event) => setVoteForm({ ...voteForm, title: event.target.value })} placeholder="예: 오늘 참석 여부" /></label>
@@ -352,11 +397,12 @@ function MobileChatRoom() {
                 {votes.data.items.map((vote) => (
                   <article key={vote.id}>
                     <strong>{vote.title}</strong>
+                    <p>총 {vote.options.reduce((sum, option) => sum + Number(option.response_count || 0), 0)}명 참여</p>
                     <div>
                       {vote.options.map((option) => (
-                        <button type="button" key={option.id} onClick={() => participateVote(vote.id, option.id)}>
+                        <button type="button" key={option.id} className={Number(vote.selected_option_id) === Number(option.id) ? "selected" : ""} onClick={() => participateVote(vote.id, option.id)}>
                           <span>{option.text}</span>
-                          <em>{option.response_count}명</em>
+                          <em>{Number(vote.selected_option_id) === Number(option.id) ? "내 선택 · " : ""}{option.response_count}명</em>
                         </button>
                       ))}
                     </div>

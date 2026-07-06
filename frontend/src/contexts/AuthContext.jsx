@@ -260,6 +260,28 @@ export function AuthProvider({ children }) {
         if (error) throw error;
         return data;
       },
+      async completeOAuthCallback(callbackUrl = window.location.href) {
+        const client = requireSupabase();
+        const searchParams = new URL(callbackUrl).searchParams;
+        let nextUser = null;
+
+        if (searchParams.has("code")) {
+          const { data, error } = await client.auth.exchangeCodeForSession(callbackUrl);
+          if (error) throw error;
+          nextUser = data.session?.user || data.user || null;
+        }
+
+        if (!nextUser) {
+          const { data } = await client.auth.getSession();
+          nextUser = data.session?.user || null;
+        }
+
+        if (!nextUser) {
+          throw new Error("로그인 세션을 확인하지 못했습니다. 다시 로그인해주세요.");
+        }
+
+        return syncProfile(nextUser, { allow_nickname_suffix: true });
+      },
       async resendSignupEmail(email) {
         const client = requireSupabase();
         const { data, error } = await client.auth.resend({
@@ -312,4 +334,3 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   return useContext(AuthContext);
 }
-

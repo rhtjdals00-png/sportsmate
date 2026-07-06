@@ -31,6 +31,46 @@ function formatRating(value) {
   return rating > 0 ? rating.toFixed(1) : "신규";
 }
 
+function validDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function dateKey(value) {
+  const date = validDate(value);
+  if (!date) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function shortTime(value) {
+  const date = validDate(value);
+  if (!date) return "시간 미정";
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function normalizeScheduleMeeting(meeting, state) {
+  return {
+    id: meeting.id,
+    title: meeting.title || "제목 없는 모임",
+    place: meeting.location_name || meeting.address || "장소 미정",
+    start_at: meeting.start_at,
+    state
+  };
+}
+
+function buildMonthCells(baseDate, items) {
+  const year = baseDate.getFullYear();
+  const month = baseDate.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  return Array.from({ length: firstDay + daysInMonth }, (_, index) => {
+    if (index < firstDay) return { key: `empty-${index}`, empty: true };
+    const day = index - firstDay + 1;
+    const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    return { key, day, items: items.filter((item) => dateKey(item.start_at) === key) };
+  });
+}
+
 function isAdminUser(user) {
   const role = String(user?.role || user?.profile?.role || "").toLowerCase();
   return Boolean(user?.is_admin || user?.isAdmin || role === "admin" || role === "superadmin" || role === "administrator");
@@ -62,6 +102,15 @@ function MobileMyPage() {
   const [introDraft, setIntroDraft] = useState(initialIntro);
   const [introSaving, setIntroSaving] = useState(false);
   const [introMessage, setIntroMessage] = useState("");
+  const scheduleItems = useMemo(() => [
+    ...(meetings.data?.hosted || []).map((meeting) => normalizeScheduleMeeting(meeting, "host")),
+    ...(meetings.data?.joined || []).map((meeting) => normalizeScheduleMeeting(meeting, "joined"))
+  ].filter((item) => validDate(item.start_at)).sort((a, b) => new Date(a.start_at) - new Date(b.start_at)), [meetings.data]);
+  const monthBase = useMemo(() => validDate(scheduleItems[0]?.start_at) || new Date(), [scheduleItems]);
+  const [selectedScheduleKey, setSelectedScheduleKey] = useState("");
+  const calendarCells = useMemo(() => buildMonthCells(monthBase, scheduleItems), [monthBase, scheduleItems]);
+  const activeScheduleKey = selectedScheduleKey || dateKey(scheduleItems[0]?.start_at);
+  const selectedSchedules = scheduleItems.filter((item) => dateKey(item.start_at) === activeScheduleKey);
 
   const handleLogout = async () => {
     await logout();
@@ -164,6 +213,35 @@ function MobileMyPage() {
           <span>승인 대기</span>
           <strong>{meetings.loading ? "확인 중" : `${pendingCount}건`}</strong>
         </Link>
+      </section>
+      <section className="mobile-my-calendar" aria-label="내 운동 일정">
+        <div className="mobile-my-calendar__head">
+          <div>
+            <span>{monthBase.getFullYear()}년 {monthBase.getMonth() + 1}월</span>
+            <h2>내 운동 일정</h2>
+          </div>
+          <Link to="/mypage/meetings">전체 보기</Link>
+        </div>
+        <div className="mobile-my-calendar__week"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+        <div className="mobile-my-calendar__grid">
+          {calendarCells.map((cell) => cell.empty ? (
+            <span key={cell.key} aria-hidden="true" />
+          ) : (
+            <button key={cell.key} type="button" className={`${cell.items.length ? "has-event" : ""} ${activeScheduleKey === cell.key ? "is-active" : ""}`} onClick={() => cell.items.length && setSelectedScheduleKey(cell.key)} disabled={!cell.items.length}>
+              <b>{cell.day}</b>
+              {cell.items.length ? <em>{cell.items.length}</em> : null}
+            </button>
+          ))}
+        </div>
+        <div className="mobile-my-calendar__list">
+          {selectedSchedules.length ? selectedSchedules.map((item) => (
+            <Link key={`${item.state}-${item.id}`} to={item.state === "host" ? `/host/meetings/${item.id}` : `/meetings/${item.id}`}>
+              <span>{item.state === "host" ? "방장" : "참여"} · {shortTime(item.start_at)}</span>
+              <strong>{item.title}</strong>
+              <p>{item.place}</p>
+            </Link>
+          )) : <p>표시할 일정이 없습니다.</p>}
+        </div>
       </section>
       <div className="menu-list">
         {showAdminEntry ? (

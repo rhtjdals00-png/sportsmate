@@ -1,9 +1,8 @@
-﻿import { useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Button from "../components/common/Button.jsx";
 import DesktopAuthPage from "../components/auth/desktop/DesktopAuthPage.jsx";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
-import SocialLoginButtons from "../components/auth/SocialLoginButtons.jsx";
 import { authApi } from "../api/authApi";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useResponsive } from "../hooks/useResponsive";
@@ -21,6 +20,13 @@ const emptyAvailability = { status: "idle", message: "", available: null };
 
 const isValidPassword = (password) => passwordRules.every((rule) => rule.test(password));
 const hasAvailabilityError = (availability) => availabilityFields.some((field) => availability[field]?.available === false);
+const passwordRuleLabels = {
+  length: "8자 이상",
+  upper: "대문자 포함",
+  lower: "소문자 포함",
+  number: "숫자 포함",
+  special: "특수문자 포함"
+};
 
 const getRegisterErrorMessage = (error) => {
   const message = error?.message || error?.response?.data?.message || "";
@@ -58,10 +64,16 @@ const getInitialRegisterForm = () => ({
   email: localStorage.getItem("sportsmate_pending_signup_email") || ""
 });
 
+function MobileAvailabilityMessage({ state }) {
+  if (!state?.message) return null;
+  const className = state.available === false ? "is-error" : state.available === true ? "is-ok" : "";
+  return <em className={`mobile-availability-message ${className}`}>{state.message}</em>;
+}
+
 function RegisterPage() {
   const navigate = useNavigate();
   const { isMobile } = useResponsive();
-  const { register, registerVerifiedEmail, requestSignupEmailVerification, verifySignupEmailCode, socialLogin, session } = useAuth();
+  const { registerVerifiedEmail, requestSignupEmailVerification, verifySignupEmailCode, socialLogin, session } = useAuth();
   const [form, setForm] = useState(getInitialRegisterForm);
   const [availability, setAvailability] = useState({
     email: emptyAvailability,
@@ -71,12 +83,23 @@ function RegisterPage() {
   const [emailCode, setEmailCode] = useState("");
   const [emailVerificationSent, setEmailVerificationSent] = useState(false);
   const [emailVerificationLoading, setEmailVerificationLoading] = useState(false);
+  const [verifiedSignupEmail, setVerifiedSignupEmail] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const [completed, setCompleted] = useState(false);
   const verifiedEmail = session?.user?.email_confirmed_at || session?.user?.confirmed_at ? session?.user?.email || "" : "";
-  const isCurrentEmailVerified = Boolean(!isMobile && verifiedEmail && verifiedEmail.toLowerCase() === form.email.trim().toLowerCase());
+  const isCurrentEmailVerified = Boolean(
+    [verifiedEmail, verifiedSignupEmail]
+      .filter(Boolean)
+      .some((email) => email.toLowerCase() === form.email.trim().toLowerCase())
+  );
+  const passwordChecks = passwordRules.map((rule) => ({
+    ...rule,
+    label: passwordRuleLabels[rule.id],
+    passed: rule.test(form.password)
+  }));
+  const passwordMatches = Boolean(form.passwordConfirm) && form.password === form.passwordConfirm;
 
   const setAvailabilityState = (field, state) => {
     setAvailability((current) => ({ ...current, [field]: state }));
@@ -92,6 +115,7 @@ function RegisterPage() {
     if ((form.email || "") !== (formatted.email || "")) {
       setEmailCode("");
       setEmailVerificationSent(false);
+      setVerifiedSignupEmail("");
     }
     setForm(formatted);
   };
@@ -128,6 +152,31 @@ function RegisterPage() {
   };
 
   const checkPhoneNumber = () => checkAvailability("phone_number");
+
+  useEffect(() => {
+    if (!isMobile) return undefined;
+    const email = form.email.trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return undefined;
+    if (isCurrentEmailVerified) return undefined;
+
+    const timer = window.setTimeout(() => {
+      checkAvailability("email", email);
+    }, 600);
+
+    return () => window.clearTimeout(timer);
+  }, [form.email, isCurrentEmailVerified, isMobile]);
+
+  useEffect(() => {
+    if (!isMobile) return undefined;
+    const phone = form.phone_number.trim();
+    if (!phone || phone.replace(/\D/g, "").length < 10) return undefined;
+
+    const timer = window.setTimeout(() => {
+      checkAvailability("phone_number", phone);
+    }, 600);
+
+    return () => window.clearTimeout(timer);
+  }, [form.phone_number, isMobile]);
 
   const requestEmailVerification = async () => {
     setNotice("");
@@ -174,6 +223,7 @@ function RegisterPage() {
     setEmailVerificationLoading(true);
     try {
       await verifySignupEmailCode(email, token);
+      setVerifiedSignupEmail(email);
       setNotice("이메일 인증이 완료되었습니다.");
     } catch (verificationError) {
       setError(verificationError.message || "인증번호 확인에 실패했습니다.");
@@ -186,33 +236,31 @@ function RegisterPage() {
     event.preventDefault();
     setError("");
 
-    if (!isMobile) {
-      if (!isValidPassword(form.password)) {
-        setError("비밀번호는 8자 이상이며 영문 대문자, 영문 소문자, 숫자, 특수문자를 모두 포함해야 합니다.");
-        return;
-      }
-      if (form.password !== form.passwordConfirm) {
-        setError("비밀번호와 비밀번호 확인이 일치하지 않습니다.");
-        return;
-      }
-      const requiredChecks = isCurrentEmailVerified ? [] : ["email"];
-      const unchecked = requiredChecks.find((field) => availability[field]?.available !== true);
-      if (unchecked) {
-        setError("이메일 인증을 완료해주세요.");
-        return;
-      }
-      if (form.phone_number && availability.phone_number?.available !== true) {
-        setError("핸드폰 번호 중복 확인을 완료해주세요.");
-        return;
-      }
-      if (hasAvailabilityError(availability)) {
-        setError("이미 사용 중인 이메일, 닉네임 또는 핸드폰 번호가 있는지 확인해주세요.");
-        return;
-      }
-      if (!form.agreeTerms || !form.agreePrivacy) {
-        setError("필수 약관에 동의해주세요.");
-        return;
-      }
+    if (!isValidPassword(form.password)) {
+      setError("비밀번호는 8자 이상이며 영문 대문자, 영문 소문자, 숫자, 특수문자를 모두 포함해야 합니다.");
+      return;
+    }
+    if (form.password !== form.passwordConfirm) {
+      setError("비밀번호와 비밀번호 확인이 일치하지 않습니다.");
+      return;
+    }
+    const requiredChecks = isCurrentEmailVerified ? [] : ["email"];
+    const unchecked = requiredChecks.find((field) => availability[field]?.available !== true);
+    if (unchecked) {
+      setError("이메일 인증을 완료해주세요.");
+      return;
+    }
+    if (form.phone_number && availability.phone_number?.available !== true) {
+      setError("핸드폰 번호 중복 확인을 완료해주세요.");
+      return;
+    }
+    if (hasAvailabilityError(availability)) {
+      setError("이미 사용 중인 이메일 또는 핸드폰 번호가 있는지 확인해주세요.");
+      return;
+    }
+    if (!form.agreeTerms || !form.agreePrivacy) {
+      setError("필수 약관에 동의해주세요.");
+      return;
     }
 
     setLoading(true);
@@ -224,13 +272,15 @@ function RegisterPage() {
         password: form.password,
         nickname: form.nickname
       };
-      if (!isMobile && !isCurrentEmailVerified) {
+      if (!isCurrentEmailVerified) {
         setError("이메일 인증을 완료해 주세요.");
         return;
       }
       if (isMobile) {
-        await register(payload);
-        navigate("/mypage/profile");
+        await registerVerifiedEmail(payload);
+        localStorage.removeItem("sportsmate_pending_signup_email");
+        sessionStorage.setItem("sportsmate_flash", "회원가입이 완료되었습니다.");
+        navigate("/profile/intro");
       } else {
         await registerVerifiedEmail(payload);
         localStorage.removeItem("sportsmate_pending_signup_email");
@@ -281,16 +331,53 @@ function RegisterPage() {
     <>
       <MobileHeader title="회원가입" />
       <form className="mobile-form auth-form" onSubmit={submit}>
-        <label>이름<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
-        <label>핸드폰 번호<input type="tel" value={form.phone_number} onChange={(event) => setForm({ ...form, phone_number: event.target.value })} /></label>
-        <label>닉네임<input required maxLength={12} value={form.nickname} onChange={(event) => setForm({ ...form, nickname: event.target.value.slice(0, 12) })} /></label>
-        <label>이메일<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
-        <label>비밀번호<input required type="password" minLength="8" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></label>
+        <label>이름<input required value={form.name} onChange={(event) => handleFormChange({ ...form, name: event.target.value })} /></label>
+        <label>
+          핸드폰 번호
+          <span className="mobile-auth-inline-action">
+            <input type="tel" inputMode="numeric" value={form.phone_number} onChange={(event) => handleFormChange({ ...form, phone_number: event.target.value })} placeholder="선택 입력" />
+            <button type="button" onClick={checkPhoneNumber}>확인</button>
+          </span>
+          <MobileAvailabilityMessage state={availability.phone_number} />
+        </label>
+        <label>닉네임<input required maxLength={12} value={form.nickname} onChange={(event) => handleFormChange({ ...form, nickname: event.target.value.slice(0, 12) })} /></label>
+        <label>
+          이메일
+          <span className="mobile-auth-inline-action">
+            <input required type="email" value={form.email} onChange={(event) => handleFormChange({ ...form, email: event.target.value })} placeholder="you@sportsmate.kr" />
+            <button type="button" onClick={requestEmailVerification} disabled={isCurrentEmailVerified}>{isCurrentEmailVerified ? "완료" : "인증"}</button>
+          </span>
+          <MobileAvailabilityMessage state={isCurrentEmailVerified ? { status: "available", message: "이메일 인증이 완료되었습니다.", available: true } : availability.email} />
+        </label>
+        {!isCurrentEmailVerified ? (
+          <label>
+            인증번호
+            <span className="mobile-auth-inline-action">
+              <input type="text" inputMode="numeric" maxLength="8" disabled={!emailVerificationSent} value={emailCode} onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 8))} placeholder="인증번호 8자리" />
+              <button type="button" onClick={verifyEmailCode} disabled={!emailVerificationSent || emailVerificationLoading}>{emailVerificationLoading ? "확인 중" : "확인"}</button>
+            </span>
+          </label>
+        ) : null}
+        <label>비밀번호<input required type="password" minLength="8" value={form.password} onChange={(event) => handleFormChange({ ...form, password: event.target.value })} placeholder="대소문자, 숫자, 특수문자 포함" /></label>
+        <div className="mobile-password-rules">
+          {passwordChecks.map((item) => (
+            <span key={item.id} className={item.passed ? "is-passed" : ""}>{item.label}</span>
+          ))}
+        </div>
+        <label>비밀번호 확인<input required type="password" minLength="8" value={form.passwordConfirm} onChange={(event) => handleFormChange({ ...form, passwordConfirm: event.target.value })} placeholder="비밀번호를 한 번 더 입력" /></label>
+        {form.passwordConfirm ? (
+          <p className={`mobile-password-match ${passwordMatches ? "is-valid" : "is-invalid"}`}>
+            {passwordMatches ? "비밀번호가 일치합니다." : "비밀번호가 일치하지 않습니다."}
+          </p>
+        ) : null}
+        <section className="mobile-auth-agreements" aria-label="약관 동의">
+          <label><input required type="checkbox" checked={form.agreeTerms} onChange={(event) => handleFormChange({ ...form, agreeTerms: event.target.checked })} /><span>서비스 이용약관에 동의합니다.</span></label>
+          <label><input required type="checkbox" checked={form.agreePrivacy} onChange={(event) => handleFormChange({ ...form, agreePrivacy: event.target.checked })} /><span>개인정보 수집 및 이용에 동의합니다.</span></label>
+        </section>
 
         {error ? <p className="mobile-auth-message mobile-auth-message--error">{error}</p> : null}
         {notice ? <p className="mobile-auth-message mobile-auth-message--notice">{notice}</p> : null}
         <Button type="submit" disabled={loading}>{loading ? "처리 중..." : "가입하기"}</Button>
-        <SocialLoginButtons />
         <Link to="/login">이미 계정이 있어요</Link>
 
       </form>

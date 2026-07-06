@@ -38,6 +38,7 @@ import NotificationsPage from "../pages/NotificationsPage.jsx";
 import MapPage from "../pages/MapPage.jsx";
 import AppSettingsPage from "../pages/AppSettingsPage.jsx";
 import ProtectedRoute from "../components/common/ProtectedRoute.jsx";
+import AdminRoute from "../components/common/AdminRoute.jsx";
 
 const protect = (element) => <ProtectedRoute>{element}</ProtectedRoute>;
 
@@ -78,8 +79,8 @@ function AppRouter() {
         <Route path="*" element={<NotFoundPage />} />
       </Route>
 
-      {/* 관리자 라우트 - 독립된 AdminLayout 적용 및 임시 Protect 해제 */}
-      <Route path="/admin" element={<AdminLayout />}>
+      {/* 관리자 라우트 - 관리자 권한이 있는 계정만 접근할 수 있습니다. */}
+      <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
         <Route index element={<AdminPage />} />
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="users/:userId" element={<AdminUserDetailPage />} />
