@@ -18,6 +18,8 @@ def _room_options(include_messages=False):
 
 def ensure_chat_access(room_id, user_id, include_messages=False):
     room = ChatRoom.query.options(*_room_options(include_messages)).get_or_404(room_id)
+    if room.meeting and room.meeting.host_id == user_id:
+        return room
     participant = Participant.query.filter_by(meeting_id=room.meeting_id, user_id=user_id, status="approved").first()
     if not participant:
         raise PermissionError("승인된 참여자만 채팅방에 접근할 수 있습니다.")
@@ -27,7 +29,7 @@ def ensure_chat_access(room_id, user_id, include_messages=False):
 def send_message(room_id, user_id, content):
     room = ensure_chat_access(room_id, user_id)
     sender = User.query.options(joinedload(User.profile)).get(user_id)
-    sender_name = sender.profile.nickname if sender and sender.profile and sender.profile.nickname else (sender.name if sender else "참여자")
+    sender_name = sender.nickname or sender.name if sender else "참여자"
     meeting_title = room.meeting.title if room.meeting else "모임"
     message = ChatMessage(chat_room_id=room.id, user_id=user_id, content=content)
     db.session.add(message)

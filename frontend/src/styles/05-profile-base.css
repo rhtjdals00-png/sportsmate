@@ -790,6 +790,22 @@
   cursor: pointer;
 }
 
+.profile-calendar-day.is-highlighted-from-chat {
+  border-color: #2563eb;
+  background: linear-gradient(135deg, #dbeafe, #eef2ff);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14), 0 14px 30px rgba(37, 99, 235, 0.16);
+  color: #1e3a8a;
+}
+
+.profile-calendar-day.is-highlighted-from-chat small {
+  color: #1d4ed8;
+}
+
+.profile-calendar-day.is-highlighted-from-chat em {
+  color: #1e40af;
+  font-weight: 950;
+}
+
 .profile-calendar-day:disabled {
   cursor: default;
   opacity: 1;

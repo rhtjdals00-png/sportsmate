@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
@@ -24,8 +24,13 @@ def rooms():
     approved_meetings = (
         Meeting.query
         .options(joinedload(Meeting.chat_room))
-        .join(Participant, Participant.meeting_id == Meeting.id)
-        .filter(Participant.user_id == user_id, Participant.status == "approved")
+        .outerjoin(Participant, Participant.meeting_id == Meeting.id)
+        .filter(
+            or_(
+                Meeting.host_id == user_id,
+                (Participant.user_id == user_id) & (Participant.status == "approved")
+            )
+        )
         .all()
     )
     missing_rooms = [ChatRoom(meeting_id=meeting.id) for meeting in approved_meetings if not meeting.chat_room]
@@ -35,8 +40,14 @@ def rooms():
     items = (
         ChatRoom.query.options(*ROOM_LIST_OPTIONS)
         .join(Meeting, ChatRoom.meeting_id == Meeting.id)
-        .join(Participant, Participant.meeting_id == Meeting.id)
-        .filter(Participant.user_id == user_id, Participant.status == "approved")
+        .outerjoin(Participant, Participant.meeting_id == Meeting.id)
+        .filter(
+            or_(
+                Meeting.host_id == user_id,
+                (Participant.user_id == user_id) & (Participant.status == "approved")
+            )
+        )
+        .distinct(ChatRoom.id)
         .all()
     )
     room_ids = [room.id for room in items]

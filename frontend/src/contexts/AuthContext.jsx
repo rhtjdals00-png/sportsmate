@@ -6,6 +6,7 @@ const AuthContext = createContext(null);
 
 const SUPABASE_CONFIG_ERROR = "Supabase 환경변수가 설정되지 않아 인증 기능을 사용할 수 없습니다.";
 const SUPABASE_AUTH_PROVIDERS = ["google", "kakao"];
+const SUPABASE_TOKEN_ERROR_MESSAGE = "인증번호가 만료되었거나 올바르지 않습니다. 메일함의 최신 인증번호를 다시 입력해주세요.";
 
 function requireSupabase() {
   if (!isSupabaseConfigured || !supabase) {
@@ -43,7 +44,8 @@ function metadataFromSupabaseUser(user, fallback = {}) {
     provider,
     provider_id: providerId,
     profile_image_url: metadata.avatar_url || metadata.picture || "",
-    allow_nickname_suffix: Boolean(fallback.allow_nickname_suffix)
+    allow_nickname_suffix: Boolean(fallback.allow_nickname_suffix),
+    force_profile_update: Boolean(fallback.force_profile_update)
   };
 }
 
@@ -68,7 +70,7 @@ export function AuthProvider({ children }) {
     }
     if (typeof data.is_new_user === "boolean") {
       const currentRedirect = localStorage.getItem("sportsmate_post_auth_redirect");
-      const needsProfile = data.is_new_user || data.profile_complete === false;
+      const needsProfile = data.profile_intro_required ?? (data.is_new_user || data.profile_complete === false);
       if (needsProfile) {
         localStorage.setItem("sportsmate_post_auth_redirect", "/profile/intro");
       } else if (currentRedirect !== "/profile/intro" && currentRedirect !== "/profile/setup") {
@@ -221,9 +223,19 @@ export function AuthProvider({ children }) {
             token,
             type: "signup"
           });
-          if (signupError) throw signupError;
+          if (signupError) {
+            const message = signupError.message || "";
+            if (message.toLowerCase().includes("token")) {
+              throw new Error(SUPABASE_TOKEN_ERROR_MESSAGE);
+            }
+            throw signupError;
+          }
+          const nextSession = signupData.session || (await client.auth.getSession()).data.session;
+          setSession(nextSession);
           return signupData;
         }
+        const nextSession = data.session || (await client.auth.getSession()).data.session;
+        setSession(nextSession);
         return data;
       },
       async registerVerifiedEmail(payload) {
@@ -244,7 +256,7 @@ export function AuthProvider({ children }) {
           }
         });
         if (error) throw error;
-        const synced = await syncProfile(data.user || currentUser, payload);
+        const synced = await syncProfile(data.user || currentUser, { ...payload, force_profile_update: true });
         return synced;
       },
       async socialLogin(provider) {
