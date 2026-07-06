@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   CalendarDays,
   Camera,
@@ -105,8 +105,21 @@ function normalizeMeeting(meeting, state) {
     rawTime: meeting.start_at,
     member: meetingMemberText(meeting),
     state,
+    chatRoomId: meeting.chat_room_id,
     img: meetingImage(meeting)
   };
+}
+
+function uniqueMeetingsById(items) {
+  const byId = new Map();
+  items.forEach((item) => {
+    const key = String(item.id);
+    const existing = byId.get(key);
+    if (!existing || (item.state === "host" && existing.state !== "host")) {
+      byId.set(key, item);
+    }
+  });
+  return Array.from(byId.values());
 }
 
 function pageTitle(title, desc) {
@@ -145,7 +158,7 @@ function ScheduleItem({ item }) {
         <p>{item.place} · {item.member}</p>
         <footer>
           <Link className="ghost-btn" to={`/meetings/${item.id}`}><FileText size={14} />상세</Link>
-          <Link className="ghost-btn" to={`/chats/${item.id}`}><MessageCircle size={14} />채팅</Link>
+          <Link className="ghost-btn" to={item.chatRoomId ? `/chats/${item.chatRoomId}` : "/chats"}><MessageCircle size={14} />채팅</Link>
         </footer>
       </div>
     </article>
@@ -214,17 +227,39 @@ function buildCalendarCells(monthDate, items) {
   });
 }
 
-function CalendarModal({ open, items, onClose }) {
+function CalendarModal({ open, items, onClose, highlightMeetingId, highlightChatRoomId }) {
   const [monthDate, setMonthDate] = useState(() => calendarBaseDate(items));
   const [selectedDay, setSelectedDay] = useState(null);
   const cells = useMemo(() => buildCalendarCells(monthDate, items), [monthDate, items]);
+  const isHighlightedItem = (item) => {
+    if (highlightChatRoomId && item.chatRoomId) {
+      return String(item.chatRoomId) === String(highlightChatRoomId);
+    }
+    return String(item.id) === String(highlightMeetingId);
+  };
+  const highlightedItem = useMemo(
+    () => items.find((item) => {
+      if (highlightChatRoomId && item.chatRoomId) {
+        return String(item.chatRoomId) === String(highlightChatRoomId);
+      }
+      return String(item.id) === String(highlightMeetingId);
+    }),
+    [highlightChatRoomId, highlightMeetingId, items]
+  );
 
   useEffect(() => {
     if (open) {
-      setMonthDate(calendarBaseDate(items));
+      const highlightedDate = validDate(highlightedItem?.rawTime);
+      setMonthDate(highlightedDate ? new Date(highlightedDate.getFullYear(), highlightedDate.getMonth(), 1) : calendarBaseDate(items));
       setSelectedDay(null);
     }
-  }, [open, items]);
+  }, [open, items, highlightedItem]);
+
+  useEffect(() => {
+    if (!open || !highlightedItem) return;
+    const matchedCell = cells.find((cell) => cell.items.some(isHighlightedItem));
+    if (matchedCell) setSelectedDay(matchedCell);
+  }, [cells, highlightedItem, open]);
 
   if (!open) return null;
   return (
@@ -254,7 +289,7 @@ function CalendarModal({ open, items, onClose }) {
                     <button
                       type="button"
                       key={cell.key}
-                      className={`calendar-day profile-calendar-day ${cell.outside ? "is-outside" : ""} ${cell.items.length ? "has-event" : ""} ${cell.items.some((item) => item.state === "host") ? "host-day" : ""}`}
+                      className={`calendar-day profile-calendar-day ${cell.outside ? "is-outside" : ""} ${cell.items.length ? "has-event" : ""} ${cell.items.some((item) => item.state === "host") ? "host-day" : ""} ${cell.items.some(isHighlightedItem) ? "is-highlighted-from-chat" : ""}`}
                       disabled={cell.outside || !cell.items.length}
                       onClick={() => cell.items.length && setSelectedDay(cell)}
                     >
@@ -281,7 +316,7 @@ function CalendarModal({ open, items, onClose }) {
             <h2 className="schedule-modal-title">{calendarDayTitle(selectedDay.date)} 일정</h2>
             <div className="schedule-modal-body">
               {selectedDay.items.map((item) => (
-                <article className="schedule-modal-item" key={`${item.state}-${item.id}`}>
+                <article className={`schedule-modal-item ${isHighlightedItem(item) ? "is-highlighted-from-chat" : ""}`} key={`${item.state}-${item.id}`}>
                   <img src={item.img} alt={item.title} />
                   <div>
                     {item.state === "host" && <div className="schedule-modal-status"><span className="board-badge host"><Crown size={13} />내가 방장</span></div>}
@@ -291,6 +326,7 @@ function CalendarModal({ open, items, onClose }) {
                     {item.state !== "host" && <span className={`board-badge ${item.state}`}>{calendarStateLabel(item)}</span>}
                     <footer>
                       <Link className="ghost-btn" to={`/meetings/${item.id}`}>상세 보기</Link>
+                      {isHighlightedItem(item) && highlightChatRoomId && <Link className="ghost-btn is-chat-return" to={`/chats/${highlightChatRoomId}`}>채팅으로 돌아가기</Link>}
                       {item.state === "host" && <Link className="ghost-btn" to={`/host/meetings/${item.id}`}>관리</Link>}
                     </footer>
                   </div>
@@ -306,6 +342,7 @@ function CalendarModal({ open, items, onClose }) {
 
 function DesktopMyPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user: authUser, backendTokenReady, setCurrentUser } = useAuth();
   const [refreshKey, setRefreshKey] = useState(0);
   const [activeActivity, setActiveActivity] = useState("schedule");
@@ -317,6 +354,27 @@ function DesktopMyPage() {
   const [authChecking, setAuthChecking] = useState(false);
   const [savingIntro, setSavingIntro] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarHighlight, setCalendarHighlight] = useState({ meetingId: "", chatRoomId: "" });
+
+  useEffect(() => {
+    const panel = searchParams.get("panel");
+    if (panel && ["schedule", "hosted", "joined", "favorite", "reviews"].includes(panel)) {
+      setActiveActivity(panel);
+    }
+    if (searchParams.get("calendar") === "1") {
+      setActiveActivity("schedule");
+      setCalendarHighlight({
+        meetingId: searchParams.get("meeting") || "",
+        chatRoomId: searchParams.get("chat") || ""
+      });
+      setCalendarOpen(true);
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("calendar");
+      nextParams.delete("meeting");
+      nextParams.delete("chat");
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const canUseProtectedUserApi = Boolean(authUser && backendTokenReady);
 
@@ -342,7 +400,7 @@ function DesktopMyPage() {
   const hostedMeetings = (meetingsState.data?.hosted || []).map((meeting) => normalizeMeeting(meeting, "host"));
   const joinedMeetings = (meetingsState.data?.joined || []).map((meeting) => normalizeMeeting(meeting, "joined"));
   const scheduled = useMemo(
-    () => [...hostedMeetings, ...joinedMeetings].sort((a, b) => new Date(a.rawTime || 0) - new Date(b.rawTime || 0)),
+    () => uniqueMeetingsById([...hostedMeetings, ...joinedMeetings]).sort((a, b) => new Date(a.rawTime || 0) - new Date(b.rawTime || 0)),
     [hostedMeetings, joinedMeetings]
   );
   const reviewItems = reviewsState.data?.items || [];
@@ -598,7 +656,13 @@ function DesktopMyPage() {
           </section>
         </div>
       )}
-      <CalendarModal open={calendarOpen} items={scheduled} onClose={() => setCalendarOpen(false)} />
+      <CalendarModal
+        open={calendarOpen}
+        items={scheduled}
+        onClose={() => setCalendarOpen(false)}
+        highlightMeetingId={calendarHighlight.meetingId}
+        highlightChatRoomId={calendarHighlight.chatRoomId}
+      />
     </div>
   );
 }

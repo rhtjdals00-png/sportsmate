@@ -311,6 +311,7 @@ function DesktopMeetingDetail() {
   const isFull = Number(meeting.current_participants || 0) >= Number(meeting.max_participants || 0);
   const hasApplied = Boolean(myParticipant && myParticipant.role !== "host" && myParticipant.status !== "cancelled");
   const canJoin = !isHost && !hasApplied && !isClosed && !isFull && !joining;
+  const chatRoomId = meeting.chat_room_id;
 
   const joinMeeting = async () => {
     if (!isAuthenticated) {
@@ -439,7 +440,7 @@ function DesktopMeetingDetail() {
             )}
 
             {myParticipant?.status === "approved" && (
-              <Link className="ghost-btn full" to="/chats">
+              <Link className="ghost-btn full" to={chatRoomId ? `/chats/${chatRoomId}` : "/chats"}>
                 <MessageSquareText size={16} /> 채팅방 보기
               </Link>
             )}

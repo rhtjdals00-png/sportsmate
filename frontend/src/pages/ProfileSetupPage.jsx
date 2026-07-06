@@ -1,11 +1,11 @@
-import { Camera, CheckCircle2, MapPin, Plus, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Camera, Map as MapIcon, MapPin, Plus, Search, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Button from "../components/common/Button.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import { locationApi } from "../api/locationApi";
 import { sportApi } from "../api/sportApi";
 import { userApi } from "../api/userApi";
-import { koreaRegions } from "../data/koreaRegions";
 
 const levelOptions = [
   { value: "beginner", label: "입문" },
@@ -73,17 +73,143 @@ function buildSportGroups(categories, sports) {
   return groups.length ? groups : fallbackSportGroups;
 }
 
-function regionParts(regionName) {
-  const parts = (regionName || "").split(" ").filter(Boolean);
-  return {
-    sido: parts[0] || "",
-    area: parts[1] || "",
-    district: parts.slice(2).join(" ")
-  };
+const DEFAULT_MAP_CENTER = { latitude: 37.5665, longitude: 126.9780 };
+const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
+
+function loadNaverMapScript(clientId) {
+  if (!clientId) return Promise.reject(new Error("missing naver map client id"));
+  if (window.naver?.maps) return Promise.resolve(window.naver.maps);
+  if (window.__sportsmateNaverMapPromise) return window.__sportsmateNaverMapPromise;
+
+  window.__sportsmateNaverMapPromise = new Promise((resolve, reject) => {
+    const existing = document.getElementById(NAVER_MAP_SCRIPT_ID);
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.naver.maps), { once: true });
+      existing.addEventListener("error", reject, { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = NAVER_MAP_SCRIPT_ID;
+    script.async = true;
+    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(clientId)}`;
+    script.onload = () => resolve(window.naver.maps);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+
+  return window.__sportsmateNaverMapPromise;
 }
 
-function joinRegion(sido, area, district) {
-  return [sido, area, district].filter(Boolean).join(" ");
+function toMapPoint(place) {
+  const latitude = Number(place?.latitude);
+  const longitude = Number(place?.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { latitude, longitude };
+}
+
+function normalizePlaceText(value) {
+  return (value || "").replace(/<[^>]+>/g, "").trim();
+}
+
+function ProfileRegionMap({ clientId, selectedLocation, results, onSelect }) {
+  const mapElementRef = useRef(null);
+  const mapRef = useRef(null);
+  const selectedMarkerRef = useRef(null);
+  const resultMarkersRef = useRef([]);
+  const [mapStatus, setMapStatus] = useState("idle");
+
+  useEffect(() => {
+    if (!clientId) return;
+    let disposed = false;
+    setMapStatus("loading");
+    loadNaverMapScript(clientId)
+      .then((maps) => {
+        if (disposed || !mapElementRef.current || mapRef.current) return;
+        const center = new maps.LatLng(DEFAULT_MAP_CENTER.latitude, DEFAULT_MAP_CENTER.longitude);
+        mapRef.current = new maps.Map(mapElementRef.current, {
+          center,
+          zoom: 12,
+          mapDataControl: false,
+          scaleControl: false,
+          zoomControl: true,
+          zoomControlOptions: {
+            position: maps.Position.TOP_RIGHT,
+            style: maps.ZoomControlStyle.SMALL
+          }
+        });
+        maps.Event.addListener(mapRef.current, "click", (event) => {
+          onSelect({
+            source: "map-click",
+            latitude: event.coord.lat(),
+            longitude: event.coord.lng()
+          });
+        });
+        setMapStatus("ready");
+      })
+      .catch(() => setMapStatus("error"));
+
+    return () => {
+      disposed = true;
+    };
+  }, [clientId, onSelect]);
+
+  useEffect(() => {
+    const maps = window.naver?.maps;
+    const map = mapRef.current;
+    const selectedPoint = toMapPoint(selectedLocation);
+    if (!maps || !map || !selectedPoint) return;
+
+    const position = new maps.LatLng(selectedPoint.latitude, selectedPoint.longitude);
+    if (!selectedMarkerRef.current) {
+      selectedMarkerRef.current = new maps.Marker({ map, position });
+    } else {
+      selectedMarkerRef.current.setPosition(position);
+      selectedMarkerRef.current.setMap(map);
+    }
+    map.setCenter(position);
+    if (map.getZoom() < 14) map.setZoom(15);
+  }, [selectedLocation?.latitude, selectedLocation?.longitude]);
+
+  useEffect(() => {
+    const maps = window.naver?.maps;
+    const map = mapRef.current;
+    if (!maps || !map) return;
+
+    resultMarkersRef.current.forEach((marker) => marker.setMap(null));
+    resultMarkersRef.current = [];
+
+    const bounds = new maps.LatLngBounds();
+    let hasBounds = false;
+    results.forEach((place) => {
+      const point = toMapPoint(place);
+      if (!point) return;
+      const position = new maps.LatLng(point.latitude, point.longitude);
+      const marker = new maps.Marker({ map, position });
+      maps.Event.addListener(marker, "click", () => onSelect(place));
+      resultMarkersRef.current.push(marker);
+      bounds.extend(position);
+      hasBounds = true;
+    });
+    if (hasBounds && !toMapPoint(selectedLocation)) map.fitBounds(bounds, { top: 36, right: 36, bottom: 36, left: 36 });
+  }, [results, onSelect, selectedLocation?.latitude, selectedLocation?.longitude]);
+
+  if (!clientId) {
+    return <div className="profile-setup__map-empty"><MapIcon size={20} />네이버 지도 클라이언트 키를 설정하면 지도에서 위치를 지정할 수 있습니다.</div>;
+  }
+
+  return (
+    <div className="profile-setup__map-panel">
+      <div className="profile-setup__map-toolbar">
+        <span><MapIcon size={17} />지도에서 활동지역 지정</span>
+        <small>검색 결과 마커나 지도 위치를 클릭하세요.</small>
+      </div>
+      <div className="profile-setup__map" ref={mapElementRef}>
+        {mapStatus === "loading" ? <span>지도를 불러오는 중입니다.</span> : null}
+        {mapStatus === "error" ? <span>지도를 불러오지 못했습니다.</span> : null}
+      </div>
+    </div>
+  );
 }
 
 function tagLabel(user) {
@@ -92,23 +218,30 @@ function tagLabel(user) {
   return normalized ? `#${normalized}` : "";
 }
 
+function profilePhoneValue(value) {
+  const formatted = formatPhoneNumber(value || "");
+  const digits = formatted.replace(/\D/g, "");
+  return digits === "01000000000" ? "" : formatted;
+}
+
 function ProfileSetupPage() {
   const navigate = useNavigate();
   const { user, setCurrentUser } = useAuth();
-  const initialRegion = regionParts(user?.profile?.region);
   const initialLevels = parsePreferredLevels(user?.profile?.preferred_sport_levels);
   const initialSports = splitSports(user?.profile?.preferred_sports);
 
   const [form, setForm] = useState({
     name: user?.name || "",
     nickname: user?.nickname || "",
-    phone_number: formatPhoneNumber(user?.phone_number || ""),
+    phone_number: profilePhoneValue(user?.phone_number),
     profile_image_url: user?.profile_image_url || "",
     bio: user?.profile?.bio || "",
-    region_sido: initialRegion.sido,
-    region_area: initialRegion.area,
-    region_district: initialRegion.district,
     region: user?.profile?.region || "",
+    region_latitude: user?.profile?.region_latitude,
+    region_longitude: user?.profile?.region_longitude,
+    region_2: user?.profile?.region_2 || "",
+    region_2_latitude: user?.profile?.region_2_latitude,
+    region_2_longitude: user?.profile?.region_2_longitude,
     exercise_level: user?.profile?.exercise_level || initialLevels.all || "beginner",
     preferred_sports: initialSports,
     preferred_sport_levels: initialLevels
@@ -117,9 +250,27 @@ function ProfileSetupPage() {
   const [sports, setSports] = useState([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState(fallbackSportGroups[0].id);
   const [selectedSport, setSelectedSport] = useState("");
+  const [selectedSportLevel, setSelectedSportLevel] = useState(user?.profile?.exercise_level || initialLevels.all || "beginner");
   const [useSportLevels, setUseSportLevels] = useState(
     initialSports.some((sportName) => Boolean(initialLevels[sportName]))
   );
+  const [regionKeywords, setRegionKeywords] = useState({
+    primary: user?.profile?.region || "",
+    secondary: user?.profile?.region_2 || ""
+  });
+  const [showSecondaryRegion, setShowSecondaryRegion] = useState(Boolean(user?.profile?.region_2));
+  const [activeRegionSlot, setActiveRegionSlot] = useState("primary");
+  const [pendingRegionSelection, setPendingRegionSelection] = useState(null);
+  const [regionResults, setRegionResults] = useState([]);
+  const [regionLoading, setRegionLoading] = useState(false);
+  const [regionMessage, setRegionMessage] = useState("");
+  const [mapClientId, setMapClientId] = useState("");
+  const regionSearchRequestRef = useRef(0);
+  const regionReverseRequestRef = useRef(0);
+  const selectedRegionKeywordRef = useRef({
+    primary: user?.profile?.region || "",
+    secondary: user?.profile?.region_2 || ""
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -137,11 +288,16 @@ function ProfileSetupPage() {
 
   const sportGroups = useMemo(() => buildSportGroups(categories, sports), [categories, sports]);
   const activeSportGroup = sportGroups.find((group) => group.id === selectedCategoryId) || sportGroups[0];
-  const selectedSido = koreaRegions.find((region) => region.name === form.region_sido);
-  const availableAreas = selectedSido?.areas || [];
-  const availableDistricts = selectedSido?.districts?.[form.region_area] || [];
   const selectedLevelLabel = levelOptions.find((level) => level.value === form.exercise_level)?.label || "입문";
   const displayTag = tagLabel(user);
+  const selectedRegionLocation = activeRegionSlot === "secondary"
+    ? { latitude: form.region_2_latitude, longitude: form.region_2_longitude }
+    : { latitude: form.region_latitude, longitude: form.region_longitude };
+  const mapSelectedLocation = pendingRegionSelection?.slot === activeRegionSlot ? pendingRegionSelection : selectedRegionLocation;
+  const visibleRegionSlots = [
+    { id: "primary", label: "활동지역 1", value: form.region },
+    ...(showSecondaryRegion ? [{ id: "secondary", label: "활동지역 2", value: form.region_2 }] : [])
+  ];
 
   useEffect(() => {
     if (!sportGroups.some((group) => group.id === selectedCategoryId)) {
@@ -150,18 +306,135 @@ function ProfileSetupPage() {
     }
   }, [sportGroups, selectedCategoryId]);
 
+  useEffect(() => {
+    locationApi.mapConfig()
+      .then((data) => setMapClientId(data.naver_dynamic_map_client_id || ""))
+      .catch(() => setMapClientId(""));
+  }, []);
+
   const updateField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const updateRegion = (sido, area = "", district = "") => {
+  const updateRegionKeyword = (slot, value) => {
+    setRegionKeywords((current) => ({ ...current, [slot]: value }));
+  };
+
+  const activateRegionSlot = (slot) => {
+    if (activeRegionSlot === slot) return;
+    setActiveRegionSlot(slot);
+    setRegionResults([]);
+    setPendingRegionSelection(null);
+    setRegionMessage("");
+  };
+
+  const updateRegion = (slot, region, latitude, longitude) => {
+    const fields = slot === "secondary"
+      ? { region: "region_2", latitude: "region_2_latitude", longitude: "region_2_longitude" }
+      : { region: "region", latitude: "region_latitude", longitude: "region_longitude" };
     setForm((current) => ({
       ...current,
-      region_sido: sido,
-      region_area: area,
-      region_district: district,
-      region: joinRegion(sido, area, district)
+      [fields.region]: region,
+      [fields.latitude]: latitude,
+      [fields.longitude]: longitude
     }));
+  };
+
+  const searchRegion = async (slot = activeRegionSlot) => {
+    const keyword = (regionKeywords[slot] || "").trim();
+    setActiveRegionSlot(slot);
+    if (!keyword) {
+      setRegionResults([]);
+      setRegionMessage("검색할 주소나 장소를 입력해주세요.");
+      return;
+    }
+
+    const requestId = regionSearchRequestRef.current + 1;
+    regionSearchRequestRef.current = requestId;
+    setPendingRegionSelection(null);
+    setRegionLoading(true);
+    setRegionMessage("");
+    try {
+      const data = await locationApi.searchPlaces({ keyword, size: 8 });
+      if (regionSearchRequestRef.current !== requestId) return;
+      const items = data.items || [];
+      setRegionResults(items);
+      setRegionMessage(items.length ? `${items.length}개의 검색 결과가 있습니다. 추가할 위치를 먼저 선택해주세요.` : "검색 결과가 없습니다.");
+    } catch {
+      if (regionSearchRequestRef.current === requestId) {
+        setRegionResults([]);
+        setRegionMessage("주소 검색에 실패했습니다.");
+      }
+    } finally {
+      if (regionSearchRequestRef.current === requestId) setRegionLoading(false);
+    }
+  };
+
+  const selectRegion = useCallback(async (place) => {
+    const slot = activeRegionSlot;
+    if (place.source === "map-click") {
+      const requestId = regionReverseRequestRef.current + 1;
+      regionReverseRequestRef.current = requestId;
+      const { latitude, longitude } = place;
+      selectedRegionKeywordRef.current[slot] = "지도에서 선택한 위치";
+      regionSearchRequestRef.current += 1;
+      setRegionResults([]);
+      setRegionLoading(false);
+      setRegionMessage("지도에서 선택한 위치의 주소를 확인하고 있습니다.");
+      setPendingRegionSelection({ slot, title: "지도에서 선택한 위치", address: "지도에서 선택한 위치", latitude, longitude });
+
+      try {
+        const data = await locationApi.reverseGeocode({ latitude, longitude });
+        const item = data.item || {};
+        const title = normalizePlaceText(item.title) || item.address || "지도에서 선택한 위치";
+        const address = item.address || item.road_address || title;
+        if (regionReverseRequestRef.current !== requestId) return;
+        setPendingRegionSelection({ slot, title, address, latitude, longitude });
+        setRegionMessage("선택한 위치를 확인한 뒤 추가 버튼을 눌러주세요.");
+      } catch {
+        if (regionReverseRequestRef.current !== requestId) return;
+        const coordinateLabel = `위도 ${Number(latitude).toFixed(6)}, 경도 ${Number(longitude).toFixed(6)}`;
+        setPendingRegionSelection({ slot, title: "지도에서 선택한 위치", address: coordinateLabel, latitude, longitude });
+        setRegionMessage("주소 확인에 실패했습니다. 좌표를 추가하려면 추가 버튼을 눌러주세요.");
+      }
+      return;
+    }
+
+    const title = normalizePlaceText(place.title);
+    const address = place.address || place.road_address || title;
+    setPendingRegionSelection({ slot, title: title || address, address, latitude: place.latitude, longitude: place.longitude });
+    setRegionMessage("선택한 위치를 확인한 뒤 추가 버튼을 눌러주세요.");
+  }, [activeRegionSlot, regionKeywords]);
+
+  const addPendingRegion = () => {
+    if (!pendingRegionSelection) {
+      setRegionMessage("검색 결과나 지도에서 추가할 위치를 먼저 선택해주세요.");
+      return;
+    }
+    const { slot, title, address, latitude, longitude } = pendingRegionSelection;
+    const label = address || title;
+    selectedRegionKeywordRef.current[slot] = label;
+    regionSearchRequestRef.current += 1;
+    updateRegionKeyword(slot, label);
+    updateRegion(slot, label, latitude, longitude);
+    setRegionResults([]);
+    setPendingRegionSelection(null);
+    setRegionLoading(false);
+    setRegionMessage(`${slot === "secondary" ? "활동지역 2" : "활동지역 1"}에 추가되었습니다.`);
+  };
+
+  const addRegionPlace = (place) => {
+    const slot = activeRegionSlot;
+    const title = normalizePlaceText(place.title);
+    const address = place.address || place.road_address || title;
+    selectedRegionKeywordRef.current[slot] = address;
+    regionSearchRequestRef.current += 1;
+    updateRegionKeyword(slot, address);
+    updateRegion(slot, address, place.latitude, place.longitude);
+    setRegionResults([]);
+    setPendingRegionSelection(null);
+    setRegionLoading(false);
+    setRegionMessage(`${slot === "secondary" ? "활동지역 2" : "활동지역 1"}에 추가되었습니다.`);
   };
 
   const updateExerciseLevel = (level) => {
@@ -173,16 +446,7 @@ function ProfileSetupPage() {
         all: level
       }
     }));
-  };
-
-  const updateSportLevel = (sportName, level) => {
-    setForm((current) => ({
-      ...current,
-      preferred_sport_levels: {
-        ...current.preferred_sport_levels,
-        [sportName]: level
-      }
-    }));
+    setSelectedSportLevel(level);
   };
 
   const addSport = () => {
@@ -194,7 +458,7 @@ function ProfileSetupPage() {
         preferred_sports: [...current.preferred_sports, selectedSport],
         preferred_sport_levels: {
           ...current.preferred_sport_levels,
-          [selectedSport]: current.preferred_sport_levels[selectedSport] || current.exercise_level
+          [selectedSport]: useSportLevels ? selectedSportLevel : current.exercise_level
         }
       };
     });
@@ -226,13 +490,19 @@ function ProfileSetupPage() {
     setError("");
     setSaving(true);
     try {
+      const phoneNumber = profilePhoneValue(form.phone_number);
       const data = await userApi.updateMe({
         name: form.name.trim(),
-        phone_number: formatPhoneNumber(form.phone_number),
+        phone_number: phoneNumber || null,
         nickname: form.nickname.trim(),
         profile_image_url: form.profile_image_url,
         bio: form.bio.trim(),
         region: form.region,
+        region_latitude: form.region_latitude,
+        region_longitude: form.region_longitude,
+        region_2: form.region_2,
+        region_2_latitude: form.region_2_latitude,
+        region_2_longitude: form.region_2_longitude,
         exercise_level: form.exercise_level,
         preferred_sports: form.preferred_sports.join(", "),
         preferred_sport_levels: useSportLevels
@@ -256,10 +526,6 @@ function ProfileSetupPage() {
             <p className="profile-setup__eyebrow">{"추가 정보 입력"}</p>
             <h1>{"운동 메이트 추천을 위한 프로필을 완성해주세요"}</h1>
             <p>{"가입은 완료됐어요. 지역, 운동 수준, 선호 종목을 입력하면 더 정확한 추천을 받을 수 있습니다."}</p>
-          </div>
-          <div className="profile-setup__status">
-            <CheckCircle2 size={18} />
-            <span>{"Supabase Auth 연결됨"}</span>
           </div>
         </section>
 
@@ -308,24 +574,82 @@ function ProfileSetupPage() {
         <section className="profile-setup__panel profile-setup__grid-section">
           <div>
             <h2>{"활동 지역"}</h2>
-            <p>{"주로 참여할 수 있는 지역을 단계별로 선택해주세요."}</p>
+            <p>{"주소를 검색하거나 지도에서 활동할 위치를 선택해주세요."}</p>
           </div>
-          <div className="profile-setup__select-block">
-            <div className="profile-setup__select-grid profile-setup__select-grid--region">
-              <select value={form.region_sido} onChange={(event) => updateRegion(event.target.value)}>
-                <option value="">{"시/도 선택"}</option>
-                {koreaRegions.map((region) => <option key={region.name} value={region.name}>{region.name}</option>)}
-              </select>
-              <select value={form.region_area} onChange={(event) => updateRegion(form.region_sido, event.target.value)} disabled={!form.region_sido}>
-                <option value="">{"시/군/구 선택"}</option>
-                {availableAreas.map((area) => <option key={area} value={area}>{area}</option>)}
-              </select>
-              <select value={form.region_district} onChange={(event) => updateRegion(form.region_sido, form.region_area, event.target.value)} disabled={!availableDistricts.length}>
-                <option value="">{"읍/면/동 선택"}</option>
-                {availableDistricts.map((district) => <option key={district} value={district}>{district}</option>)}
-              </select>
-            </div>
-            <div className="profile-setup__region-result"><MapPin size={16} />{form.region || text("지역 미선택")}</div>
+          <div className="profile-setup__region-picker">
+            {visibleRegionSlots.map((slot) => (
+              <div key={slot.id} className={`profile-setup__region-slot ${activeRegionSlot === slot.id ? "is-active" : ""}`}>
+                <label className="profile-setup__address-row">
+                  <Search size={18} />
+                  <input
+                    value={regionKeywords[slot.id]}
+                    placeholder={`${slot.label} 주소 또는 장소`}
+                    onFocus={() => activateRegionSlot(slot.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        searchRegion(slot.id);
+                      }
+                    }}
+                    onChange={(event) => {
+                      selectedRegionKeywordRef.current[slot.id] = "";
+                      updateRegionKeyword(slot.id, event.target.value);
+                      updateRegion(slot.id, event.target.value, undefined, undefined);
+                      activateRegionSlot(slot.id);
+                    }}
+                  />
+                  <button type="button" onClick={() => searchRegion(slot.id)} disabled={regionLoading && activeRegionSlot === slot.id}>
+                    {regionLoading && activeRegionSlot === slot.id ? "검색 중" : "검색"}
+                  </button>
+                </label>
+                <div className={`profile-setup__region-result ${slot.value ? "is-selected" : ""}`}>
+                  <MapPin size={16} />
+                  <strong>{slot.label}</strong>
+                  <span>{slot.value || "아직 선택되지 않았습니다."}</span>
+                </div>
+              </div>
+            ))}
+            {!showSecondaryRegion ? (
+              <button
+                type="button"
+                className="profile-setup__add-region-button"
+                onClick={() => {
+                  setShowSecondaryRegion(true);
+                  activateRegionSlot("secondary");
+                }}
+              >
+                <Plus size={16} /> 선호지역 추가
+              </button>
+            ) : null}
+            {regionMessage ? <p className="profile-setup__address-message">{regionMessage}</p> : null}
+            {regionResults.length > 0 ? (
+              <div className="profile-setup__address-results">
+                {regionResults.map((place, index) => (
+                  <button
+                    type="button"
+                    key={`${place.title || place.address}-${index}`}
+                    className={pendingRegionSelection?.address === (place.address || place.road_address || normalizePlaceText(place.title)) ? "is-pending" : ""}
+                    onClick={() => selectRegion(place)}
+                    onDoubleClick={() => addRegionPlace(place)}
+                  >
+                    <strong>{normalizePlaceText(place.title || place.address)}</strong>
+                    {place.address || place.road_address ? <span>{place.address || place.road_address}</span> : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {pendingRegionSelection ? (
+              <div className="profile-setup__pending-region">
+                <div>
+                  <strong>추가할 위치</strong>
+                  <span>{pendingRegionSelection.address || pendingRegionSelection.title}</span>
+                </div>
+                <button type="button" onClick={addPendingRegion}>
+                  <Plus size={16} /> 추가
+                </button>
+              </div>
+            ) : null}
+            <ProfileRegionMap clientId={mapClientId} selectedLocation={mapSelectedLocation} results={regionResults} onSelect={selectRegion} />
           </div>
         </section>
 
@@ -351,7 +675,7 @@ function ProfileSetupPage() {
             </div>
             <span>{form.preferred_sports.length}{"개 선택"}</span>
           </div>
-          <div className="profile-setup__sport-dropdowns">
+          <div className={`profile-setup__sport-dropdowns ${useSportLevels ? "profile-setup__sport-dropdowns--with-level" : ""}`}>
             <select value={selectedCategoryId} onChange={(event) => { setSelectedCategoryId(event.target.value); setSelectedSport(""); }}>
               {sportGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
             </select>
@@ -359,6 +683,13 @@ function ProfileSetupPage() {
               <option value="">{"소주제 선택"}</option>
               {(activeSportGroup?.sports || []).map((sportName) => <option key={sportName} value={sportName}>{sportName}</option>)}
             </select>
+            {useSportLevels ? (
+              <select value={selectedSportLevel} onChange={(event) => setSelectedSportLevel(event.target.value)}>
+                {levelOptions.map((level) => (
+                  <option key={level.value} value={level.value}>{level.label}</option>
+                ))}
+              </select>
+            ) : null}
             <button type="button" onClick={addSport} disabled={!selectedSport}>
               <Plus size={16} /> {"추가"}
             </button>
@@ -371,23 +702,6 @@ function ProfileSetupPage() {
             />
             <span>{"종목별 수준 선택하기"}</span>
           </label>
-          {useSportLevels && form.preferred_sports.length > 0 ? (
-            <div className="profile-setup__sport-levels">
-              {form.preferred_sports.map((sportName) => (
-                <label key={sportName}>
-                  <span>{sportName}</span>
-                  <select
-                    value={form.preferred_sport_levels[sportName] || form.exercise_level}
-                    onChange={(event) => updateSportLevel(sportName, event.target.value)}
-                  >
-                    {levelOptions.map((level) => (
-                      <option key={level.value} value={level.value}>{level.label}</option>
-                    ))}
-                  </select>
-                </label>
-              ))}
-            </div>
-          ) : null}
           {form.preferred_sports.length > 0 ? (
             <div className="profile-setup__selected">
               {form.preferred_sports.map((sportName) => {

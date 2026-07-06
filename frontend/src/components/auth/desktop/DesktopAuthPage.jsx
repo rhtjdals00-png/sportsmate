@@ -6,7 +6,6 @@ import {
   LockKeyhole,
   Mail,
   Phone,
-  Sparkles,
   UserRound,
   XCircle
 } from "lucide-react";
@@ -51,13 +50,14 @@ function DesktopAuthPage({
   emailCode = "",
   emailVerified = false,
   emailVerificationSent = false,
+  emailVerificationRequesting = false,
   emailVerificationLoading = false,
   verifiedEmail = "",
   loading,
   error,
   notice,
   onSocialLogin,
-  completed = false
+  emailVerificationSuccessVisible = false
 }) {
   const isRegister = mode === "register";
   const title = isRegister ? "회원가입" : "로그인";
@@ -69,31 +69,14 @@ function DesktopAuthPage({
   const hasPasswordConfirm = Boolean(form.passwordConfirm);
   const passwordMatches = Boolean(form.password) && form.password === form.passwordConfirm;
 
-  if (isRegister && completed) {
-    return (
-      <div className="desktop-auth-page">
-        <section className="desktop-auth-card desktop-auth-complete" aria-label="회원가입 완료">
-          <div className="desktop-auth-complete__mark"><CheckCircle2 size={34} /></div>
-          <div className="desktop-auth-card__head">
-            <span>WELCOME TO SPORTSMATE</span>
-            <h2>가입이 완료되었습니다</h2>
-            <p>이제 선호 종목, 운동 강도, 활동 지역을 설정하면 나에게 맞는 모임을 추천받을 수 있습니다.</p>
-          </div>
-          <div className="desktop-auth-complete__actions">
-            <Link className="desktop-auth-primary-link" to="/profile/intro">
-              <Sparkles size={18} /> 맞춤 정보 추천받기
-            </Link>
-            <Link className="desktop-auth-secondary-link" to="/">
-              나중에 할게요
-            </Link>
-          </div>
-        </section>
-      </div>
-    );
-  }
-
   return (
     <div className={`desktop-auth-page ${isRegister ? "desktop-auth-page--register" : ""}`}>
+      {emailVerificationSuccessVisible ? (
+        <div className="desktop-auth-verification-toast" role="status">
+          <CheckCircle2 size={20} />
+          <span>이메일 인증이 완료되었습니다.</span>
+        </div>
+      ) : null}
       <section className="desktop-auth-card" aria-label={isRegister ? "회원가입" : "로그인"}>
         <div className="desktop-auth-card__head">
           <span>SPORTSMATE ACCOUNT</span>
@@ -159,7 +142,9 @@ function DesktopAuthPage({
                     onChange={(event) => onChange({ ...form, email: event.target.value })}
                     placeholder="you@sportsmate.kr"
                   />
-                  <button type="button" onClick={onEmailVerification}>인증</button>
+                  <button type="button" onClick={onEmailVerification} disabled={emailVerificationRequesting || emailVerificationLoading}>
+                    {emailVerificationRequesting ? "발송 중" : "인증"}
+                  </button>
                 </span>
                 <AvailabilityMessage state={availability.email} />
               </label>

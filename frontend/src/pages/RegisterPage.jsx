@@ -1,5 +1,6 @@
 ﻿import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import Button from "../components/common/Button.jsx";
 import DesktopAuthPage from "../components/auth/desktop/DesktopAuthPage.jsx";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
@@ -18,16 +19,28 @@ const passwordRules = [
 
 const availabilityFields = ["email", "phone_number"];
 const emptyAvailability = { status: "idle", message: "", available: null };
+const EMAIL_OTP_LENGTH = 8;
 
 const isValidPassword = (password) => passwordRules.every((rule) => rule.test(password));
 const hasAvailabilityError = (availability) => availabilityFields.some((field) => availability[field]?.available === false);
 
 const getRegisterErrorMessage = (error) => {
   const message = error?.message || error?.response?.data?.message || "";
+  if (message.toLowerCase().includes("token")) {
+    return "인증번호가 만료되었거나 올바르지 않습니다. 메일함의 최신 인증번호를 다시 입력해주세요.";
+  }
   if (message.includes("New password should be different from the old password")) {
     return "이미 가입된 이메일이거나 이전과 같은 비밀번호입니다. 다른 비밀번호를 입력하거나 로그인해주세요.";
   }
   return message || "회원가입에 실패했습니다.";
+};
+
+const getVerificationErrorMessage = (error) => {
+  const message = error?.message || error?.response?.data?.message || "";
+  if (message.toLowerCase().includes("token")) {
+    return `인증번호가 만료되었거나 올바르지 않습니다. 인증 메일을 다시 받아 최신 ${EMAIL_OTP_LENGTH}자리 코드를 입력해주세요.`;
+  }
+  return message || "인증번호 확인에 실패했습니다.";
 };
 
 const formatPhoneNumber = (value) => {
@@ -70,13 +83,20 @@ function RegisterPage() {
   });
   const [emailCode, setEmailCode] = useState("");
   const [emailVerificationSent, setEmailVerificationSent] = useState(false);
+  const [emailVerificationRequesting, setEmailVerificationRequesting] = useState(false);
   const [emailVerificationLoading, setEmailVerificationLoading] = useState(false);
+  const [emailVerificationSuccessVisible, setEmailVerificationSuccessVisible] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
-  const [completed, setCompleted] = useState(false);
   const verifiedEmail = session?.user?.email_confirmed_at || session?.user?.confirmed_at ? session?.user?.email || "" : "";
   const isCurrentEmailVerified = Boolean(!isMobile && verifiedEmail && verifiedEmail.toLowerCase() === form.email.trim().toLowerCase());
+
+  useEffect(() => {
+    if (!emailVerificationSuccessVisible) return undefined;
+    const timer = window.setTimeout(() => setEmailVerificationSuccessVisible(false), 2400);
+    return () => window.clearTimeout(timer);
+  }, [emailVerificationSuccessVisible]);
 
   const setAvailabilityState = (field, state) => {
     setAvailability((current) => ({ ...current, [field]: state }));
@@ -92,6 +112,7 @@ function RegisterPage() {
     if ((form.email || "") !== (formatted.email || "")) {
       setEmailCode("");
       setEmailVerificationSent(false);
+      setEmailVerificationSuccessVisible(false);
     }
     setForm(formatted);
   };
@@ -130,6 +151,7 @@ function RegisterPage() {
   const checkPhoneNumber = () => checkAvailability("phone_number");
 
   const requestEmailVerification = async () => {
+    if (emailVerificationRequesting) return;
     setNotice("");
     setError("");
     const email = form.email.trim();
@@ -137,6 +159,7 @@ function RegisterPage() {
       setError("이메일을 입력해주세요.");
       return;
     }
+    setEmailVerificationRequesting(true);
     try {
       const emailState = await checkAvailability("email", email);
       if (emailState.available === false) {
@@ -154,6 +177,8 @@ function RegisterPage() {
       setNotice("인증번호를 보냈습니다. 메일함에서 인증번호를 확인해주세요.");
     } catch (verificationError) {
       setError(verificationError.message || verificationError.response?.data?.message || "이메일 인증 요청에 실패했습니다.");
+    } finally {
+      setEmailVerificationRequesting(false);
     }
   };
 
@@ -170,13 +195,18 @@ function RegisterPage() {
       setError("인증번호를 입력해주세요.");
       return;
     }
+    if (token.length !== EMAIL_OTP_LENGTH) {
+      setError(`인증번호 ${EMAIL_OTP_LENGTH}자리를 입력해주세요.`);
+      return;
+    }
 
     setEmailVerificationLoading(true);
     try {
       await verifySignupEmailCode(email, token);
       setNotice("이메일 인증이 완료되었습니다.");
+      setEmailVerificationSuccessVisible(true);
     } catch (verificationError) {
-      setError(verificationError.message || "인증번호 확인에 실패했습니다.");
+      setError(getVerificationErrorMessage(verificationError));
     } finally {
       setEmailVerificationLoading(false);
     }
@@ -234,7 +264,7 @@ function RegisterPage() {
       } else {
         await registerVerifiedEmail(payload);
         localStorage.removeItem("sportsmate_pending_signup_email");
-        setCompleted(true);
+        navigate("/profile/intro", { replace: true });
       }
     } catch (submitError) {
       setError(getRegisterErrorMessage(submitError));
@@ -266,13 +296,14 @@ function RegisterPage() {
         emailCode={emailCode}
         emailVerified={isCurrentEmailVerified}
         emailVerificationSent={emailVerificationSent}
+        emailVerificationRequesting={emailVerificationRequesting}
         emailVerificationLoading={emailVerificationLoading}
         verifiedEmail={verifiedEmail}
         loading={loading}
         error={error}
         notice={notice}
         onSocialLogin={handleSocialLogin}
-        completed={completed}
+        emailVerificationSuccessVisible={emailVerificationSuccessVisible}
       />
     );
   }
