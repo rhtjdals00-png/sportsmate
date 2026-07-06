@@ -75,7 +75,19 @@ def messages(room_id):
     user_id = int(get_jwt_identity())
     try:
         room = ensure_chat_access(room_id, user_id, include_messages=True)
-        return jsonify({"room": room.to_dict(current_user_id=user_id), "items": [message.to_dict() for message in room.messages]})
+        room_data = room.to_dict(current_user_id=user_id)
+        participant = Participant.query.filter_by(meeting_id=room.meeting_id, user_id=user_id, status="approved").first()
+        can_manage = bool(
+            room.meeting
+            and (
+                room.meeting.host_id == user_id
+                or (participant and participant.role in ["host", "cohost", "subhost", "assistant"])
+            )
+        )
+        room_data["can_manage"] = can_manage
+        if room_data.get("meeting"):
+            room_data["meeting"]["can_manage"] = can_manage
+        return jsonify({"room": room_data, "items": [message.to_dict() for message in room.messages]})
     except PermissionError as error:
         return jsonify({"message": str(error)}), 403
 
