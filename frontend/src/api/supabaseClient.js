@@ -9,4 +9,12 @@ if (!isSupabaseConfigured) {
   console.warn("Supabase 환경변수가 설정되지 않아 인증 기능을 사용할 수 없습니다.");
 }
 
-export const supabase = isSupabaseConfigured ? createClient(supabaseUrl, supabaseAnonKey) : null;
+export const supabase = isSupabaseConfigured
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+        persistSession: true
+      }
+    })
+  : null;

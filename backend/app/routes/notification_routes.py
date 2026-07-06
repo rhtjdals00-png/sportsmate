@@ -14,8 +14,8 @@ notification_bp = Blueprint("notifications", __name__)
 def _display_name(user):
     if not user:
         return "알 수 없는 사용자"
-    if user.profile and user.profile.nickname:
-        return user.profile.nickname
+    if user.nickname:
+        return user.nickname
     return user.name or user.email or "알 수 없는 사용자"
 
 

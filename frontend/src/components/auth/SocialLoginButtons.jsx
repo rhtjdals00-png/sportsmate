@@ -1,5 +1,5 @@
 import { MessageCircle, Search } from "lucide-react";
-import { supabase } from "../../api/supabaseClient";
+import { useAuth } from "../../contexts/AuthContext.jsx";
 
 const providers = [
   { id: "google", label: "Google로 계속하기", icon: Search },
@@ -11,22 +11,19 @@ function normalizeAuthProvider(provider) {
 }
 
 function SocialLoginButtons() {
-  const redirectTo = `${window.location.origin}/auth/callback`;
+  const { socialLogin } = useAuth();
 
   const startSocialLogin = async (provider) => {
     const nextProvider = normalizeAuthProvider(provider);
-    if (!supabase) {
-      window.alert("Supabase 환경변수가 설정되지 않았습니다.");
-      return;
-    }
     if (!nextProvider) {
       window.alert("지원하지 않는 소셜 로그인 제공자입니다.");
       return;
     }
-    await supabase.auth.signInWithOAuth({
-      provider: nextProvider,
-      options: { redirectTo }
-    });
+    try {
+      await socialLogin(nextProvider);
+    } catch (error) {
+      window.alert(error?.message || "소셜 로그인 요청에 실패했습니다.");
+    }
   };
 
   return (

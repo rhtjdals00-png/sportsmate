@@ -63,6 +63,10 @@ def send_web_push(user_id, title, body, url=None):
             if status_code in {404, 410}:
                 subscription.is_active = False
                 changed = True
+            else:
+                current_app.logger.warning("Web push failed for user %s: %s", user_id, error)
+        except Exception as error:
+            current_app.logger.warning("Web push skipped for user %s: %s", user_id, error)
     if changed:
         db.session.commit()
     return {"sent": sent}
