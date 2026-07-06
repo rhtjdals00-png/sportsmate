@@ -1,6 +1,5 @@
 ﻿import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useEffect } from "react";
 import Button from "../components/common/Button.jsx";
 import DesktopAuthPage from "../components/auth/desktop/DesktopAuthPage.jsx";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
