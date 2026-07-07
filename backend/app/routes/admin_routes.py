@@ -3,6 +3,7 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
 from sqlalchemy.orm import joinedload
 
+from app.extensions import db
 from app.models import Meeting, Report, User, Participant, Sport
 
 admin_bp = Blueprint("admin", __name__)

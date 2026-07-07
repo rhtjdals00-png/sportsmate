@@ -16,6 +16,7 @@ function AppSettingsPage() {
   const [pushMessage, setPushMessage] = useState("");
   const [locationMessage, setLocationMessage] = useState("");
   const [resetMessage, setResetMessage] = useState("");
+  const [permission, setPermission] = useState(() => ("Notification" in window ? Notification.permission : "default"));
   const pushState = getPushSupportState();
   const iosPwaMessage = isIosLike() && !isStandalonePwa()
     ? "iPhone은 Safari 공유 버튼으로 홈 화면에 추가한 뒤 앱에서 알림을 켤 수 있습니다."
@@ -25,6 +26,7 @@ function AppSettingsPage() {
     setPushMessage("");
     try {
       await enablePushNotifications();
+      setPermission("granted");
       setPushMessage("알림 권한이 설정되었습니다.");
     } catch (error) {
       setPushMessage(error?.message || "알림 권한을 설정하지 못했습니다.");
@@ -76,7 +78,11 @@ function AppSettingsPage() {
           {iosPwaMessage ? <p className="mobile-settings-card__notice">{iosPwaMessage}</p> : null}
           {!pushState.supported && !iosPwaMessage ? <p className="mobile-settings-card__notice">{pushState.reason}</p> : null}
           {pushMessage ? <p className="mobile-settings-card__message">{pushMessage}</p> : null}
-          <button type="button" onClick={enablePush}>알림 켜기</button>
+          {permission === "granted" ? (
+            <button type="button" disabled style={{ background: '#e2e8f0', color: '#94a3b8', cursor: 'default' }}>알림 활성화됨</button>
+          ) : (
+            <button type="button" onClick={enablePush}>알림 켜기</button>
+          )}
         </article>
 
         <article className="mobile-settings-card">

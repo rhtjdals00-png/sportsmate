@@ -6,7 +6,7 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import ChatRoom, Meeting, Participant, Review, Sport, User
+from app.models import ChatMessage, ChatRoom, Meeting, Participant, Review, Sport, User
 from app.services.notification_service import create_notification, send_web_push
 
 
@@ -90,6 +90,25 @@ def _distance_km(lat1, lng1, lat2, lng2):
     delta_lambda = math.radians(lng2 - lng1)
     a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
     return round(radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)), 1)
+
+
+def _display_name(user):
+    if not user:
+        return "참여자"
+    return user.nickname or user.name or "참여자"
+
+
+def _add_meeting_system_message(meeting, user_id, content):
+    chat_room = meeting.chat_room or ChatRoom(meeting_id=meeting.id)
+    if not meeting.chat_room:
+        db.session.add(chat_room)
+        db.session.flush()
+    db.session.add(ChatMessage(
+        chat_room_id=chat_room.id,
+        user_id=user_id,
+        content=content,
+        message_type="system",
+    ))
 
 
 def list_meetings(params, current_user_id=None):
@@ -267,6 +286,7 @@ def update_application(meeting_id, applicant_user_id, host_id, status):
             db.session.flush()
         if meeting.current_participants >= meeting.max_participants:
             meeting.status = "full"
+        _add_meeting_system_message(meeting, participant.user_id, f"{_display_name(participant.user)}님이 입장하셨습니다.")
         title = "참여 신청 승인"
         message = f"{meeting.title} 참여 신청이 승인되었습니다."
         link_url = f"/chats/{meeting.chat_room.id}"
