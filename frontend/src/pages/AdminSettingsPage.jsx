@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings, Save, RefreshCw, Shield, Bell, HeartHandshake, Database } from "lucide-react";
+import { Settings, Save, RefreshCw, Shield, Bell, HeartHandshake, Database, Search, Calendar, ChevronDown, X } from "lucide-react";
 import { adminApi } from "../api/adminApi";
 
 function AdminSettingsPage() {
@@ -22,6 +22,12 @@ function AdminSettingsPage() {
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
+
+  // States for log filtering & pagination
+  const [logSearchQuery, setLogSearchQuery] = useState("");
+  const [logStartDate, setLogStartDate] = useState("");
+  const [logEndDate, setLogEndDate] = useState("");
+  const [visibleLogsCount, setVisibleLogsCount] = useState(10);
 
   const fetchSettings = async () => {
     try {
@@ -65,6 +71,10 @@ function AdminSettingsPage() {
   const handleViewLogs = async () => {
     setShowLogsModal(true);
     setLogsLoading(true);
+    setLogSearchQuery("");
+    setLogStartDate("");
+    setLogEndDate("");
+    setVisibleLogsCount(10);
     try {
       const res = await adminApi.getSettingsLogs();
       if (res) {
@@ -95,6 +105,29 @@ function AdminSettingsPage() {
       });
     }
   };
+
+  // Filter and reverse the logs (newest first)
+  const filteredLogs = logs
+    .slice()
+    .reverse()
+    .filter((log) => {
+      // 1. Keyword search (admin name or changes content)
+      const query = logSearchQuery.trim().toLowerCase();
+      const matchesKeyword = !query || 
+        log.admin.toLowerCase().includes(query) || 
+        log.changes.some(change => change.toLowerCase().includes(query));
+
+      // 2. Date filtering (timestamp format: "YYYY-MM-DD HH:MM:SS")
+      const logDateStr = log.timestamp.split(" ")[0]; // "YYYY-MM-DD"
+      
+      const matchesStartDate = !logStartDate || logDateStr >= logStartDate;
+      const matchesEndDate = !logEndDate || logDateStr <= logEndDate;
+
+      return matchesKeyword && matchesStartDate && matchesEndDate;
+    });
+
+  // Take only visible ones
+  const displayedLogs = filteredLogs.slice(0, visibleLogsCount);
 
   return (
     <div className="admin-panel-card" style={{ maxWidth: "900px", margin: "0 auto" }}>
@@ -430,7 +463,7 @@ function AdminSettingsPage() {
             borderRadius: "16px",
             width: "100%",
             maxWidth: "650px",
-            maxHeight: "85vh",
+            height: "80vh",
             display: "flex",
             flexDirection: "column",
             boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
@@ -470,6 +503,130 @@ function AdminSettingsPage() {
               </button>
             </div>
 
+            {/* Filter Section */}
+            <div style={{
+              padding: "16px 24px",
+              backgroundColor: "#f8fafc",
+              borderBottom: "1px solid #e2e8f0",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px"
+            }}>
+              {/* Search input with search icon */}
+              <div style={{ position: "relative", width: "100%" }}>
+                <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+                <input
+                  type="text"
+                  placeholder="관리자 이름 또는 변경 내용 검색..."
+                  value={logSearchQuery}
+                  onChange={(e) => {
+                    setLogSearchQuery(e.target.value);
+                    setVisibleLogsCount(10);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px 8px 36px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "14px",
+                    outline: "none",
+                    boxSizing: "border-box"
+                  }}
+                />
+                {logSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLogSearchQuery("");
+                      setVisibleLogsCount(10);
+                    }}
+                    style={{
+                      position: "absolute",
+                      right: "12px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      border: "none",
+                      backgroundColor: "transparent",
+                      cursor: "pointer",
+                      color: "#94a3b8",
+                      padding: 0
+                    }}
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+
+              {/* Date Filters row */}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Calendar size={14} style={{ color: "#64748b" }} />
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: "#475569" }}>기간:</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                  <input
+                    type="date"
+                    value={logStartDate}
+                    onChange={(e) => {
+                      setLogStartDate(e.target.value);
+                      setVisibleLogsCount(10);
+                    }}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: "6px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "13px",
+                      outline: "none",
+                      color: "#334155"
+                    }}
+                  />
+                  <span style={{ color: "#94a3b8" }}>~</span>
+                  <input
+                    type="date"
+                    value={logEndDate}
+                    onChange={(e) => {
+                      setLogEndDate(e.target.value);
+                      setVisibleLogsCount(10);
+                    }}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: "6px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "13px",
+                      outline: "none",
+                      color: "#334155"
+                    }}
+                  />
+                </div>
+                {(logStartDate || logEndDate || logSearchQuery) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLogStartDate("");
+                      setLogEndDate("");
+                      setLogSearchQuery("");
+                      setVisibleLogsCount(10);
+                    }}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: "6px",
+                      border: "none",
+                      backgroundColor: "#e2e8f0",
+                      color: "#475569",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      transition: "background-color 0.2s"
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#cbd5e1"}
+                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#e2e8f0"}
+                  >
+                    필터 초기화
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Modal Content */}
             <div style={{
               padding: "24px",
@@ -480,13 +637,15 @@ function AdminSettingsPage() {
                 <div style={{ textAlign: "center", padding: "40px 0", color: "#64748b" }}>
                   로그 데이터를 불러오는 중...
                 </div>
-              ) : logs.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "40px 0", color: "#64748b" }}>
-                  기록된 시스템 설정 변경 이력이 없습니다.
+              ) : filteredLogs.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px 0", color: "#64748b", fontSize: "14px" }}>
+                  {logSearchQuery || logStartDate || logEndDate 
+                    ? "검색 조건에 맞는 로그 내역이 없습니다."
+                    : "기록된 시스템 설정 변경 이력이 없습니다."}
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                  {logs.slice().reverse().map((log, index) => (
+                  {displayedLogs.map((log, index) => (
                     <div key={index} style={{
                       padding: "16px",
                       borderRadius: "10px",
@@ -504,6 +663,35 @@ function AdminSettingsPage() {
                       </ul>
                     </div>
                   ))}
+
+                  {/* Load More Button */}
+                  {filteredLogs.length > visibleLogsCount && (
+                    <button
+                      type="button"
+                      onClick={() => setVisibleLogsCount(prev => prev + 10)}
+                      style={{
+                        padding: "10px",
+                        borderRadius: "8px",
+                        border: "1px solid #e2e8f0",
+                        backgroundColor: "#ffffff",
+                        color: "#2563eb",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                        marginTop: "8px",
+                        transition: "background-color 0.2s"
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#f8fafc"}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#ffffff"}
+                    >
+                      <ChevronDown size={16} />
+                      <span>더 보기 ({filteredLogs.length - visibleLogsCount}개 남음)</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>

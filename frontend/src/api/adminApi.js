@@ -13,5 +13,9 @@ export const adminApi = {
   updateUser: (userId, data) => apiClient.patch(`/admin/users/${userId}`, data).then((res) => res.data),
   getSettings: () => apiClient.get(`/admin/settings?_=${Date.now()}`).then((res) => res.data),
   updateSettings: (data) => apiClient.post("/admin/settings", data).then((res) => res.data),
-  getSettingsLogs: () => apiClient.get(`/admin/settings/logs?_=${Date.now()}`).then((res) => res.data)
+  getSettingsLogs: () => apiClient.get(`/admin/settings/logs?_=${Date.now()}`).then((res) => res.data),
+  sendMessage: (userId, message) => apiClient.post(`/admin/users/${userId}/message`, { message }).then((res) => res.data),
+  sendBroadcast: (data) => apiClient.post("/admin/broadcast", data).then((res) => res.data),
+  getBroadcastLogs: () => apiClient.get(`/admin/broadcast/logs?_=${Date.now()}`).then((res) => res.data),
+  getAuditLogs: () => apiClient.get(`/admin/audit-logs?_=${Date.now()}`).then((res) => res.data)
 };

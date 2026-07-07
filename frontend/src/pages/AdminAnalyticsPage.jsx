@@ -67,7 +67,25 @@ function AdminAnalyticsPage() {
     { rank: 4, name: "기타", count: "-", percentage: 0 }
   ]);
 
+  const [regionPercentages, setRegionPercentages] = useState([
+    { rank: 1, name: "서울", count: 25, percentage: 55 },
+    { rank: 2, name: "경기", count: 12, percentage: 25 },
+    { rank: 3, name: "부산", count: 5, percentage: 12 },
+    { rank: 4, name: "기타", count: 4, percentage: 8 }
+  ]);
+
+  const [weeklyPercentages, setWeeklyPercentages] = useState([
+    { day: "일", percentage: 15 },
+    { day: "월", percentage: 10 },
+    { day: "화", percentage: 12 },
+    { day: "수", percentage: 14 },
+    { day: "목", percentage: 16 },
+    { day: "금", percentage: 20 },
+    { day: "토", percentage: 25 }
+  ]);
+
   const [loading, setLoading] = useState(true);
+  const [isApiConnected, setIsApiConnected] = useState(false);
 
   useEffect(() => {
     async function fetchAnalyticsData() {
@@ -88,6 +106,9 @@ function AdminAnalyticsPage() {
           meetings: apiMeetings,
           reports: apiReports
         });
+        if (usersRes.status === "fulfilled" || meetingsRes.status === "fulfilled" || reportsRes.status === "fulfilled") {
+          setIsApiConnected(true);
+        }
       } catch (err) {
         console.error("API error while generating analytics, fallback used", err);
       } finally {
@@ -184,7 +205,7 @@ function AdminAnalyticsPage() {
     let revenueTrend = "0%";
     let revenueTrendIsUp = true;
 
-    if (apiMeetings.length === 0) {
+    if (apiMeetings.length === 0 && !isApiConnected) {
       // Fallbacks for empty database mockup
       revenue = activeTab === "오늘" ? 450000 : activeTab === "7일" ? 3250000 : 14250000;
       revenueTrend = activeTab === "오늘" ? "2.5%" : activeTab === "7일" ? "6.8%" : "12.5%";
@@ -193,11 +214,11 @@ function AdminAnalyticsPage() {
       revenue = filteredMeetings.length * 150000;
       const prevRevenue = prevPeriodMeetings.length * 150000;
       if (prevRevenue === 0) {
-        revenueTrend = revenue > 0 ? "+100%" : "0%";
+        revenueTrend = revenue > 0 ? "100%" : "0%";
         revenueTrendIsUp = true;
       } else {
         const growth = ((revenue - prevRevenue) / prevRevenue) * 100;
-        revenueTrend = `${growth >= 0 ? "+" : ""}${Math.round(growth)}%`;
+        revenueTrend = `${Math.abs(Math.round(growth))}%`;
         revenueTrendIsUp = growth >= 0;
       }
     }
@@ -206,22 +227,22 @@ function AdminAnalyticsPage() {
     let newUsersTrend = "0%";
     let newUsersTrendIsUp = true;
 
-    if (apiUsers.length === 0) {
+    if (apiUsers.length === 0 && !isApiConnected) {
       newUsers = activeTab === "오늘" ? 58 : activeTab === "7일" ? 412 : 1842;
       newUsersTrend = activeTab === "오늘" ? "1.8%" : activeTab === "7일" ? "4.5%" : "8.2%";
     } else {
       if (prevPeriodUsers.length === 0) {
-        newUsersTrend = newUsers > 0 ? "+100%" : "0%";
+        newUsersTrend = newUsers > 0 ? "100%" : "0%";
         newUsersTrendIsUp = true;
       } else {
         const growth = ((newUsers - prevPeriodUsers.length) / prevPeriodUsers.length) * 100;
-        newUsersTrend = `${growth >= 0 ? "+" : ""}${Math.round(growth)}%`;
+        newUsersTrend = `${Math.abs(Math.round(growth))}%`;
         newUsersTrendIsUp = growth >= 0;
       }
     }
 
     let activeMeetings = filteredMeetings.length;
-    if (apiMeetings.length === 0) {
+    if (apiMeetings.length === 0 && !isApiConnected) {
       activeMeetings = activeTab === "오늘" ? 12 : activeTab === "7일" ? 78 : 328;
     }
 
@@ -248,13 +269,13 @@ function AdminAnalyticsPage() {
       newUsersTrendIsUp,
       activeMeetings,
       meetingsDetails: {
-        soccer: soccerCount || soccerFallback,
-        running: runningCount || runningFallback,
-        tennis: tennisCount || tennisFallback
+        soccer: (apiMeetings.length === 0 && !isApiConnected) ? soccerFallback : soccerCount,
+        running: (apiMeetings.length === 0 && !isApiConnected) ? runningFallback : runningCount,
+        tennis: (apiMeetings.length === 0 && !isApiConnected) ? tennisFallback : tennisCount
       },
       reports: {
-        pending: pendingCount || pendingFallback,
-        resolved: resolvedCount || resolvedFallback
+        pending: (apiReports.length === 0 && !isApiConnected) ? pendingFallback : pendingCount,
+        resolved: (apiReports.length === 0 && !isApiConnected) ? resolvedFallback : resolvedCount
       }
     });
 
@@ -282,7 +303,7 @@ function AdminAnalyticsPage() {
       };
     });
 
-    if (formattedSports.length === 0) {
+    if (formattedSports.length === 0 && !isApiConnected) {
       const totalFallback = activeTab === "오늘" ? 12 : activeTab === "7일" ? 78 : 328;
       const soccerVal = activeTab === "오늘" ? 6 : activeTab === "7일" ? 38 : 145;
       const runningVal = activeTab === "오늘" ? 4 : activeTab === "7일" ? 24 : 98;
@@ -345,7 +366,7 @@ function AdminAnalyticsPage() {
         }));
       setTopMeetingsList(sorted);
     } else {
-      setTopMeetingsList(topMeetings.slice(0, 4));
+      setTopMeetingsList(isApiConnected ? [] : topMeetings.slice(0, 4));
     }
 
     // 5. System Logs
@@ -384,28 +405,30 @@ function AdminAnalyticsPage() {
       });
     }
 
-    // Pad with default logs
-    for (let i = generatedLogs.length; i < 4; i++) {
-      if (systemLogs[i]) {
-        const mockLog = systemLogs[i];
-        const parseTime = (str) => {
-          if (!str) return 0;
-          const minMatch = str.match(/^(\d+)분\s*전$/);
-          if (minMatch) return parseInt(minMatch[1], 10);
-          const hourMatch = str.match(/^(\d+)시간\s*전$/);
-          if (hourMatch) return parseInt(hourMatch[1], 10) * 60;
-          const dayMatch = str.match(/^(\d+)일\s*전$/);
-          if (dayMatch) return parseInt(dayMatch[1], 10) * 60 * 24;
-          return 0;
-        };
-        const minsAgo = parseTime(mockLog.time);
-        const mockCreatedAt = new Date(Date.now() - minsAgo * 60 * 1000).toISOString();
-        
-        generatedLogs.push({ 
-          ...mockLog, 
-          id: `mock-${i}`,
-          created_at: mockCreatedAt
-        });
+    // Pad with default logs only if offline (mock mode)
+    if (!isApiConnected) {
+      for (let i = generatedLogs.length; i < 4; i++) {
+        if (systemLogs[i]) {
+          const mockLog = systemLogs[i];
+          const parseTime = (str) => {
+            if (!str) return 0;
+            const minMatch = str.match(/^(\d+)분\s*전$/);
+            if (minMatch) return parseInt(minMatch[1], 10);
+            const hourMatch = str.match(/^(\d+)시간\s*전$/);
+            if (hourMatch) return parseInt(hourMatch[1], 10) * 60;
+            const dayMatch = str.match(/^(\d+)일\s*전$/);
+            if (dayMatch) return parseInt(dayMatch[1], 10) * 60 * 24;
+            return 0;
+          };
+          const minsAgo = parseTime(mockLog.time);
+          const mockCreatedAt = new Date(Date.now() - minsAgo * 60 * 1000).toISOString();
+          
+          generatedLogs.push({ 
+            ...mockLog, 
+            id: `mock-${i}`,
+            created_at: mockCreatedAt
+          });
+        }
       }
     }
 
@@ -535,7 +558,117 @@ function AdminAnalyticsPage() {
       labelsX
     });
 
-  }, [activeTab, rawData]);
+    // 7. Process Region Stats
+    const regionCounts = {};
+    filteredMeetings.forEach(m => {
+      let regionName = "기타";
+      const addr = m.address || m.location_name || "";
+      if (addr) {
+        const firstWord = addr.trim().split(/\s+/)[0];
+        if (firstWord.startsWith("서울")) regionName = "서울";
+        else if (firstWord.startsWith("경기")) regionName = "경기";
+        else if (firstWord.startsWith("인천")) regionName = "인천";
+        else if (firstWord.startsWith("부산")) regionName = "부산";
+        else if (firstWord.startsWith("대구")) regionName = "대구";
+        else if (firstWord.startsWith("대전")) regionName = "대전";
+        else if (firstWord.startsWith("광주")) regionName = "광주";
+        else if (firstWord.startsWith("울산")) regionName = "울산";
+        else if (firstWord.startsWith("세종")) regionName = "세종";
+        else if (firstWord.startsWith("강원")) regionName = "강원";
+        else if (firstWord.startsWith("충청북") || firstWord.startsWith("충북")) regionName = "충북";
+        else if (firstWord.startsWith("충청남") || firstWord.startsWith("충남")) regionName = "충남";
+        else if (firstWord.startsWith("전라북") || firstWord.startsWith("전북")) regionName = "전북";
+        else if (firstWord.startsWith("전라남") || firstWord.startsWith("전남")) regionName = "전남";
+        else if (firstWord.startsWith("경상북") || firstWord.startsWith("경북")) regionName = "경북";
+        else if (firstWord.startsWith("경상남") || firstWord.startsWith("경남")) regionName = "경남";
+        else if (firstWord.startsWith("제주")) regionName = "제주";
+      }
+      regionCounts[regionName] = (regionCounts[regionName] || 0) + 1;
+    });
+
+    const sortedRegions = Object.entries(regionCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const topRegions = sortedRegions.filter(r => r.name !== "기타").slice(0, 3);
+    const othersRegionCount = sortedRegions.find(r => r.name === "기타")?.count || 0;
+    const sortedRegionTotal = filteredMeetings.length;
+
+    const formattedRegions = topRegions.map((r, idx) => {
+      const pct = sortedRegionTotal > 0 ? Math.round((r.count / sortedRegionTotal) * 100) : 0;
+      return {
+        rank: idx + 1,
+        name: r.name,
+        count: r.count,
+        percentage: pct
+      };
+    });
+
+    const totalPct = formattedRegions.reduce((sum, r) => sum + r.percentage, 0);
+    const remainingPct = Math.max(0, 100 - totalPct);
+
+    formattedRegions.push({
+      rank: formattedRegions.length + 1,
+      name: "기타",
+      count: othersRegionCount || "-",
+      percentage: remainingPct
+    });
+
+    if (sortedRegionTotal === 0 && !isApiConnected) {
+      // Default fallbacks for empty database
+      const fallbackRegions = [
+        { rank: 1, name: "서울", count: activeTab === "오늘" ? 7 : activeTab === "7일" ? 43 : 180, percentage: 55 },
+        { rank: 2, name: "경기", count: activeTab === "오늘" ? 3 : activeTab === "7일" ? 20 : 82, percentage: 25 },
+        { rank: 3, name: "부산", count: activeTab === "오늘" ? 1 : activeTab === "7일" ? 9 : 39, percentage: 12 },
+        { rank: 4, name: "기타", count: activeTab === "오늘" ? 1 : activeTab === "7일" ? 6 : 27, percentage: 8 }
+      ];
+      setRegionPercentages(fallbackRegions);
+    } else {
+      setRegionPercentages(formattedRegions);
+    }
+
+    // 8. Process Weekly Stats
+    const weeklyCounts = Array(7).fill(0); // 0: Sun, 1: Mon, ... 6: Sat
+    filteredMeetings.forEach(m => {
+      const dateStr = m.created_at || m.start_at;
+      if (dateStr) {
+        const d = new Date(dateStr);
+        if (!isNaN(d.getTime())) {
+          weeklyCounts[d.getDay()]++;
+        }
+      }
+    });
+
+    const maxWeeklyVal = Math.max(...weeklyCounts, 1);
+    const daysName = ["일", "월", "화", "수", "목", "금", "토"];
+    const formattedWeekly = daysName.map((day, idx) => {
+      const count = weeklyCounts[idx];
+      const pct = Math.round((count / maxWeeklyVal) * 100);
+      return {
+        day,
+        percentage: count > 0 ? pct : 0,
+        count
+      };
+    });
+
+    const weeklyTotal = filteredMeetings.length;
+    if (weeklyTotal === 0 && !isApiConnected) {
+      // Fallback values for empty state
+      const fallbackWeekly = [
+        { day: "일", percentage: 75, count: activeTab === "오늘" ? 3 : activeTab === "7일" ? 18 : 74 },
+        { day: "월", percentage: 40, count: activeTab === "오늘" ? 1 : activeTab === "7일" ? 10 : 39 },
+        { day: "화", percentage: 45, count: activeTab === "오늘" ? 1 : activeTab === "7일" ? 11 : 44 },
+        { day: "수", percentage: 55, count: activeTab === "오늘" ? 2 : activeTab === "7일" ? 13 : 54 },
+        { day: "목", percentage: 50, count: activeTab === "오늘" ? 2 : activeTab === "7일" ? 12 : 49 },
+        { day: "금", percentage: 80, count: activeTab === "오늘" ? 3 : activeTab === "7일" ? 19 : 79 },
+        { day: "토", percentage: 100, count: activeTab === "오늘" ? 4 : activeTab === "7일" ? 24 : 98 }
+      ];
+      setWeeklyPercentages(fallbackWeekly);
+    } else {
+      setWeeklyPercentages(formattedWeekly);
+    }
+
+  }, [activeTab, rawData, isApiConnected]);
 
   const handleFilterClick = (tab) => {
     setActiveTab(tab);
@@ -825,6 +958,105 @@ function AdminAnalyticsPage() {
         </section>
       </div>
 
+      {/* 2.5. New Analytical Row: Region and Weekly Charts */}
+      <div className="admin-grid-cols" style={{ marginBottom: "32px" }}>
+        {/* Card 1: Meetings by Region (Horizontal Progress Bar Style) */}
+        <section className="admin-panel-card" style={{ marginBottom: 0 }}>
+          <div className="admin-panel-card__header">
+            <h2 className="admin-panel-card__title">지역별 모임 분포</h2>
+            <button type="button" className="admin-panel-card__more-btn">
+              <MoreHorizontal size={18} />
+            </button>
+          </div>
+          <div className="admin-panel-card__body" style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
+            {regionPercentages.map((reg, index) => {
+              const colors = ["#3b82f6", "#f97316", "#10b981", "#64748b"];
+              const color = colors[index] || colors[0];
+              return (
+                <div key={reg.name} style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", fontWeight: 700, color: "#334155" }}>
+                    <span>{reg.rank}위 {reg.name}</span>
+                    <span style={{ color }}>{reg.percentage}% ({reg.count}개)</span>
+                  </div>
+                  <div style={{ height: "10px", width: "100%", backgroundColor: "#f1f5f9", borderRadius: "5px", overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%",
+                      width: `${reg.percentage}%`,
+                      backgroundColor: color,
+                      borderRadius: "5px",
+                      transition: "width 0.6s cubic-bezier(0.16, 1, 0.3, 1)"
+                    }}></div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Card 2: Weekly Activity Analysis (Vertical CSS Bar Chart) */}
+        <section className="admin-panel-card" style={{ marginBottom: 0 }}>
+          <div className="admin-panel-card__header">
+            <h2 className="admin-panel-card__title">요일별 활성도 분석</h2>
+            <button type="button" className="admin-panel-card__more-btn">
+              <MoreHorizontal size={18} />
+            </button>
+          </div>
+          <div className="admin-panel-card__body" style={{ padding: "24px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: "16px" }}>
+            <div style={{ 
+              display: "flex", 
+              justifyContent: "space-between", 
+              alignItems: "flex-end", 
+              height: "145px", 
+              paddingBottom: "12px", 
+              borderBottom: "2px solid #e2e8f0"
+            }}>
+              {weeklyPercentages.map((week) => {
+                const isWeekend = week.day === "토" || week.day === "일";
+                const barColor = isWeekend ? "linear-gradient(to top, #ef4444, #f87171)" : "linear-gradient(to top, #3b82f6, #60a5fa)";
+                return (
+                  <div key={week.day} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", width: "12%" }}>
+                    <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b" }}>
+                      {week.count}개
+                    </span>
+                    <div style={{ 
+                      width: "24px", 
+                      height: "100px", 
+                      borderRadius: "4px 4px 0 0", 
+                      backgroundColor: "rgba(241, 245, 249, 0.85)", 
+                      display: "flex", 
+                      flexDirection: "column", 
+                      justifyContent: "flex-end", 
+                      overflow: "hidden" 
+                    }}>
+                      <div style={{ 
+                        width: "100%", 
+                        height: `${week.percentage}%`, 
+                        borderRadius: "4px 4px 0 0", 
+                        background: barColor,
+                        transition: "height 0.6s cubic-bezier(0.16, 1, 0.3, 1)"
+                      }}></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
+              {weeklyPercentages.map((week) => (
+                <div key={week.day} style={{ width: "12%", textAlign: "center" }}>
+                  <span style={{ 
+                    fontSize: "12px", 
+                    fontWeight: 800, 
+                    color: week.day === "토" ? "#2563eb" : week.day === "일" ? "#dc2626" : "#475569"
+                  }}>
+                    {week.day}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </div>
+
       {/* 3. Bottom Grid: Top 4 active meetings and system logs */}
       <div className="admin-grid-cols">
         {/* Left Column: Popular matches Top 4 */}
@@ -837,21 +1069,27 @@ function AdminAnalyticsPage() {
           </div>
           <div className="admin-panel-card__body">
             <div className="admin-rank-list">
-              {topMeetingsList.map((m) => (
-                <div className="admin-rank-item" key={m.rank}>
-                  <div className="admin-rank-item__number">
-                    {m.rank}
-                  </div>
-                  <div className="admin-rank-item__main">
-                    <span className="admin-rank-item__title">{m.title}</span>
-                    <span className="admin-rank-item__meta">{m.location}</span>
-                  </div>
-                  <div className="admin-rank-item__attendance">
-                    <span className="admin-rank-item__rate">참석률 {m.rate}</span>
-                    <span className="admin-rank-item__capa">정원 {m.capacity}</span>
-                  </div>
+              {topMeetingsList.length === 0 ? (
+                <div style={{ textAlign: "center", color: "#94a3b8", padding: "40px 0", fontSize: "14px" }}>
+                  선택한 기간 내에 개설된 모임이 없습니다.
                 </div>
-              ))}
+              ) : (
+                topMeetingsList.map((m) => (
+                  <div className="admin-rank-item" key={m.rank}>
+                    <div className="admin-rank-item__number">
+                      {m.rank}
+                    </div>
+                    <div className="admin-rank-item__main">
+                      <span className="admin-rank-item__title">{m.title}</span>
+                      <span className="admin-rank-item__meta">{m.location}</span>
+                    </div>
+                    <div className="admin-rank-item__attendance">
+                      <span className="admin-rank-item__rate">참석률 {m.rate}</span>
+                      <span className="admin-rank-item__capa">정원 {m.capacity}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </section>
@@ -866,24 +1104,30 @@ function AdminAnalyticsPage() {
           </div>
           <div className="admin-panel-card__body">
             <div className="admin-log-list">
-              {logs.map((log) => (
-                <div className="admin-log-item" key={log.id}>
-                  <div className="admin-log-item__dot-outer">
-                    <div className={`admin-log-item__dot admin-log-item__dot--${log.type}`}></div>
-                  </div>
-                  <div className="admin-log-item__content">
-                    <div className="admin-log-item__meta-row">
-                      <span className={`admin-log-item__tag admin-log-item__tag--${log.type}`}>
-                        [{log.category}]
-                      </span>
-                      <span className="admin-log-item__time">{log.time}</span>
-                    </div>
-                    <p className="admin-log-item__desc">
-                      {log.desc}
-                    </p>
-                  </div>
+              {logs.length === 0 ? (
+                <div style={{ textAlign: "center", color: "#94a3b8", padding: "40px 0", fontSize: "14px" }}>
+                  선택한 기간 내에 발생한 시스템 로그가 없습니다.
                 </div>
-              ))}
+              ) : (
+                logs.map((log) => (
+                  <div className="admin-log-item" key={log.id}>
+                    <div className="admin-log-item__dot-outer">
+                      <div className={`admin-log-item__dot admin-log-item__dot--${log.type}`}></div>
+                    </div>
+                    <div className="admin-log-item__content">
+                      <div className="admin-log-item__meta-row">
+                        <span className={`admin-log-item__tag admin-log-item__tag--${log.type}`}>
+                          [{log.category}]
+                        </span>
+                        <span className="admin-log-item__time">{log.time}</span>
+                      </div>
+                      <p className="admin-log-item__desc">
+                        {log.desc}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </section>

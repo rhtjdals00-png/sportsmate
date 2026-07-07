@@ -161,7 +161,14 @@ def reports():
 
 
 @admin_bp.patch("/meetings/<int:meeting_id>")
+@jwt_required()
 def update_meeting(meeting_id):
+    from flask_jwt_extended import get_jwt_identity
+    current_user_id = int(get_jwt_identity())
+    admin_user = User.query.options(joinedload(User.profile)).get(current_user_id)
+    if not admin_user or admin_user.role not in ["superadmin", "admin"]:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+
     meeting = Meeting.query.get_or_404(meeting_id)
     from flask import request
     from app.extensions import db
@@ -202,11 +209,27 @@ def update_meeting(meeting_id):
             
     meeting.sync_status()
     db.session.commit()
+
+    from app.utils.audit import log_admin_action
+    log_admin_action(
+        admin_name=admin_user.nickname or admin_user.name or admin_user.email,
+        action_type="모임 수정",
+        description=f"모임 ID {meeting_id} ({meeting.title})의 정보를 수정했습니다.",
+        target_id=meeting_id
+    )
+
     return jsonify({"meeting": meeting.to_dict()})
 
 
 @admin_bp.delete("/meetings/<int:meeting_id>")
+@jwt_required()
 def delete_meeting(meeting_id):
+    from flask_jwt_extended import get_jwt_identity
+    current_user_id = int(get_jwt_identity())
+    admin_user = User.query.options(joinedload(User.profile)).get(current_user_id)
+    if not admin_user or admin_user.role not in ["superadmin", "admin"]:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+
     meeting = Meeting.query.get_or_404(meeting_id)
     from app.extensions import db
     from datetime import datetime
@@ -215,11 +238,27 @@ def delete_meeting(meeting_id):
     meeting.suspended_at = datetime.utcnow()
     
     db.session.commit()
+
+    from app.utils.audit import log_admin_action
+    log_admin_action(
+        admin_name=admin_user.nickname or admin_user.name or admin_user.email,
+        action_type="모임 폐쇄",
+        description=f"모임 ID {meeting_id} ({meeting.title})을(를) 강제 폐쇄(정지)했습니다.",
+        target_id=meeting_id
+    )
+
     return jsonify({"success": True})
 
 
 @admin_bp.post("/meetings/<int:meeting_id>/restore")
+@jwt_required()
 def restore_meeting(meeting_id):
+    from flask_jwt_extended import get_jwt_identity
+    current_user_id = int(get_jwt_identity())
+    admin_user = User.query.options(joinedload(User.profile)).get(current_user_id)
+    if not admin_user or admin_user.role not in ["superadmin", "admin"]:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+
     meeting = Meeting.query.get_or_404(meeting_id)
     from app.extensions import db
     
@@ -231,15 +270,34 @@ def restore_meeting(meeting_id):
     meeting.sync_status()
     
     db.session.commit()
+
+    from app.utils.audit import log_admin_action
+    log_admin_action(
+        admin_name=admin_user.nickname or admin_user.name or admin_user.email,
+        action_type="모임 복구",
+        description=f"폐쇄된 모임 ID {meeting_id} ({meeting.title})을(를) 정상 복구했습니다.",
+        target_id=meeting_id
+    )
+
     return jsonify({"success": True, "meeting": meeting.to_dict()})
 
 
 @admin_bp.delete("/meetings/<int:meeting_id>/members/<int:user_id>")
+@jwt_required()
 def kick_member(meeting_id, user_id):
+    from flask_jwt_extended import get_jwt_identity
+    current_user_id = int(get_jwt_identity())
+    admin_user = User.query.options(joinedload(User.profile)).get(current_user_id)
+    if not admin_user or admin_user.role not in ["superadmin", "admin"]:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+
     from app.extensions import db
     participant = Participant.query.filter_by(meeting_id=meeting_id, user_id=user_id).first_or_404()
     if participant.role == "host":
         return jsonify({"message": "방장은 강제 퇴장시킬 수 없습니다."}), 400
+        
+    target_user = User.query.get(user_id)
+    target_user_name = target_user.name or target_user.email if target_user else f"ID {user_id}"
         
     meeting = Meeting.query.get(meeting_id)
     if meeting and participant.status == "approved":
@@ -248,6 +306,16 @@ def kick_member(meeting_id, user_id):
         
     db.session.delete(participant)
     db.session.commit()
+
+    from app.utils.audit import log_admin_action
+    meeting_title = meeting.title if meeting else f"ID {meeting_id}"
+    log_admin_action(
+        admin_name=admin_user.nickname or admin_user.name or admin_user.email,
+        action_type="멤버 강퇴",
+        description=f"모임 '{meeting_title}'에서 회원 {target_user_name}(ID {user_id})을(를) 강제 퇴장시켰습니다.",
+        target_id=meeting_id
+    )
+
     return jsonify({"success": True})
 
 
@@ -347,6 +415,25 @@ def update_user(user_id):
             profile.preferred_sports = data["preferred_sports"]
             
     db.session.commit()
+
+    from app.utils.audit import log_admin_action
+    target_username = user.name or user.email
+    changes = []
+    if "role" in data:
+        changes.append(f"권한을 {data['role']}(으)로 변경")
+    if "is_active" in data:
+        changes.append("계정 활성화 상태 변경" if data['is_active'] else "계정 정지 처리")
+    if "email" in data or "name" in data or "nickname" in data:
+        changes.append("회원 개인 정보 수정")
+    
+    change_desc = ", ".join(changes) if changes else "회원 정보 수정"
+    log_admin_action(
+        admin_name=admin_user.nickname or admin_user.name or admin_user.email,
+        action_type="회원 관리",
+        description=f"회원 {target_username}(ID {user_id})의 {change_desc} 작업을 수행했습니다.",
+        target_id=user_id
+    )
+
     return jsonify({"user": user.to_dict()})
 
 
@@ -406,6 +493,13 @@ def update_settings():
 
     if save_system_settings(current_settings):
         add_settings_log(admin_name, changes)
+        
+        from app.utils.audit import log_admin_action
+        log_admin_action(
+            admin_name=admin_name,
+            action_type="설정 변경",
+            description=f"시스템 환경 설정을 변경했습니다. ({', '.join(changes)})"
+        )
         return jsonify({"success": True, "settings": current_settings})
     return jsonify({"message": "설정 저장 실패"}), 500
 
@@ -415,3 +509,187 @@ def update_settings():
 def get_settings_logs():
     from app.utils.settings import load_settings_logs
     return jsonify(load_settings_logs())
+
+
+@admin_bp.post("/users/<int:user_id>/message")
+@jwt_required()
+def send_user_message(user_id):
+    from flask_jwt_extended import get_jwt_identity
+    current_user_id = int(get_jwt_identity())
+    admin_user = User.query.options(joinedload(User.profile)).get(current_user_id)
+    if not admin_user or admin_user.role not in ["superadmin", "admin"]:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+
+    user = User.query.options(joinedload(User.profile)).get_or_404(user_id)
+    data = request.get_json() or {}
+    message_text = data.get("message")
+    if not message_text:
+        return jsonify({"message": "메시지 내용을 입력해주세요."}), 400
+
+    from app.services.notification_service import create_notification
+    create_notification(
+        user_id=user.id,
+        type="admin_message",
+        title="관리자 알림",
+        message=message_text,
+        link_url="/notifications",
+        commit=True,
+        send_push=True
+    )
+    db.session.commit()
+
+    from app.utils.audit import log_admin_action
+    target_username = user.name or user.email
+    log_admin_action(
+        admin_name=admin_user.nickname or admin_user.name or admin_user.email,
+        action_type="개별 알림 발송",
+        description=f"회원 {target_username}(ID {user_id})에게 개별 알림을 전송했습니다. 내용: '{message_text[:30]}...'",
+        target_id=user_id
+    )
+
+    return jsonify({"success": True, "message": "메시지가 성공적으로 전송되었습니다."})
+
+
+SYSTEM_BROADCAST_LOGS_FILE = "/teamproject3/sportsmate/backend/system_broadcast_logs.json"
+
+def load_broadcast_logs():
+    import json
+    import os
+    # Convert path to absolute or relative depending on system
+    file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "system_broadcast_logs.json")
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return []
+
+def add_broadcast_log(admin_name, title, message, link_url, target_type, target_value, target_count, send_push):
+    import json
+    import os
+    import datetime
+    file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "system_broadcast_logs.json")
+    logs = load_broadcast_logs()
+    new_entry = {
+        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "admin": admin_name,
+        "title": title,
+        "message": message,
+        "link_url": link_url,
+        "target_type": target_type,
+        "target_value": target_value,
+        "target_count": target_count,
+        "send_push": send_push
+    }
+    logs.append(new_entry)
+    if len(logs) > 100:
+        logs = logs[-100:]
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(logs, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False
+
+
+@admin_bp.get("/broadcast/logs")
+@jwt_required()
+def get_broadcast_logs():
+    from flask_jwt_extended import get_jwt_identity
+    current_user_id = int(get_jwt_identity())
+    admin_user = User.query.options(joinedload(User.profile)).get(current_user_id)
+    if not admin_user or admin_user.role not in ["superadmin", "admin"]:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+
+    return jsonify(load_broadcast_logs())
+
+
+@admin_bp.post("/broadcast")
+@jwt_required()
+def send_broadcast():
+    from flask_jwt_extended import get_jwt_identity
+    current_user_id = int(get_jwt_identity())
+    admin_user = User.query.options(joinedload(User.profile)).get(current_user_id)
+    if not admin_user or admin_user.role not in ["superadmin", "admin"]:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+
+    data = request.get_json() or {}
+    title = data.get("title")
+    message = data.get("message")
+    link_url = data.get("link_url") or "/notifications"
+    target_type = data.get("target_type") or "all"
+    target_value = data.get("target_value")
+    send_push = data.get("send_push", True)
+
+    if not title or not message:
+        return jsonify({"message": "제목과 내용을 모두 입력해 주세요."}), 400
+
+    # Query target users
+    query = User.query
+    if target_type == "region" and target_value:
+        from app.models import UserProfile
+        query = query.join(User.profile).filter(UserProfile.region.like(f"%{target_value}%"))
+    elif target_type == "role" and target_value:
+        query = query.filter(User.role == target_value)
+
+    target_users = query.all()
+    if not target_users:
+        return jsonify({"message": "대상 회원이 존재하지 않습니다."}), 400
+
+    from app.services.notification_service import create_notification
+    sent_count = 0
+    for target in target_users:
+        create_notification(
+            user_id=target.id,
+            type="admin_broadcast",
+            title=title,
+            message=message,
+            link_url=link_url,
+            commit=False,
+            send_push=send_push
+        )
+        sent_count += 1
+
+    from app.extensions import db
+    db.session.commit()
+
+    admin_name = admin_user.nickname or admin_user.name or admin_user.email
+    add_broadcast_log(
+        admin_name=admin_name,
+        title=title,
+        message=message,
+        link_url=link_url,
+        target_type=target_type,
+        target_value=target_value,
+        target_count=sent_count,
+        send_push=send_push
+    )
+
+    from app.utils.audit import log_admin_action
+    target_desc = "전체 회원" if target_type == "all" else (f"지역: {target_value}" if target_type == "region" else f"등급: {target_value}")
+    log_admin_action(
+        admin_name=admin_name,
+        action_type="단체 알림 발송",
+        description=f"대상 [{target_desc}]에게 단체 공지 알림을 발송했습니다. 수신 대상: {sent_count}명, 제목: '{title}'"
+    )
+
+    return jsonify({
+        "success": True,
+        "message": f"{sent_count}명의 회원에게 알림 전송이 완료되었습니다.",
+        "target_count": sent_count
+    })
+
+
+@admin_bp.get("/audit-logs")
+@jwt_required()
+def get_audit_logs():
+    from flask_jwt_extended import get_jwt_identity
+    current_user_id = int(get_jwt_identity())
+    admin_user = User.query.options(joinedload(User.profile)).get(current_user_id)
+    if not admin_user or admin_user.role not in ["superadmin", "admin"]:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+
+    from app.utils.audit import load_audit_logs
+    return jsonify(load_audit_logs())
+

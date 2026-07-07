@@ -5,11 +5,11 @@ import { User, Shield, Ban, CheckCircle } from "lucide-react";
 
 // Mock database fallback for offline/empty states
 const mockUsers = [
-  { id: 1, email: "admin@sportsmate.co.kr", nickname: "최고관리자", created_at: "2023.09.01", user_tag: "0001", provider: "email", role: "superadmin" },
-  { id: 2, email: "seojh@gmail.com", nickname: "서지훈", created_at: "2023.10.27", user_tag: "1004", provider: "google", role: "user" },
-  { id: 3, email: "minkh@naver.com", nickname: "민경훈", created_at: "2023.10.27", user_tag: "2048", provider: "kakao", role: "user" },
-  { id: 4, email: "jieun@daum.net", nickname: "이지은", created_at: "2023.10.26", user_tag: "7777", provider: "email", role: "admin" },
-  { id: 5, email: "hyunwoo@gmail.com", nickname: "최현우", created_at: "2023.10.26", user_tag: "9999", provider: "google", role: "suspended" }
+  { id: 1, email: "admin@sportsmate.co.kr", nickname: "최고관리자", name: "최고관리자", created_at: "2023.09.01", user_tag: "0001", provider: "email", role: "superadmin" },
+  { id: 2, email: "seojh@gmail.com", nickname: "서지훈", name: "서지훈", created_at: "2023.10.27", user_tag: "1004", provider: "google", role: "user" },
+  { id: 3, email: "minkh@naver.com", nickname: "민경훈", name: "민경훈", created_at: "2023.10.27", user_tag: "2048", provider: "kakao", role: "user" },
+  { id: 4, email: "jieun@daum.net", nickname: "이지은", name: "이지은", created_at: "2023.10.26", user_tag: "7777", provider: "email", role: "admin" },
+  { id: 5, email: "hyunwoo@gmail.com", nickname: "최현우", name: "최현우", created_at: "2023.10.26", user_tag: "9999", provider: "google", role: "suspended" }
 ];
 
 function AdminUsersPage() {
@@ -54,6 +54,7 @@ function AdminUsersPage() {
           const formatted = res.items.map(u => ({
             id: u.id,
             email: u.email || "이메일 없음",
+            name: u.name || "",
             nickname: u.nickname || "닉네임 없음",
             user_tag: u.user_tag || "",
             provider: u.provider || "email",
@@ -90,10 +91,11 @@ function AdminUsersPage() {
 
     const emailText = u.email ? u.email.toLowerCase() : "";
     const nicknameText = u.nickname ? u.nickname.toLowerCase() : "";
+    const nameText = u.name ? u.name.toLowerCase() : "";
     const tagText = u.user_tag ? u.user_tag.toLowerCase() : "";
-
+ 
     if (activeSearchField === "nickname") {
-      return nicknameText.includes(query);
+      return nicknameText.includes(query) || nameText.includes(query);
     } else if (activeSearchField === "user_tag") {
       return tagText.includes(query);
     } else if (activeSearchField === "email") {
@@ -104,6 +106,7 @@ function AdminUsersPage() {
       // all
       return (
         nicknameText.includes(query) ||
+        nameText.includes(query) ||
         tagText.includes(query) ||
         emailText.includes(query) ||
         roleText.includes(query)
@@ -135,7 +138,7 @@ function AdminUsersPage() {
             }}
           >
             <option value="all">전체</option>
-            <option value="nickname">닉네임</option>
+            <option value="nickname">이름 / 닉네임</option>
             <option value="user_tag">태그</option>
             <option value="email">이메일</option>
             <option value="role">구분</option>
@@ -208,7 +211,7 @@ function AdminUsersPage() {
             <thead>
               <tr>
                 <th>ID</th>
-                <th>닉네임</th>
+                <th>이름 / 닉네임</th>
                 <th>태그</th>
                 <th>이메일</th>
                 <th>가입일</th>
@@ -253,7 +256,10 @@ function AdminUsersPage() {
                   >
                     <td>#{u.id}</td>
                     <td style={{ fontWeight: 600 }}>
-                      {u.nickname}
+                      <span>{u.name || "이름 없음"}</span>
+                      <span style={{ color: "#64748b", fontWeight: 400, marginLeft: "6px", fontSize: "13px" }}>
+                        ({u.nickname})
+                      </span>
                     </td>
                     <td>
                       {u.user_tag ? (

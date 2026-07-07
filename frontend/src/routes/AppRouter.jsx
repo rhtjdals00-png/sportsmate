@@ -34,6 +34,8 @@ import AdminMeetingDetailPage from "../pages/AdminMeetingDetailPage.jsx";
 import AdminReportsPage from "../pages/AdminReportsPage.jsx";
 import AdminAnalyticsPage from "../pages/AdminAnalyticsPage.jsx";
 import AdminSettingsPage from "../pages/AdminSettingsPage.jsx";
+import AdminBroadcastPage from "../pages/AdminBroadcastPage.jsx";
+import AdminAuditLogsPage from "../pages/AdminAuditLogsPage.jsx";
 import NotFoundPage from "../pages/NotFoundPage.jsx";
 import NotificationsPage from "../pages/NotificationsPage.jsx";
 import MapPage from "../pages/MapPage.jsx";
@@ -80,7 +82,7 @@ function AppRouter() {
         <Route path="*" element={<NotFoundPage />} />
       </Route>
 
-      {/* 관리자 라우트 - 관리자 권한이 있는 계정만 접근할 수 있습니다. */}
+      {/* 관리자 권한이 있는 계정만 접근할 수 있는 라우트입니다. */}
       <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
         <Route index element={<AdminPage />} />
         <Route path="users" element={<AdminUsersPage />} />
@@ -88,7 +90,9 @@ function AppRouter() {
         <Route path="meetings" element={<AdminMeetingsPage />} />
         <Route path="meetings/:meetingId" element={<AdminMeetingDetailPage />} />
         <Route path="reports" element={<AdminReportsPage />} />
+        <Route path="broadcast" element={<AdminBroadcastPage />} />
         <Route path="analytics" element={<AdminAnalyticsPage />} />
+        <Route path="audit-logs" element={<AdminAuditLogsPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />
       </Route>
     </Routes>

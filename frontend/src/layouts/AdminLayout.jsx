@@ -8,6 +8,8 @@ import {
   Settings, 
   ChevronDown,
   BarChart3,
+  Bell,
+  ClipboardList
 } from "lucide-react";
 import { useResponsive } from "../hooks/useResponsive";
 import { useAuth } from "../contexts/AuthContext.jsx";
@@ -17,6 +19,13 @@ function AdminLayout() {
   const { isMobile } = useResponsive();
   const { user } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
+
+  const handleNavItemClick = (e, path) => {
+    if (location.pathname === path) {
+      e.preventDefault();
+      window.location.reload();
+    }
+  };
 
   // 현재 관리자 라우트에 맞춰 헤더 제목을 결정합니다.
   const getHeaderTitle = () => {
@@ -33,8 +42,12 @@ function AdminLayout() {
         return "모임 관리";
       case "/admin/reports":
         return "신고 및 제재 리포트 관리";
+      case "/admin/broadcast":
+        return "전체 공지 및 알림 발송";
       case "/admin/analytics":
         return "전체 통계 대시보드";
+      case "/admin/audit-logs":
+        return "관리자 작업 이력 로그";
       case "/admin/settings":
         return "시스템 설정";
       case "/admin":
@@ -69,6 +82,7 @@ function AdminLayout() {
           <NavLink 
             to="/admin" 
             end 
+            onClick={(e) => handleNavItemClick(e, "/admin")}
             className={({ isActive }) => 
               `admin-sidebar__nav-item${isActive ? " active" : ""}`
             }
@@ -79,6 +93,7 @@ function AdminLayout() {
           
           <NavLink 
             to="/admin/users" 
+            onClick={(e) => handleNavItemClick(e, "/admin/users")}
             className={({ isActive }) => 
               `admin-sidebar__nav-item${isActive ? " active" : ""}`
             }
@@ -89,6 +104,7 @@ function AdminLayout() {
           
           <NavLink 
             to="/admin/meetings" 
+            onClick={(e) => handleNavItemClick(e, "/admin/meetings")}
             className={({ isActive }) => 
               `admin-sidebar__nav-item${isActive ? " active" : ""}`
             }
@@ -99,6 +115,7 @@ function AdminLayout() {
 
           <NavLink 
             to="/admin/reports" 
+            onClick={(e) => handleNavItemClick(e, "/admin/reports")}
             className={({ isActive }) => 
               `admin-sidebar__nav-item${isActive ? " active" : ""}`
             }
@@ -108,7 +125,19 @@ function AdminLayout() {
           </NavLink>
 
           <NavLink 
+            to="/admin/broadcast" 
+            onClick={(e) => handleNavItemClick(e, "/admin/broadcast")}
+            className={({ isActive }) => 
+              `admin-sidebar__nav-item${isActive ? " active" : ""}`
+            }
+          >
+            <Bell size={18} />
+            <span>전체 알림 및 공지</span>
+          </NavLink>
+
+          <NavLink 
             to="/admin/analytics" 
+            onClick={(e) => handleNavItemClick(e, "/admin/analytics")}
             className={({ isActive }) => 
               `admin-sidebar__nav-item${isActive ? " active" : ""}`
             }
@@ -118,7 +147,19 @@ function AdminLayout() {
           </NavLink>
 
           <NavLink 
+            to="/admin/audit-logs" 
+            onClick={(e) => handleNavItemClick(e, "/admin/audit-logs")}
+            className={({ isActive }) => 
+              `admin-sidebar__nav-item${isActive ? " active" : ""}`
+            }
+          >
+            <ClipboardList size={18} />
+            <span>작업 이력 로그</span>
+          </NavLink>
+
+          <NavLink 
             to="/admin/settings" 
+            onClick={(e) => handleNavItemClick(e, "/admin/settings")}
             className={({ isActive }) => 
               `admin-sidebar__nav-item${isActive ? " active" : ""}`
             }
