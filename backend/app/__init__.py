@@ -53,6 +53,9 @@ def create_app(config_class=Config):
     CORS(app, resources={r"/api/*": {"origins": app.config["FRONTEND_ORIGIN"]}}, supports_credentials=True)
 
     register_blueprints(app)
+    with app.app_context():
+        from app.services.schema_compat import ensure_chat_message_columns
+        ensure_chat_message_columns(app)
 
     @app.before_request
     def check_maintenance():

@@ -6,6 +6,7 @@
   Eye,
   EyeOff,
   FileText,
+  LogOut,
   MapPin,
   Megaphone,
   MessageCircle,
@@ -20,7 +21,7 @@
   X
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import EmptyState from "../../common/EmptyState.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import { chatApi } from "../../../api/chatApi";
@@ -94,6 +95,42 @@ function selectedIdsOf(vote) {
 
 function displayVoterName(voter) {
   return voter.nickname || voter.name || "참여자";
+}
+
+function senderLabel(sender) {
+  return sender?.nickname || sender?.name || "참여자";
+}
+
+function messagePreview(message) {
+  if (!message) return "";
+  if (message.message_type === "image") return message.attachment_name || "사진";
+  if (message.message_type === "location") return message.location_label || "공유한 위치";
+  return message.content || "";
+}
+
+function replySenderLabel(message) {
+  return message?.reply_to_sender_name || senderLabel(message?.reply_to?.sender);
+}
+
+function replyContent(message) {
+  if (!message) return "";
+  return message.reply_to_content || messagePreview(message.reply_to);
+}
+
+function mapUrl(message) {
+  const lat = message.location_latitude;
+  const lng = message.location_longitude;
+  if (lat == null || lng == null) return "";
+  return `https://www.google.com/maps?q=${encodeURIComponent(`${lat},${lng}`)}`;
+}
+
+function readImageAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }
 
 function padNumber(value) {
@@ -221,6 +258,7 @@ function VoteDeadlinePicker({ value, onChange }) {
 
 function DesktopChatRoom() {
   const { chatRoomId } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
@@ -230,8 +268,13 @@ function DesktopChatRoom() {
   const [talkSearchOpen, setTalkSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [talkInfoOpen, setTalkInfoOpen] = useState(false);
+  const [memberPanelOpen, setMemberPanelOpen] = useState(false);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [actionNotice, setActionNotice] = useState("");
+  const [leavingRoom, setLeavingRoom] = useState(false);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  const [leaveTargetRoom, setLeaveTargetRoom] = useState(null);
+  const [privateChatNotice, setPrivateChatNotice] = useState("");
   const [profilePreviewUser, setProfilePreviewUser] = useState(null);
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [noticeFormOpen, setNoticeFormOpen] = useState(false);
@@ -241,6 +284,8 @@ function DesktopChatRoom() {
   const [noticeError, setNoticeError] = useState("");
   const [messageMenu, setMessageMenu] = useState(null);
   const [replyTarget, setReplyTarget] = useState(null);
+  const [focusedMessageId, setFocusedMessageId] = useState(null);
+  const [showLatestJump, setShowLatestJump] = useState(false);
   const [draggingReply, setDraggingReply] = useState(null);
   const [voteOpen, setVoteOpen] = useState(false);
   const [voteMode, setVoteMode] = useState("list");
@@ -259,6 +304,7 @@ function DesktopChatRoom() {
   const [voteSubmitting, setVoteSubmitting] = useState(false);
   const [voteError, setVoteError] = useState("");
   const messageListRef = useRef(null);
+  const messageRefs = useRef({});
   const messageInputRef = useRef(null);
   const fileInputRef = useRef(null);
   const longPressTimerRef = useRef(null);
@@ -270,6 +316,7 @@ function DesktopChatRoom() {
   const meeting = room?.meeting;
   const renderedMessages = messages.data?.items || [];
   const roomItems = rooms.data?.items || [];
+  const participantItems = room?.participants || [];
   const isRoomHost = String(meeting?.host?.id ?? "") === String(user?.id ?? "");
   const myRole = isRoomHost ? "host" : (meeting?.my_participant?.role || "member");
   const canManageRoom = Boolean(room?.can_manage || meeting?.can_manage || ["host", "cohost", "subhost", "assistant"].includes(String(myRole).toLowerCase()));
@@ -291,7 +338,22 @@ function DesktopChatRoom() {
   useLayoutEffect(() => {
     if (!messageListRef.current || !messages.data?.items) return;
     messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+    setShowLatestJump(false);
   }, [messages.data?.items?.length, pinnedNotice?.id]);
+
+  const scrollToLatestMessage = (behavior = "smooth") => {
+    const node = messageListRef.current;
+    if (!node) return;
+    node.scrollTo({ top: node.scrollHeight, behavior });
+    setShowLatestJump(false);
+  };
+
+  const handleMessageScroll = () => {
+    const node = messageListRef.current;
+    if (!node) return;
+    const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
+    setShowLatestJump(distanceFromBottom > 140);
+  };
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -364,10 +426,10 @@ function DesktopChatRoom() {
     setActionNotice("");
     setSending(true);
     try {
-      const nextContent = replyTarget
-        ? `${replyTarget.content}에 대한 답장\n${content.trim()}`
-        : content.trim();
-      await chatApi.send(chatRoomId, { content: nextContent });
+      await chatApi.send(chatRoomId, {
+        content: content.trim(),
+        reply_to_message_id: replyTarget?.id || null
+      });
       setContent("");
       setReplyTarget(null);
       setRefreshKey((value) => value + 1);
@@ -387,9 +449,42 @@ function DesktopChatRoom() {
   const handlePhotoSelected = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    const resetInput = () => {
+      event.target.value = "";
+    };
+    if (!file.type.startsWith("image/")) {
+      setActionNotice("이미지 파일만 전송할 수 있습니다.");
+      resetInput();
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setActionNotice("사진은 5MB 이하만 전송할 수 있습니다.");
+      resetInput();
+      return;
+    }
     setActionMenuOpen(false);
-    setActionNotice("사진 전송 기능은 준비 중입니다. 선택한 사진은 아직 전송되지 않았습니다.");
-    event.target.value = "";
+    setSending(true);
+    setActionNotice("");
+    setError("");
+    readImageAsDataUrl(file)
+      .then((dataUrl) => chatApi.send(chatRoomId, {
+        content: file.name || "사진",
+        message_type: "image",
+        attachment_url: dataUrl,
+        attachment_name: file.name,
+        reply_to_message_id: replyTarget?.id || null
+      }))
+      .then(() => {
+        setReplyTarget(null);
+        setRefreshKey((value) => value + 1);
+      })
+      .catch((photoError) => {
+        setError(photoError.response?.data?.message || "사진 전송에 실패했습니다.");
+      })
+      .finally(() => {
+        setSending(false);
+        resetInput();
+      });
   };
 
   const shareLocation = () => {
@@ -400,9 +495,28 @@ function DesktopChatRoom() {
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      () => {
+      async (position) => {
         setActionMenuOpen(false);
-        setActionNotice("위치 권한을 확인했습니다. 위치 공유 전송 기능은 준비 중입니다.");
+        setSending(true);
+        try {
+          const { latitude, longitude } = position.coords;
+          await chatApi.send(chatRoomId, {
+            content: "위치를 공유했습니다.",
+            message_type: "location",
+            location: {
+              latitude,
+              longitude,
+              label: "현재 위치"
+            },
+            reply_to_message_id: replyTarget?.id || null
+          });
+          setReplyTarget(null);
+          setRefreshKey((value) => value + 1);
+        } catch (locationError) {
+          setError(locationError.response?.data?.message || "위치 공유에 실패했습니다.");
+        } finally {
+          setSending(false);
+        }
       },
       () => setActionNotice("위치 권한이 허용되지 않았습니다. 브라우저 설정을 확인해주세요."),
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
@@ -592,6 +706,18 @@ function DesktopChatRoom() {
     window.setTimeout(() => messageInputRef.current?.focus(), 0);
   };
 
+  const focusReplySource = (messageId) => {
+    if (!messageId) return;
+    setSearchQuery("");
+    window.requestAnimationFrame(() => {
+      const node = messageRefs.current[messageId];
+      if (!node) return;
+      node.scrollIntoView({ block: "center", behavior: "smooth" });
+      setFocusedMessageId(messageId);
+      window.setTimeout(() => setFocusedMessageId((current) => current === messageId ? null : current), 1400);
+    });
+  };
+
   const canReplyToMessage = (message) => message.message_type !== "notice";
   const canNoticeMessage = (message) => canManageRoom && message.message_type !== "notice";
   const canUseMessageMenu = (message) => canReplyToMessage(message) || canNoticeMessage(message);
@@ -649,6 +775,40 @@ function DesktopChatRoom() {
     setDraggingReply(null);
   };
 
+  const requestPrivateChat = async (targetUser) => {
+    if (!targetUser?.id || String(targetUser.id) === String(user?.id)) {
+      setPrivateChatNotice("자기 자신에게는 개인톡을 보낼 수 없습니다.");
+      return;
+    }
+    try {
+      const data = await chatApi.createDirectRoom(targetUser.id);
+      setPrivateChatNotice(`1:1 톡방이 준비되었습니다. 방 번호: ${data.room?.id}`);
+    } catch (directError) {
+      setPrivateChatNotice(directError.response?.data?.message || "1:1 톡방을 만들지 못했습니다.");
+    }
+  };
+
+  const leaveRoom = async () => {
+    const targetRoomId = leaveTargetRoom?.id || chatRoomId;
+    if (!targetRoomId || leavingRoom) return;
+    setLeavingRoom(true);
+    setError("");
+    try {
+      await chatApi.leave(targetRoomId);
+      setLeaveConfirmOpen(false);
+      setLeaveTargetRoom(null);
+      setRefreshKey((value) => value + 1);
+      if (String(targetRoomId) === String(chatRoomId)) {
+        navigate("/chats", { replace: true });
+      }
+    } catch (leaveError) {
+      setError(leaveError.response?.data?.message || "채팅방 나가기에 실패했습니다.");
+      setLeaveConfirmOpen(false);
+    } finally {
+      setLeavingRoom(false);
+    }
+  };
+
   const openVoteNoticeDraft = (vote) => {
     openNoticeForm({
       title: `투표: ${vote.title}`,
@@ -678,14 +838,28 @@ function DesktopChatRoom() {
               {roomItems.map((item) => {
                 const itemMeeting = item.meeting || {};
                 return (
-                  <Link key={item.id} to={`/chats/${item.id}`} className={`proto-talk-room-item ${String(item.id) === String(chatRoomId) ? "selected" : ""}`}>
-                    {itemMeeting.cover_image_url ? <img src={itemMeeting.cover_image_url} alt="" /> : <div className="talk-room-fallback"><MessageCircle size={20} /></div>}
-                    <span>
-                      <b>{itemMeeting.title || "모임 채팅방"}</b>
-                      <small>{itemMeeting.location_name || "장소 미정"} · {itemMeeting.current_participants || 0}/{itemMeeting.max_participants || 0}명</small>
-                    </span>
+                  <div key={item.id} className={`proto-talk-room-item ${String(item.id) === String(chatRoomId) ? "selected" : ""}`}>
+                    <Link to={`/chats/${item.id}`}>
+                      {itemMeeting.cover_image_url ? <img src={itemMeeting.cover_image_url} alt="" /> : <div className="talk-room-fallback"><MessageCircle size={20} /></div>}
+                      <span>
+                        <b>{itemMeeting.title || "모임 채팅방"}</b>
+                        <small>{itemMeeting.location_name || "장소 미정"} · {itemMeeting.current_participants || 0}/{itemMeeting.max_participants || 0}명</small>
+                      </span>
                     <em>{formatMessageTime(item.last_message?.created_at) || "방금"}</em>
+                    {Number(item.unread_count || 0) > 0 ? <i>{item.unread_count}</i> : null}
                   </Link>
+                    <button
+                      className="talk-room-leave-btn"
+                      type="button"
+                      onClick={() => {
+                        setLeaveTargetRoom(item);
+                        setLeaveConfirmOpen(true);
+                      }}
+                      aria-label="채팅방 나가기"
+                    >
+                      <LogOut size={14} />
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -715,6 +889,10 @@ function DesktopChatRoom() {
                 <button className="talk-tool-btn" type="button" onClick={openVoteList}>
                   <Vote size={15} />
                   <b>투표</b>
+                </button>
+                <button className="talk-tool-btn" type="button" onClick={() => setMemberPanelOpen((value) => !value)}>
+                  <UsersRound size={15} />
+                  <b>멤버</b>
                 </button>
                 <button className="talk-icon-btn" type="button" onClick={() => setTalkSearchOpen((value) => !value)} aria-label="대화 검색">
                   <Search size={15} />
@@ -759,6 +937,27 @@ function DesktopChatRoom() {
               ) : null}
             </div>
 
+            <div className={`talk-members-panel ${memberPanelOpen ? "is-open" : ""}`}>
+              <header>
+                <strong>참여자 {participantItems.length}명</strong>
+                <button type="button" onClick={() => setMemberPanelOpen(false)} aria-label="참여자 닫기"><X size={14} /></button>
+              </header>
+              <div>
+                {participantItems.map((participant) => {
+                  const participantUser = participant.user || {};
+                  const isMe = String(participantUser.id ?? participant.user_id) === String(user?.id ?? "");
+                  return (
+                    <button key={participant.id || participant.user_id} type="button" onClick={() => setProfilePreviewUser(participantUser)}>
+                      {participantUser.profile_image_url ? <img src={participantUser.profile_image_url} alt="" /> : <span><UsersRound size={16} /></span>}
+                      <b>{senderLabel(participantUser)}{isMe ? " (나)" : ""}</b>
+                      <small>{participant.role === "host" ? "방장" : participant.role || "member"}</small>
+                    </button>
+                  );
+                })}
+                {!participantItems.length ? <p>참여자 정보를 불러오지 못했습니다.</p> : null}
+              </div>
+            </div>
+
             {pinnedNotice ? (
               <button className="chat-pinned-notice" type="button" onClick={() => setNoticeOpen(true)}>
                 <Megaphone size={16} />
@@ -767,7 +966,7 @@ function DesktopChatRoom() {
               </button>
             ) : null}
 
-            <div className="talk-messages" ref={messageListRef}>
+            <div className="talk-messages" ref={messageListRef} onScroll={handleMessageScroll}>
               {visibleMessages.length ? (
                 visibleMessages.map((message, index) => {
                   const mine = message.user_id === user?.id;
@@ -777,7 +976,11 @@ function DesktopChatRoom() {
                     <div key={message.id}>
                       {showDivider ? <div className="talk-date">{formatMessageDate(message.created_at)}</div> : null}
                       <div
-                        className={`talk-bubble ${mine ? "right" : "left"} ${message.message_type === "notice" ? "is-system" : ""} ${canUseMessageMenu(message) ? "has-menu" : ""} ${draggingReply?.id === message.id ? "is-reply-dragging" : ""}`}
+                        ref={(node) => {
+                          if (node) messageRefs.current[message.id] = node;
+                          else delete messageRefs.current[message.id];
+                        }}
+                        className={`talk-bubble ${mine ? "right" : "left"} ${message.message_type === "notice" ? "is-system" : ""} ${canUseMessageMenu(message) ? "has-menu" : ""} ${draggingReply?.id === message.id ? "is-reply-dragging" : ""} ${focusedMessageId === message.id ? "is-focused" : ""}`}
                         style={{ "--reply-drag-x": `${draggingReply?.id === message.id ? draggingReply.dx : 0}px` }}
                         onContextMenu={(event) => openMessageMenu(event, message)}
                         onPointerDown={(event) => startMessageLongPress(event, message)}
@@ -788,11 +991,41 @@ function DesktopChatRoom() {
                       >
                         {!mine && message.message_type !== "notice" ? (
                           <button className="talk-sender-button" type="button" onClick={() => setProfilePreviewUser(message.sender)}>
-                            {message.sender?.nickname || message.sender?.name || "참여자"}
+                            {message.sender?.profile_image_url ? <img src={message.sender.profile_image_url} alt="" /> : <span><UsersRound size={13} /></span>}
+                            <b>{senderLabel(message.sender)}</b>
                           </button>
                         ) : null}
-                        <p>{message.content}</p>
-                        <time>{formatMessageTime(message.created_at)}</time>
+                        {(message.reply_to_message_id || message.reply_to_content) ? (
+                          <button
+                            className="talk-message-reply"
+                            type="button"
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={() => focusReplySource(message.reply_to_message_id)}
+                          >
+                            <strong>{replySenderLabel(message)}</strong>
+                            <span>{replyContent(message)}</span>
+                          </button>
+                        ) : null}
+                        {message.message_type === "image" ? (
+                          <figure className="talk-photo-message">
+                            <img src={message.attachment_url} alt={message.attachment_name || "전송된 사진"} />
+                            {message.attachment_name ? <figcaption>{message.attachment_name}</figcaption> : null}
+                          </figure>
+                        ) : message.message_type === "location" ? (
+                          <a className="talk-location-message" href={mapUrl(message)} target="_blank" rel="noreferrer">
+                            <MapPin size={18} />
+                            <span>
+                              <strong>{message.location_label || "공유한 위치"}</strong>
+                              <small>{[message.location_latitude, message.location_longitude].filter((value) => value != null).join(", ")}</small>
+                            </span>
+                          </a>
+                        ) : (
+                          <p>{message.content}</p>
+                        )}
+                        <div className="talk-message-meta">
+                          {message.message_type !== "notice" ? <span>{Number(message.read_count || 0)} 읽음</span> : null}
+                          <time>{formatMessageTime(message.created_at)}</time>
+                        </div>
                         {canUseMessageMenu(message) ? (
                           <button className="talk-message-menu-btn" type="button" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => openMessageMenu(event, message)} aria-label="메시지 메뉴">
                             <span />
@@ -822,13 +1055,19 @@ function DesktopChatRoom() {
               )}
             </div>
 
+            {showLatestJump ? (
+              <button className="talk-latest-jump" type="button" onClick={() => scrollToLatestMessage()} aria-label="최신 메시지로 이동">
+                최신 메시지로
+              </button>
+            ) : null}
+
             <form className="talk-input" onSubmit={send}>
               {replyTarget ? (
                 <div className="talk-reply-preview">
                   <Reply size={15} />
                   <span>
-                    <b>{replyTarget.content}에 대한 답장</b>
-                    <small>{replyTarget.sender?.nickname || replyTarget.sender?.name || "참여자"}</small>
+                    <b>{messagePreview(replyTarget)}</b>
+                    <small>{senderLabel(replyTarget.sender)}에게 답장</small>
                   </span>
                   <button type="button" onClick={() => setReplyTarget(null)} aria-label="답장 취소">
                     <X size={14} />
@@ -886,9 +1125,26 @@ function DesktopChatRoom() {
             </div>
             <strong>{profilePreviewUser.nickname || profilePreviewUser.name || "참여자"}</strong>
             <p>{profilePreviewUser.profile?.region || "활동 지역 미설정"}</p>
+            {privateChatNotice ? <p className="chat-profile-sheet__notice">{privateChatNotice}</p> : null}
             <div className="chat-profile-sheet__actions">
-              <button type="button">1:1 쪽지</button>
+              <button type="button" onClick={() => requestPrivateChat(profilePreviewUser)}>1:1 톡</button>
               <button type="button">차단</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {leaveConfirmOpen ? (
+        <div className="chat-vote-confirm" role="dialog" aria-modal="true" aria-label="채팅방 나가기">
+          <button className="chat-vote-modal__backdrop" type="button" onClick={() => setLeaveConfirmOpen(false)} aria-label="닫기" />
+          <section>
+            <strong>채팅방을 나갈까요?</strong>
+            <p>{leaveTargetRoom?.meeting?.title || meeting?.title || "이 채팅방"}에서 나가면 모임 참여도 함께 취소됩니다.</p>
+            <div className="chat-vote-confirm__actions">
+              <button type="button" onClick={() => setLeaveConfirmOpen(false)}>취소</button>
+              <button type="button" className="is-danger" onClick={leaveRoom} disabled={leavingRoom}>
+                {leavingRoom ? "나가는 중" : "나가기"}
+              </button>
             </div>
           </section>
         </div>

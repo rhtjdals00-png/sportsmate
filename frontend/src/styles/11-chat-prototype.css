@@ -85,6 +85,7 @@
 
 .desktop-prototype .talk-room {
   display: flex;
+  position: relative;
   flex-direction: column;
   padding: 0;
   overflow: hidden;
@@ -296,6 +297,146 @@
   white-space: pre-line;
 }
 
+.desktop-prototype .talk-message-reply {
+  display: grid;
+  width: min(100%, 360px);
+  gap: 3px;
+  margin-bottom: 6px;
+  border: 0;
+  border-left: 3px solid #93c5fd;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+}
+
+.desktop-prototype .talk-bubble.right .talk-message-reply {
+  margin-left: auto;
+  background: rgba(255, 255, 255, 0.96);
+  border-left-color: #93c5fd;
+}
+
+.desktop-prototype .talk-message-reply strong,
+.desktop-prototype .talk-message-reply span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-prototype .talk-message-reply strong {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.desktop-prototype .talk-bubble.right .talk-message-reply strong,
+.desktop-prototype .talk-bubble.right .talk-message-reply span {
+  color: #0f172a;
+}
+
+.desktop-prototype .talk-bubble.right .talk-message-reply strong {
+  color: #1d4ed8;
+}
+
+.desktop-prototype .talk-bubble.right .talk-message-reply span {
+  color: #334155;
+}
+
+.desktop-prototype .talk-message-reply span {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.desktop-prototype .talk-photo-message {
+  display: grid;
+  width: min(320px, 100%);
+  gap: 6px;
+  margin: 0;
+}
+
+.desktop-prototype .talk-bubble.right .talk-photo-message {
+  margin-left: auto;
+}
+
+.desktop-prototype .talk-photo-message img {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  border-radius: 14px;
+  object-fit: cover;
+}
+
+.desktop-prototype .talk-photo-message figcaption {
+  overflow: hidden;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-prototype .talk-bubble.right .talk-photo-message figcaption {
+  color: #dbeafe;
+  text-align: right;
+}
+
+.desktop-prototype .talk-location-message {
+  display: grid;
+  width: min(320px, 100%);
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 12px;
+  text-decoration: none;
+}
+
+.desktop-prototype .talk-bubble.right .talk-location-message {
+  margin-left: auto;
+  background: #4f46e5;
+  color: #ffffff;
+}
+
+.desktop-prototype .talk-location-message > svg {
+  color: #2563eb;
+}
+
+.desktop-prototype .talk-bubble.right .talk-location-message > svg {
+  color: #ffffff;
+}
+
+.desktop-prototype .talk-location-message span,
+.desktop-prototype .talk-location-message strong,
+.desktop-prototype .talk-location-message small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-prototype .talk-location-message strong {
+  margin: 0;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.desktop-prototype .talk-location-message small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.desktop-prototype .talk-bubble.right .talk-location-message small {
+  color: #dbeafe;
+}
+
 .desktop-prototype .talk-bubble.left p {
   background: #ffffff;
   color: #0f172a;
@@ -443,6 +584,22 @@
   font-weight: 950;
 }
 
+.desktop-prototype .talk-latest-jump {
+  position: absolute;
+  right: 24px;
+  bottom: 88px;
+  z-index: 5;
+  min-height: 34px;
+  border: 1px solid rgba(79, 70, 229, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #4f46e5;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 950;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+}
+
 .desktop-prototype .talk-info-panel button {
   display: inline-flex;
   align-items: center;
@@ -454,6 +611,107 @@
   padding: 8px 12px;
   font-size: 12px;
   font-weight: 900;
+}
+
+.desktop-prototype .talk-info-panel button.is-danger {
+  border-color: rgba(239, 68, 68, 0.18);
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.desktop-prototype .talk-members-panel {
+  display: none;
+  border-bottom: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 14px 18px;
+}
+
+.desktop-prototype .talk-members-panel.is-open {
+  display: grid;
+  gap: 12px;
+}
+
+.desktop-prototype .talk-members-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.desktop-prototype .talk-members-panel header strong {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.desktop-prototype .talk-members-panel header button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.desktop-prototype .talk-members-panel > div {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.desktop-prototype .talk-members-panel > div > button {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #0f172a;
+  padding: 8px;
+  text-align: left;
+}
+
+.desktop-prototype .talk-members-panel img,
+.desktop-prototype .talk-members-panel > div > button > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  object-fit: cover;
+}
+
+.desktop-prototype .talk-members-panel b,
+.desktop-prototype .talk-members-panel small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-prototype .talk-members-panel b {
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.desktop-prototype .talk-members-panel small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.desktop-prototype .talk-members-panel p,
+.desktop-prototype .chat-profile-sheet__notice {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .desktop-prototype .talk-sender-button {
@@ -894,6 +1152,32 @@
   font-weight: 800;
 }
 
+.desktop-prototype .chat-vote-confirm__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.desktop-prototype .chat-vote-confirm__actions button {
+  min-height: 42px;
+  border: 1px solid rgba(79, 70, 229, 0.18);
+  border-radius: 14px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.desktop-prototype .chat-vote-confirm__actions button.is-danger {
+  border-color: rgba(239, 68, 68, 0.18);
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.desktop-prototype .chat-vote-confirm__actions button:disabled {
+  opacity: 0.6;
+}
+
 .desktop-prototype .chat-pinned-notice {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr);
@@ -1051,6 +1335,10 @@
   user-select: none;
 }
 
+.desktop-prototype .talk-bubble.is-focused {
+  animation: talk-message-focus 1400ms ease both;
+}
+
 .desktop-prototype .talk-message-menu-btn {
   position: absolute;
   top: 20px;
@@ -1076,7 +1364,7 @@
 }
 
 .desktop-prototype .talk-bubble.right .talk-message-menu-btn {
-  left: -34px;
+  right: -34px;
 }
 
 .desktop-prototype .talk-message-menu-btn span {
@@ -1174,6 +1462,131 @@
 .desktop-prototype .talk-message-context-menu button:hover {
   background: #eef2ff;
   color: #4f46e5;
+}
+
+.desktop-prototype .talk-sender-button {
+  display: inline-grid;
+  grid-template-columns: 22px auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.desktop-prototype .talk-sender-button img,
+.desktop-prototype .talk-sender-button span {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  object-fit: cover;
+}
+
+.desktop-prototype .talk-sender-button b {
+  margin: 0;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.desktop-prototype .talk-message-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.desktop-prototype .talk-bubble.right .talk-message-meta {
+  justify-content: flex-end;
+}
+
+.desktop-prototype .talk-message-meta span,
+.desktop-prototype .talk-message-meta time {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+@keyframes talk-message-focus {
+  0% {
+    filter: drop-shadow(0 0 0 rgba(79, 70, 229, 0));
+  }
+  18% {
+    filter: drop-shadow(0 0 0 rgba(79, 70, 229, 0));
+    outline: 3px solid rgba(79, 70, 229, 0.3);
+    outline-offset: 6px;
+  }
+  100% {
+    filter: drop-shadow(0 0 0 rgba(79, 70, 229, 0));
+    outline: 0 solid rgba(79, 70, 229, 0);
+    outline-offset: 12px;
+  }
+}
+
+.desktop-prototype .proto-talk-room-item {
+  position: relative;
+  display: block;
+  padding: 0;
+}
+
+.desktop-prototype .proto-talk-room-item > a {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 54px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  border-radius: 8px;
+  color: #0f172a;
+  padding: 12px 44px 12px 12px;
+  text-decoration: none;
+}
+
+.desktop-prototype .proto-talk-room-item i {
+  display: grid;
+  min-width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #ffffff;
+  padding: 0 7px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.desktop-prototype .proto-talk-room-item:hover,
+.desktop-prototype .proto-talk-room-item.selected {
+  background: transparent;
+}
+
+.desktop-prototype .proto-talk-room-item:hover > a,
+.desktop-prototype .proto-talk-room-item.selected > a {
+  background: #eef2ff;
+}
+
+.desktop-prototype .talk-room-leave-btn {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(239, 68, 68, 0.16);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #dc2626;
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity 150ms ease;
+}
+
+.desktop-prototype .proto-talk-room-item:hover .talk-room-leave-btn,
+.desktop-prototype .talk-room-leave-btn:focus-visible {
+  opacity: 1;
 }
 
 .desktop-prototype .chat-vote-create__grid {

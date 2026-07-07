@@ -2,7 +2,7 @@ from .common import TimestampMixin
 from .users import User, UserProfile
 from .taxonomy import SportCategory, Sport, Region
 from .meetings import Meeting, Participant
-from .chat import ChatRoom, ChatMessage
+from .chat import ChatRoom, ChatMessage, ChatMessageRead, DirectChatRoom, DirectChatMessage
 from .notifications import Notification, PushSubscription
 from .engagement import Review, Notice, Vote, VoteOption, VoteResponse, Attendance
 from .moderation import Report
@@ -18,6 +18,9 @@ __all__ = [
     "Participant",
     "ChatRoom",
     "ChatMessage",
+    "ChatMessageRead",
+    "DirectChatRoom",
+    "DirectChatMessage",
     "Notification",
     "PushSubscription",
     "Review",

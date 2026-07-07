@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { MessageCircle } from "lucide-react";
+import { LogOut, MessageCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import EmptyState from "../../common/EmptyState.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
@@ -19,8 +19,24 @@ function formatChatTime(value) {
 function DesktopChatList() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const [leavingRoomId, setLeavingRoomId] = useState(null);
   const rooms = useAsync(() => chatApi.rooms(), [refreshKey]);
   const items = rooms.data?.items || [];
+
+  const handleLeaveRoom = async (room) => {
+    const title = room.meeting?.title || "채팅방";
+    if (!window.confirm(`${title}에서 나가시겠어요? 채팅방을 나가면 해당 모임에서도 나가게 됩니다.`)) return;
+
+    try {
+      setLeavingRoomId(room.id);
+      await chatApi.leave(room.id);
+      setRefreshKey((value) => value + 1);
+    } catch (error) {
+      window.alert(error.response?.data?.message || "채팅방 나가기에 실패했습니다.");
+    } finally {
+      setLeavingRoomId(null);
+    }
+  };
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -80,14 +96,26 @@ function DesktopChatList() {
               {items.map((room) => {
                 const meeting = room.meeting || {};
                 return (
-                  <Link key={room.id} to={`/chats/${room.id}`} className="proto-talk-room-item">
-                    {meeting.cover_image_url ? <img src={meeting.cover_image_url} alt="" /> : <div className="talk-room-fallback"><MessageCircle size={20} /></div>}
-                    <span>
-                      <b>{meeting.title || "모임 채팅방"}</b>
-                      <small>{meeting.location_name || "장소 미정"} · {meeting.current_participants || 0}/{meeting.max_participants || 0}명</small>
-                    </span>
-                    <em>{formatChatTime(room.last_message?.created_at)}</em>
-                  </Link>
+                  <div key={room.id} className="proto-talk-room-item">
+                    <Link to={`/chats/${room.id}`}>
+                      {meeting.cover_image_url ? <img src={meeting.cover_image_url} alt="" /> : <div className="talk-room-fallback"><MessageCircle size={20} /></div>}
+                      <span>
+                        <b>{meeting.title || "모임 채팅방"}</b>
+                        <small>{meeting.location_name || "장소 미정"} · {meeting.current_participants || 0}/{meeting.max_participants || 0}명</small>
+                      </span>
+                      <em>{formatChatTime(room.last_message?.created_at)}</em>
+                      {Number(room.unread_count || 0) > 0 ? <i>{room.unread_count}</i> : null}
+                    </Link>
+                    <button
+                      className="talk-room-leave-btn"
+                      type="button"
+                      onClick={() => handleLeaveRoom(room)}
+                      disabled={String(leavingRoomId) === String(room.id)}
+                      aria-label="채팅방 나가기"
+                    >
+                      <LogOut size={14} />
+                    </button>
+                  </div>
                 );
               })}
             </div>
