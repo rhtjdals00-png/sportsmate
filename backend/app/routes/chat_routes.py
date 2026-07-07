@@ -37,6 +37,10 @@ def participant_item(participant):
     }
 
 
+def user_display_name(user):
+    return (user.nickname or user.name) if user else "참여자"
+
+
 @chat_bp.get("")
 @jwt_required()
 def rooms():
@@ -46,6 +50,7 @@ def rooms():
         .options(joinedload(Meeting.chat_room))
         .outerjoin(Participant, Participant.meeting_id == Meeting.id)
         .filter(
+            Meeting.status.notin_(["cancelled", "suspended"]),
             or_(
                 Meeting.host_id == user_id,
                 (Participant.user_id == user_id) & (Participant.status == "approved")
@@ -62,6 +67,7 @@ def rooms():
         .join(Meeting, ChatRoom.meeting_id == Meeting.id)
         .outerjoin(Participant, Participant.meeting_id == Meeting.id)
         .filter(
+            Meeting.status.notin_(["cancelled", "suspended"]),
             or_(
                 Meeting.host_id == user_id,
                 (Participant.user_id == user_id) & (Participant.status == "approved")
@@ -187,7 +193,7 @@ def direct_messages(room_id):
 def create_direct_message(room_id):
     user_id = int(get_jwt_identity())
     try:
-        message = send_direct_message(room_id, user_id, (request.get_json() or {}).get("content", ""))
+        message = send_direct_message(room_id, user_id, request.get_json() or {})
         return jsonify({"message": message.to_dict()}), 201
     except ValueError as error:
         return jsonify({"message": str(error)}), 400
@@ -222,6 +228,12 @@ def leave_room(room_id):
         if room.meeting:
             room.meeting.current_participants = max(1, int(room.meeting.current_participants or 1) - 1)
             room.meeting.sync_status()
+        db.session.add(ChatMessage(
+            chat_room_id=room.id,
+            user_id=user_id,
+            content=f"{user_display_name(participant.user)}님이 나가셨습니다.",
+            message_type="system",
+        ))
         db.session.commit()
         return jsonify({"left": True, "meeting_id": room.meeting_id})
     except PermissionError as error:

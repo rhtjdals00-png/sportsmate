@@ -101,6 +101,11 @@ function senderLabel(sender) {
   return sender?.nickname || sender?.name || "참여자";
 }
 
+function userTagLabel(user) {
+  if (user?.user_tag_display) return user.user_tag_display;
+  return user?.user_tag ? `[${user.user_tag}]` : "";
+}
+
 function messagePreview(message) {
   if (!message) return "";
   if (message.message_type === "image") return message.attachment_name || "사진";
@@ -115,6 +120,10 @@ function replySenderLabel(message) {
 function replyContent(message) {
   if (!message) return "";
   return message.reply_to_content || messagePreview(message.reply_to);
+}
+
+function isSystemMessage(message) {
+  return ["notice", "system"].includes(message?.message_type);
 }
 
 function mapUrl(message) {
@@ -257,14 +266,18 @@ function VoteDeadlinePicker({ value, onChange }) {
 }
 
 function DesktopChatRoom() {
-  const { chatRoomId } = useParams();
+  const { chatRoomId, directRoomId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isDirectChat = Boolean(directRoomId);
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
-  const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const [roomRefreshKey, setRoomRefreshKey] = useState(0);
+  const [directRefreshKey, setDirectRefreshKey] = useState(0);
+  const [directRoomRefreshKey, setDirectRoomRefreshKey] = useState(0);
+  const [chatListMode, setChatListMode] = useState(isDirectChat ? "direct" : "meeting");
   const [talkSearchOpen, setTalkSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [talkInfoOpen, setTalkInfoOpen] = useState(false);
@@ -276,6 +289,9 @@ function DesktopChatRoom() {
   const [leaveTargetRoom, setLeaveTargetRoom] = useState(null);
   const [privateChatNotice, setPrivateChatNotice] = useState("");
   const [profilePreviewUser, setProfilePreviewUser] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [photoZoom, setPhotoZoom] = useState(1);
+  const [photoPan, setPhotoPan] = useState({ x: 0, y: 0 });
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [noticeFormOpen, setNoticeFormOpen] = useState(false);
   const [noticeRefreshKey, setNoticeRefreshKey] = useState(0);
@@ -309,13 +325,19 @@ function DesktopChatRoom() {
   const fileInputRef = useRef(null);
   const longPressTimerRef = useRef(null);
   const dragReplyRef = useRef(null);
+  const photoDragRef = useRef(null);
 
-  const messages = useAsync(() => chatApi.messages(chatRoomId), [chatRoomId, refreshKey]);
-  const rooms = useAsync(() => chatApi.rooms(), [refreshKey]);
-  const room = messages.data?.room;
+  const messages = useAsync(() => chatRoomId ? chatApi.messages(chatRoomId) : Promise.resolve(null), [chatRoomId, refreshKey]);
+  const directMessages = useAsync(() => directRoomId ? chatApi.directMessages(directRoomId) : Promise.resolve(null), [directRoomId, directRefreshKey]);
+  const rooms = useAsync(() => chatApi.rooms(), [roomRefreshKey]);
+  const directRooms = useAsync(() => chatApi.directRooms(), [directRoomRefreshKey]);
+  const activeMessages = isDirectChat ? directMessages : messages;
+  const room = activeMessages.data?.room;
+  const directOtherUser = isDirectChat ? room?.other_user : null;
   const meeting = room?.meeting;
-  const renderedMessages = messages.data?.items || [];
+  const renderedMessages = activeMessages.data?.items || [];
   const roomItems = rooms.data?.items || [];
+  const directRoomItems = directRooms.data?.items || [];
   const participantItems = room?.participants || [];
   const isRoomHost = String(meeting?.host?.id ?? "") === String(user?.id ?? "");
   const myRole = isRoomHost ? "host" : (meeting?.my_participant?.role || "member");
@@ -323,9 +345,21 @@ function DesktopChatRoom() {
   const votes = useAsync(() => meeting?.id ? meetingApi.votes(meeting.id) : Promise.resolve({ items: [] }), [meeting?.id, voteRefreshKey]);
   const notices = useAsync(() => meeting?.id ? meetingApi.notices(meeting.id) : Promise.resolve({ items: [] }), [meeting?.id, noticeRefreshKey]);
   const pinnedNotice = useMemo(() => {
-    const items = notices.data?.items || [];
+    const items = [...(notices.data?.items || [])].sort((first, second) => {
+      const firstTime = new Date(first.created_at || 0).getTime();
+      const secondTime = new Date(second.created_at || 0).getTime();
+      if (secondTime !== firstTime) return secondTime - firstTime;
+      return Number(second.id || 0) - Number(first.id || 0);
+    });
     return items.find((item) => item.is_pinned) || items[0] || null;
   }, [notices.data?.items]);
+  const pinnedNoticeText = pinnedNotice?.content || pinnedNotice?.title || "";
+  const systemMessageText = (message) => {
+    if (message.message_type === "system") return message.content;
+    if (message.message_type !== "notice") return message.content;
+    if (message.content && !message.content.endsWith(": 채팅 공지")) return message.content;
+    return pinnedNoticeText ? `공지가 등록되었습니다: ${pinnedNoticeText}` : message.content;
+  };
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const visibleMessages = normalizedSearchQuery
@@ -335,11 +369,20 @@ function DesktopChatRoom() {
       })
     : renderedMessages;
 
+  useEffect(() => {
+    setChatListMode(isDirectChat ? "direct" : "meeting");
+    setSearchQuery("");
+    setReplyTarget(null);
+    setActionMenuOpen(false);
+  }, [isDirectChat, chatRoomId, directRoomId]);
+
   useLayoutEffect(() => {
-    if (!messageListRef.current || !messages.data?.items) return;
+    if (!messageListRef.current || !activeMessages.data?.items) return;
     messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     setShowLatestJump(false);
-  }, [messages.data?.items?.length, pinnedNotice?.id]);
+    setRoomRefreshKey((value) => value + 1);
+    if (isDirectChat) setDirectRoomRefreshKey((value) => value + 1);
+  }, [activeMessages.data?.items?.length, pinnedNotice?.id, isDirectChat]);
 
   const scrollToLatestMessage = (behavior = "smooth") => {
     const node = messageListRef.current;
@@ -357,11 +400,14 @@ function DesktopChatRoom() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      if (document.hidden || sending || realtimeConnected) return;
+      if (document.hidden || sending) return;
       setRefreshKey((value) => value + 1);
+      setRoomRefreshKey((value) => value + 1);
+      setDirectRefreshKey((value) => value + 1);
+      setDirectRoomRefreshKey((value) => value + 1);
     }, 3000);
     return () => window.clearInterval(timer);
-  }, [realtimeConnected, sending]);
+  }, [sending]);
 
   useEffect(() => {
     if (!voteOpen || !meeting?.id) return undefined;
@@ -373,25 +419,56 @@ function DesktopChatRoom() {
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !chatRoomId) {
-      setRealtimeConnected(false);
       return undefined;
     }
 
+    const refreshChat = () => {
+      setRefreshKey((value) => value + 1);
+      setRoomRefreshKey((value) => value + 1);
+    };
     const channel = supabase
       .channel(`desktop-chat-room-${chatRoomId}`)
       .on("postgres_changes", {
-        event: "INSERT",
+        event: "*",
         schema: "public",
         table: "chat_messages",
         filter: `chat_room_id=eq.${chatRoomId}`
-      }, () => setRefreshKey((value) => value + 1))
-      .subscribe((status) => setRealtimeConnected(status === "SUBSCRIBED"));
+      }, refreshChat)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "chat_message_reads"
+      }, refreshChat)
+      .subscribe();
 
     return () => {
-      setRealtimeConnected(false);
       supabase.removeChannel(channel);
     };
   }, [chatRoomId]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase || !directRoomId) {
+      return undefined;
+    }
+
+    const refreshDirectChat = () => {
+      setDirectRefreshKey((value) => value + 1);
+      setDirectRoomRefreshKey((value) => value + 1);
+    };
+    const channel = supabase
+      .channel(`desktop-direct-chat-${directRoomId}`)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "direct_chat_messages",
+        filter: `direct_chat_room_id=eq.${directRoomId}`
+      }, refreshDirectChat)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [directRoomId]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !meeting?.id) return undefined;
@@ -426,6 +503,13 @@ function DesktopChatRoom() {
     setActionNotice("");
     setSending(true);
     try {
+      if (isDirectChat) {
+        await chatApi.sendDirect(directRoomId, { content: content.trim() });
+        setContent("");
+        setDirectRefreshKey((value) => value + 1);
+        setDirectRoomRefreshKey((value) => value + 1);
+        return;
+      }
       await chatApi.send(chatRoomId, {
         content: content.trim(),
         reply_to_message_id: replyTarget?.id || null
@@ -433,6 +517,7 @@ function DesktopChatRoom() {
       setContent("");
       setReplyTarget(null);
       setRefreshKey((value) => value + 1);
+      setRoomRefreshKey((value) => value + 1);
     } catch (sendError) {
       setError(sendError.response?.data?.message || "메시지 전송에 실패했습니다.");
     } finally {
@@ -444,6 +529,52 @@ function DesktopChatRoom() {
     setActionNotice("");
     setError("");
     fileInputRef.current?.click();
+  };
+
+  const openPhotoPreview = (preview) => {
+    setPhotoPreview(preview);
+    setPhotoZoom(1);
+    setPhotoPan({ x: 0, y: 0 });
+    photoDragRef.current = null;
+  };
+
+  const closePhotoPreview = () => {
+    setPhotoPreview(null);
+    setPhotoZoom(1);
+    setPhotoPan({ x: 0, y: 0 });
+    photoDragRef.current = null;
+  };
+
+  const handlePhotoWheel = (event) => {
+    event.preventDefault();
+    const nextZoom = Math.min(6, Math.max(0.5, photoZoom + (event.deltaY < 0 ? 0.18 : -0.18)));
+    if (nextZoom === photoZoom) return;
+    setPhotoZoom(nextZoom);
+    if (nextZoom <= 1) setPhotoPan({ x: 0, y: 0 });
+  };
+
+  const startPhotoDrag = (event) => {
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    photoDragRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      pan: photoPan
+    };
+  };
+
+  const movePhotoDrag = (event) => {
+    const drag = photoDragRef.current;
+    if (!drag) return;
+    setPhotoPan({
+      x: drag.pan.x + event.clientX - drag.x,
+      y: drag.pan.y + event.clientY - drag.y
+    });
+  };
+
+  const endPhotoDrag = (event) => {
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    photoDragRef.current = null;
   };
 
   const handlePhotoSelected = (event) => {
@@ -467,16 +598,29 @@ function DesktopChatRoom() {
     setActionNotice("");
     setError("");
     readImageAsDataUrl(file)
-      .then((dataUrl) => chatApi.send(chatRoomId, {
-        content: file.name || "사진",
-        message_type: "image",
-        attachment_url: dataUrl,
-        attachment_name: file.name,
-        reply_to_message_id: replyTarget?.id || null
-      }))
+      .then((dataUrl) => {
+        const payload = {
+          content: file.name || "사진",
+          message_type: "image",
+          attachment_url: dataUrl,
+          attachment_name: file.name
+        };
+        return isDirectChat
+          ? chatApi.sendDirect(directRoomId, payload)
+          : chatApi.send(chatRoomId, {
+              ...payload,
+              reply_to_message_id: replyTarget?.id || null
+            });
+      })
       .then(() => {
         setReplyTarget(null);
-        setRefreshKey((value) => value + 1);
+        if (isDirectChat) {
+          setDirectRefreshKey((value) => value + 1);
+          setDirectRoomRefreshKey((value) => value + 1);
+        } else {
+          setRefreshKey((value) => value + 1);
+          setRoomRefreshKey((value) => value + 1);
+        }
       })
       .catch((photoError) => {
         setError(photoError.response?.data?.message || "사진 전송에 실패했습니다.");
@@ -500,18 +644,31 @@ function DesktopChatRoom() {
         setSending(true);
         try {
           const { latitude, longitude } = position.coords;
-          await chatApi.send(chatRoomId, {
+          const payload = {
             content: "위치를 공유했습니다.",
             message_type: "location",
             location: {
               latitude,
               longitude,
               label: "현재 위치"
-            },
-            reply_to_message_id: replyTarget?.id || null
-          });
+            }
+          };
+          if (isDirectChat) {
+            await chatApi.sendDirect(directRoomId, payload);
+          } else {
+            await chatApi.send(chatRoomId, {
+              ...payload,
+              reply_to_message_id: replyTarget?.id || null
+            });
+          }
           setReplyTarget(null);
-          setRefreshKey((value) => value + 1);
+          if (isDirectChat) {
+            setDirectRefreshKey((value) => value + 1);
+            setDirectRoomRefreshKey((value) => value + 1);
+          } else {
+            setRefreshKey((value) => value + 1);
+            setRoomRefreshKey((value) => value + 1);
+          }
         } catch (locationError) {
           setError(locationError.response?.data?.message || "위치 공유에 실패했습니다.");
         } finally {
@@ -682,7 +839,9 @@ function DesktopChatRoom() {
       });
       setNoticeFormOpen(false);
       setNoticeRefreshKey((value) => value + 1);
+      window.setTimeout(() => setNoticeRefreshKey((value) => value + 1), 250);
       setRefreshKey((value) => value + 1);
+      setRoomRefreshKey((value) => value + 1);
       setActionNotice("공지사항이 등록되었습니다.");
     } catch (noticeCreateError) {
       setNoticeError(noticeCreateError.response?.data?.message || "공지 등록에 실패했습니다.");
@@ -718,8 +877,8 @@ function DesktopChatRoom() {
     });
   };
 
-  const canReplyToMessage = (message) => message.message_type !== "notice";
-  const canNoticeMessage = (message) => canManageRoom && message.message_type !== "notice";
+  const canReplyToMessage = (message) => !isSystemMessage(message);
+  const canNoticeMessage = (message) => canManageRoom && !isSystemMessage(message);
   const canUseMessageMenu = (message) => canReplyToMessage(message) || canNoticeMessage(message);
 
   const openMessageMenu = (event, message) => {
@@ -782,7 +941,15 @@ function DesktopChatRoom() {
     }
     try {
       const data = await chatApi.createDirectRoom(targetUser.id);
-      setPrivateChatNotice(`1:1 톡방이 준비되었습니다. 방 번호: ${data.room?.id}`);
+      const roomId = data.room?.id;
+      if (roomId) {
+        setProfilePreviewUser(null);
+        setPrivateChatNotice("");
+        setDirectRoomRefreshKey((value) => value + 1);
+        navigate(`/chats/direct/${roomId}`);
+        return;
+      }
+      setPrivateChatNotice("1:1 톡방을 만들었지만 방 정보를 확인하지 못했습니다.");
     } catch (directError) {
       setPrivateChatNotice(directError.response?.data?.message || "1:1 톡방을 만들지 못했습니다.");
     }
@@ -798,6 +965,7 @@ function DesktopChatRoom() {
       setLeaveConfirmOpen(false);
       setLeaveTargetRoom(null);
       setRefreshKey((value) => value + 1);
+      setRoomRefreshKey((value) => value + 1);
       if (String(targetRoomId) === String(chatRoomId)) {
         navigate("/chats", { replace: true });
       }
@@ -806,6 +974,36 @@ function DesktopChatRoom() {
       setLeaveConfirmOpen(false);
     } finally {
       setLeavingRoom(false);
+    }
+  };
+
+  const closeMeetingRoom = async () => {
+    if (!meeting?.id) return;
+    if (!window.confirm("이 모임 채팅방을 종료할까요? 모임도 취소 상태로 변경됩니다.")) return;
+    setError("");
+    try {
+      await meetingApi.cancel(meeting.id);
+      setRefreshKey((value) => value + 1);
+      setRoomRefreshKey((value) => value + 1);
+      navigate("/chats", { replace: true });
+    } catch (closeError) {
+      setError(closeError.response?.data?.message || "채팅방 종료에 실패했습니다.");
+    }
+  };
+
+  const kickParticipant = async (participant) => {
+    const targetUser = participant.user || {};
+    const targetUserId = targetUser.id || participant.user_id;
+    if (!meeting?.id || !targetUserId) return;
+    if (!window.confirm(`${senderLabel(targetUser)}님을 이 채팅방에서 내보낼까요? 모임 참여도 함께 취소됩니다.`)) return;
+    setError("");
+    try {
+      await meetingApi.kickMember(meeting.id, targetUserId);
+      setProfilePreviewUser(null);
+      setRefreshKey((value) => value + 1);
+      setRoomRefreshKey((value) => value + 1);
+    } catch (kickError) {
+      setError(kickError.response?.data?.message || "멤버 추방에 실패했습니다.");
     }
   };
 
@@ -828,12 +1026,22 @@ function DesktopChatRoom() {
       <div className="talk-layout">
         <aside className="page-card talk-list">
           <div className="talk-list-head">
-            <h2>참여중인 채팅방</h2>
-            <span>{roomItems.length}</span>
+            <h2>채팅방</h2>
+            <span>{chatListMode === "direct" ? directRoomItems.length : roomItems.length}</span>
           </div>
-          {rooms.loading && !rooms.data ? (
+          <div className="talk-list-tabs" role="tablist" aria-label="채팅방 종류">
+            <button className={chatListMode === "meeting" ? "is-active" : ""} type="button" onClick={() => setChatListMode("meeting")}>
+              참여중인 모임
+            </button>
+            <button className={chatListMode === "direct" ? "is-active" : ""} type="button" onClick={() => setChatListMode("direct")}>
+              1대1톡
+            </button>
+          </div>
+          {chatListMode === "meeting" && rooms.loading && !rooms.data ? (
             <LoadingCards count={4} />
-          ) : roomItems.length ? (
+          ) : chatListMode === "direct" && directRooms.loading && !directRooms.data ? (
+            <LoadingCards count={4} />
+          ) : chatListMode === "meeting" && roomItems.length ? (
             <div className="talk-list-items">
               {roomItems.map((item) => {
                 const itemMeeting = item.meeting || {};
@@ -863,37 +1071,65 @@ function DesktopChatRoom() {
                 );
               })}
             </div>
+          ) : chatListMode === "direct" && directRoomItems.length ? (
+            <div className="talk-list-items">
+              {directRoomItems.map((item) => {
+                const otherUser = item.other_user || {};
+                return (
+                  <div key={item.id} className={`proto-talk-room-item ${String(item.id) === String(directRoomId) ? "selected" : ""}`}>
+                    <Link to={`/chats/direct/${item.id}`}>
+                      {otherUser.profile_image_url ? <img src={otherUser.profile_image_url} alt="" /> : <div className="talk-room-fallback"><UsersRound size={20} /></div>}
+                      <span>
+                        <b>{senderLabel(otherUser)}</b>
+                        <small>{item.last_message?.content || "아직 대화가 없습니다."}</small>
+                      </span>
+                      <em>{formatMessageTime(item.last_message?.created_at || item.updated_at || item.created_at) || "방금"}</em>
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
+          ) : chatListMode === "direct" ? (
+            <EmptyState title="1대1 톡방이 없습니다." description="채팅방 멤버 프로필에서 1:1 톡을 시작해보세요." />
           ) : (
             <EmptyState title="참여 중인 채팅방이 없습니다." actionLabel="모임 찾기" actionTo="/meetings" />
           )}
         </aside>
 
-        {messages.loading && !messages.data ? (
+        {activeMessages.loading && !activeMessages.data ? (
           <section className="page-card talk-room talk-room-open"><LoadingCards count={3} /></section>
-        ) : messages.error ? (
+        ) : activeMessages.error ? (
           <section className="page-card talk-room talk-room-empty">
-            <EmptyState title="채팅방을 불러오지 못했습니다." description="참여 승인 상태를 확인하거나 잠시 후 다시 시도해주세요." actionLabel="채팅 목록" actionTo="/chats" />
+            <EmptyState title="채팅방을 불러오지 못했습니다." description={isDirectChat ? "1:1 톡방 접근 상태를 확인하거나 잠시 후 다시 시도해주세요." : "참여 승인 상태를 확인하거나 잠시 후 다시 시도해주세요."} actionLabel="채팅 목록" actionTo="/chats" />
           </section>
         ) : (
           <section className="page-card talk-room talk-room-open">
             <div className="talk-room-top">
               <div>
-                <strong>{meeting?.title || "채팅방"}</strong>
-                <small>{meeting?.location_name || "장소 미정"} · {meeting?.current_participants || 0}/{meeting?.max_participants || 0}명</small>
+                <strong>{isDirectChat ? senderLabel(directOtherUser) : (meeting?.title || "채팅방")}</strong>
+                <small>
+                  {isDirectChat
+                    ? (directOtherUser?.profile?.region || "1:1 톡")
+                    : `${meeting?.location_name || "장소 미정"} · ${meeting?.current_participants || 0}/${meeting?.max_participants || 0}명`}
+                </small>
               </div>
               <span>
-                <button className="talk-tool-btn" type="button" onClick={() => setTalkInfoOpen((value) => !value)}>
-                  <ClipboardList size={15} />
-                  <b>공지/일정</b>
-                </button>
-                <button className="talk-tool-btn" type="button" onClick={openVoteList}>
-                  <Vote size={15} />
-                  <b>투표</b>
-                </button>
-                <button className="talk-tool-btn" type="button" onClick={() => setMemberPanelOpen((value) => !value)}>
-                  <UsersRound size={15} />
-                  <b>멤버</b>
-                </button>
+                {!isDirectChat ? (
+                  <>
+                    <button className="talk-tool-btn" type="button" onClick={() => setTalkInfoOpen((value) => !value)}>
+                      <ClipboardList size={15} />
+                      <b>공지/일정</b>
+                    </button>
+                    <button className="talk-tool-btn" type="button" onClick={openVoteList}>
+                      <Vote size={15} />
+                      <b>투표</b>
+                    </button>
+                    <button className="talk-tool-btn" type="button" onClick={() => setMemberPanelOpen((value) => !value)}>
+                      <UsersRound size={15} />
+                      <b>멤버</b>
+                    </button>
+                  </>
+                ) : null}
                 <button className="talk-icon-btn" type="button" onClick={() => setTalkSearchOpen((value) => !value)} aria-label="대화 검색">
                   <Search size={15} />
                 </button>
@@ -906,7 +1142,7 @@ function DesktopChatRoom() {
               <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="대화 내용 검색" />
             </div>
 
-            <div className={`talk-info-panel ${talkInfoOpen ? "is-open" : ""}`}>
+            {!isDirectChat ? <div className={`talk-info-panel ${talkInfoOpen ? "is-open" : ""}`}>
               {pinnedNotice ? (
                 <button type="button" onClick={() => setNoticeOpen(true)}>
                   <Megaphone size={15} />
@@ -929,15 +1165,21 @@ function DesktopChatRoom() {
                     <Pin size={15} />
                     <span>공지 작성</span>
                   </button>
+                  {isRoomHost ? (
+                    <button className="is-danger" type="button" onClick={closeMeetingRoom}>
+                      <LogOut size={15} />
+                      <span>채팅방 종료</span>
+                    </button>
+                  ) : null}
                   <Link to={`/host/meetings/${meeting.id}`}>
                     <Settings size={15} />
                     <span>방 관리</span>
                   </Link>
                 </>
               ) : null}
-            </div>
+            </div> : null}
 
-            <div className={`talk-members-panel ${memberPanelOpen ? "is-open" : ""}`}>
+            {!isDirectChat ? <div className={`talk-members-panel ${memberPanelOpen ? "is-open" : ""}`}>
               <header>
                 <strong>참여자 {participantItems.length}명</strong>
                 <button type="button" onClick={() => setMemberPanelOpen(false)} aria-label="참여자 닫기"><X size={14} /></button>
@@ -947,29 +1189,31 @@ function DesktopChatRoom() {
                   const participantUser = participant.user || {};
                   const isMe = String(participantUser.id ?? participant.user_id) === String(user?.id ?? "");
                   return (
-                    <button key={participant.id || participant.user_id} type="button" onClick={() => setProfilePreviewUser(participantUser)}>
-                      {participantUser.profile_image_url ? <img src={participantUser.profile_image_url} alt="" /> : <span><UsersRound size={16} /></span>}
-                      <b>{senderLabel(participantUser)}{isMe ? " (나)" : ""}</b>
-                      <small>{participant.role === "host" ? "방장" : participant.role || "member"}</small>
-                    </button>
+                    <div key={participant.id || participant.user_id} className="talk-member-row">
+                      <button type="button" onClick={() => setProfilePreviewUser(participantUser)}>
+                        {participantUser.profile_image_url ? <img src={participantUser.profile_image_url} alt="" /> : <span><UsersRound size={16} /></span>}
+                        <b>{senderLabel(participantUser)}{isMe ? " (나)" : ""}</b>
+                        <small>{participant.role === "host" ? "방장" : participant.role || "member"}</small>
+                      </button>
+                    </div>
                   );
                 })}
                 {!participantItems.length ? <p>참여자 정보를 불러오지 못했습니다.</p> : null}
               </div>
-            </div>
+            </div> : null}
 
-            {pinnedNotice ? (
+            {!isDirectChat && pinnedNotice ? (
               <button className="chat-pinned-notice" type="button" onClick={() => setNoticeOpen(true)}>
                 <Megaphone size={16} />
                 <strong>공지사항</strong>
-                <span>{pinnedNotice.title}</span>
+                <span>{pinnedNoticeText}</span>
               </button>
             ) : null}
 
             <div className="talk-messages" ref={messageListRef} onScroll={handleMessageScroll}>
               {visibleMessages.length ? (
                 visibleMessages.map((message, index) => {
-                  const mine = message.user_id === user?.id;
+                  const mine = isDirectChat ? message.sender_id === user?.id : message.user_id === user?.id;
                   const previous = visibleMessages[index - 1];
                   const showDivider = !previous || messageDateKey(previous.created_at) !== messageDateKey(message.created_at);
                   return (
@@ -980,60 +1224,72 @@ function DesktopChatRoom() {
                           if (node) messageRefs.current[message.id] = node;
                           else delete messageRefs.current[message.id];
                         }}
-                        className={`talk-bubble ${mine ? "right" : "left"} ${message.message_type === "notice" ? "is-system" : ""} ${canUseMessageMenu(message) ? "has-menu" : ""} ${draggingReply?.id === message.id ? "is-reply-dragging" : ""} ${focusedMessageId === message.id ? "is-focused" : ""}`}
+                        className={`talk-bubble ${mine ? "right" : "left"} ${isSystemMessage(message) ? "is-system" : ""} ${!isDirectChat && canUseMessageMenu(message) ? "has-menu" : ""} ${draggingReply?.id === message.id ? "is-reply-dragging" : ""} ${focusedMessageId === message.id ? "is-focused" : ""}`}
                         style={{ "--reply-drag-x": `${draggingReply?.id === message.id ? draggingReply.dx : 0}px` }}
-                        onContextMenu={(event) => openMessageMenu(event, message)}
-                        onPointerDown={(event) => startMessageLongPress(event, message)}
-                        onPointerMove={(event) => handleMessagePointerMove(event, message)}
+                        onContextMenu={(event) => !isDirectChat && openMessageMenu(event, message)}
+                        onPointerDown={(event) => !isDirectChat && startMessageLongPress(event, message)}
+                        onPointerMove={(event) => !isDirectChat && handleMessagePointerMove(event, message)}
                         onPointerUp={clearMessageLongPress}
                         onPointerLeave={clearMessageLongPress}
                         onPointerCancel={clearMessageLongPress}
                       >
-                        {!mine && message.message_type !== "notice" ? (
-                          <button className="talk-sender-button" type="button" onClick={() => setProfilePreviewUser(message.sender)}>
-                            {message.sender?.profile_image_url ? <img src={message.sender.profile_image_url} alt="" /> : <span><UsersRound size={13} /></span>}
-                            <b>{senderLabel(message.sender)}</b>
-                          </button>
-                        ) : null}
-                        {(message.reply_to_message_id || message.reply_to_content) ? (
-                          <button
-                            className="talk-message-reply"
-                            type="button"
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onClick={() => focusReplySource(message.reply_to_message_id)}
-                          >
-                            <strong>{replySenderLabel(message)}</strong>
-                            <span>{replyContent(message)}</span>
-                          </button>
-                        ) : null}
-                        {message.message_type === "image" ? (
-                          <figure className="talk-photo-message">
-                            <img src={message.attachment_url} alt={message.attachment_name || "전송된 사진"} />
-                            {message.attachment_name ? <figcaption>{message.attachment_name}</figcaption> : null}
-                          </figure>
-                        ) : message.message_type === "location" ? (
-                          <a className="talk-location-message" href={mapUrl(message)} target="_blank" rel="noreferrer">
-                            <MapPin size={18} />
-                            <span>
-                              <strong>{message.location_label || "공유한 위치"}</strong>
-                              <small>{[message.location_latitude, message.location_longitude].filter((value) => value != null).join(", ")}</small>
-                            </span>
-                          </a>
+                        <div className="talk-message-main">
+                          {!mine && !isSystemMessage(message) ? (
+                            <button className="talk-sender-button" type="button" onClick={() => setProfilePreviewUser(message.sender)}>
+                              {message.sender?.profile_image_url ? <img src={message.sender.profile_image_url} alt="" /> : <span><UsersRound size={13} /></span>}
+                              <b>{senderLabel(message.sender)}</b>
+                            </button>
+                          ) : null}
+                          {(message.reply_to_message_id || message.reply_to_content) ? (
+                            <button
+                              className="talk-message-reply"
+                              type="button"
+                              onPointerDown={(event) => event.stopPropagation()}
+                              onClick={() => focusReplySource(message.reply_to_message_id)}
+                            >
+                              <strong>{replySenderLabel(message)}</strong>
+                              <span>{replyContent(message)}</span>
+                            </button>
+                          ) : null}
+                          {message.message_type === "image" ? (
+                            <figure className="talk-photo-message">
+                              <button
+                                type="button"
+                                onPointerDown={(event) => event.stopPropagation()}
+                                onClick={() => openPhotoPreview({
+                                  url: message.attachment_url,
+                                  name: message.attachment_name || "전송된 사진"
+                                })}
+                                aria-label="사진 확대 보기"
+                              >
+                                <img src={message.attachment_url} alt={message.attachment_name || "전송된 사진"} />
+                              </button>
+                              {message.attachment_name ? <figcaption>{message.attachment_name}</figcaption> : null}
+                            </figure>
+                          ) : message.message_type === "location" ? (
+                            <a className="talk-location-message" href={mapUrl(message)} target="_blank" rel="noreferrer">
+                              <MapPin size={18} />
+                              <span>
+                                <strong>{message.location_label || "공유한 위치"}</strong>
+                                <small>{[message.location_latitude, message.location_longitude].filter((value) => value != null).join(", ")}</small>
+                              </span>
+                            </a>
                         ) : (
-                          <p>{message.content}</p>
-                        )}
+                            <p>{isSystemMessage(message) ? systemMessageText(message) : message.content}</p>
+                          )}
+                        </div>
                         <div className="talk-message-meta">
-                          {message.message_type !== "notice" ? <span>{Number(message.read_count || 0)} 읽음</span> : null}
+                          {!isDirectChat && !isSystemMessage(message) ? <span>{Number(message.read_count || 0)} 읽음</span> : null}
                           <time>{formatMessageTime(message.created_at)}</time>
                         </div>
-                        {canUseMessageMenu(message) ? (
+                        {!isDirectChat && canUseMessageMenu(message) ? (
                           <button className="talk-message-menu-btn" type="button" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => openMessageMenu(event, message)} aria-label="메시지 메뉴">
                             <span />
                             <span />
                             <span />
                           </button>
                         ) : null}
-                        {canManageRoom && message.message_type !== "notice" ? (
+                        {!isDirectChat && canManageRoom && !isSystemMessage(message) ? (
                           <button className="talk-message-notice-btn" type="button" onClick={() => openMessageNoticeDraft(message)}>공지로</button>
                         ) : null}
                       </div>
@@ -1050,7 +1306,7 @@ function DesktopChatRoom() {
                 <div className="talk-message-empty">
                   <UsersRound size={24} />
                   <strong>아직 대화가 없습니다.</strong>
-                  <p>모임 준비 이야기를 먼저 시작해보세요.</p>
+                  <p>{isDirectChat ? "1:1 대화를 먼저 시작해보세요." : "모임 준비 이야기를 먼저 시작해보세요."}</p>
                 </div>
               )}
             </div>
@@ -1062,7 +1318,7 @@ function DesktopChatRoom() {
             ) : null}
 
             <form className="talk-input" onSubmit={send}>
-              {replyTarget ? (
+              {!isDirectChat && replyTarget ? (
                 <div className="talk-reply-preview">
                   <Reply size={15} />
                   <span>
@@ -1079,8 +1335,8 @@ function DesktopChatRoom() {
               {actionMenuOpen ? (
                 <div className="chat-action-menu" role="menu">
                   <button type="button" role="menuitem" onClick={openPhotoPicker}><Camera size={17} />사진 전송</button>
-                  {canManageRoom ? <button type="button" role="menuitem" onClick={openVoteCreate}><Vote size={17} />투표 생성</button> : null}
-                  {canManageRoom ? <button type="button" role="menuitem" onClick={() => openNoticeForm()}><Pin size={17} />공지 작성</button> : null}
+                  {!isDirectChat && canManageRoom ? <button type="button" role="menuitem" onClick={openVoteCreate}><Vote size={17} />투표 생성</button> : null}
+                  {!isDirectChat && canManageRoom ? <button type="button" role="menuitem" onClick={() => openNoticeForm()}><Pin size={17} />공지 작성</button> : null}
                   <button type="button" role="menuitem" onClick={shareLocation}><MapPin size={17} />위치 공유</button>
                 </div>
               ) : null}
@@ -1123,12 +1379,52 @@ function DesktopChatRoom() {
             <div className="chat-profile-sheet__avatar">
               {profilePreviewUser.profile_image_url ? <img src={profilePreviewUser.profile_image_url} alt="" /> : <UsersRound size={24} />}
             </div>
-            <strong>{profilePreviewUser.nickname || profilePreviewUser.name || "참여자"}</strong>
+            <strong className="chat-profile-sheet__name">
+              <span>{profilePreviewUser.nickname || profilePreviewUser.name || "참여자"}</span>
+              {userTagLabel(profilePreviewUser) ? <small>{userTagLabel(profilePreviewUser)}</small> : null}
+            </strong>
             <p>{profilePreviewUser.profile?.region || "활동 지역 미설정"}</p>
             {privateChatNotice ? <p className="chat-profile-sheet__notice">{privateChatNotice}</p> : null}
             <div className="chat-profile-sheet__actions">
               <button type="button" onClick={() => requestPrivateChat(profilePreviewUser)}>1:1 톡</button>
+              {(() => {
+                const previewParticipant = participantItems.find((participant) => String(participant.user?.id ?? participant.user_id) === String(profilePreviewUser.id));
+                const isPreviewMe = String(profilePreviewUser.id ?? "") === String(user?.id ?? "");
+                return isRoomHost && previewParticipant && !isPreviewMe && previewParticipant.role !== "host" ? (
+                  <button className="is-danger" type="button" onClick={() => kickParticipant(previewParticipant)}>추방</button>
+                ) : null;
+              })()}
               <button type="button">차단</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {photoPreview ? (
+        <div className="chat-photo-viewer" role="dialog" aria-modal="true" aria-label="사진 확대 보기">
+          <button className="chat-photo-viewer__backdrop" type="button" onClick={closePhotoPreview} aria-label="닫기" />
+          <section>
+            <header>
+              <strong>{photoPreview.name}</strong>
+              <span>{Math.round(photoZoom * 100)}%</span>
+              <button type="button" onClick={closePhotoPreview} aria-label="닫기"><X size={18} /></button>
+            </header>
+            <div
+              className="chat-photo-viewer__stage"
+              onWheel={handlePhotoWheel}
+              onPointerDown={startPhotoDrag}
+              onPointerMove={movePhotoDrag}
+              onPointerUp={endPhotoDrag}
+              onPointerCancel={endPhotoDrag}
+            >
+              <img
+                src={photoPreview.url}
+                alt={photoPreview.name}
+                draggable="false"
+                style={{
+                  transform: `translate(${photoPan.x}px, ${photoPan.y}px) scale(${photoZoom})`
+                }}
+              />
             </div>
           </section>
         </div>

@@ -858,11 +858,21 @@
 .mobile-shell .message-row {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 6px;
 }
 
 .mobile-shell .message-row.mine {
   justify-content: flex-end;
+}
+
+.mobile-shell .message-row.is-focused .message-bubble {
+  animation: mobile-msg-focus-pulse 1.2s ease;
+}
+
+@keyframes mobile-msg-focus-pulse {
+  0%, 100% { box-shadow: 0 1px 8px rgba(15, 23, 42, 0.06); }
+  30% { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3), 0 2px 12px rgba(99, 102, 241, 0.18); }
+  70% { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15), 0 2px 12px rgba(99, 102, 241, 0.1); }
 }
 
 .mobile-shell .message-avatar {
@@ -895,29 +905,136 @@
 }
 
 .mobile-shell .message-bubble {
-  max-width: 82%;
+  max-width: 100%;
   border-radius: 18px 18px 18px 6px;
   background: #fff;
   padding: 10px 13px;
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 1px 8px rgba(15, 23, 42, 0.06);
+  position: relative;
+  display: grid;
+  gap: 3px;
+  border: 0;
 }
 
 .mobile-shell .message-bubble.mine {
-  align-self: flex-end;
   border-radius: 18px 18px 6px 18px;
   background: var(--mobile-primary);
   color: #fff;
+  border: 0;
 }
 
-.mobile-shell .message-bubble span {
+.mobile-shell .message-bubble.photo-bubble {
+  padding: 4px;
+  background: #fff;
+  box-shadow: 0 1px 6px rgba(15, 23, 42, 0.05);
+}
+
+.mobile-shell .message-bubble.mine.photo-bubble {
+  background: var(--mobile-primary);
+}
+
+.mobile-shell .mobile-photo-message {
+  margin: 0;
+  padding: 0;
   display: block;
-  margin-bottom: 4px;
+  border-radius: 14px 14px 14px 4px;
+  overflow: hidden;
+}
+
+.mobile-shell .message-bubble.mine .mobile-photo-message {
+  border-radius: 14px 14px 4px 14px;
+}
+
+.mobile-shell .mobile-photo-message img {
+  display: block;
+  width: 100%;
+  max-width: 200px;
+  max-height: 200px;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+.mobile-shell .message-bubble.location-bubble {
+  padding: 8px;
+  background: #fff;
+  width: 240px;
+  max-width: 100%;
+  box-shadow: 0 1px 6px rgba(15, 23, 42, 0.05);
+}
+
+.mobile-shell .message-bubble.mine.location-bubble {
+  background: var(--mobile-primary);
+}
+
+.mobile-shell .mobile-location-message-wrap {
+  display: block;
+  width: 100%;
+}
+
+.mobile-shell .mobile-location-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: #1e293b;
+  padding: 4px 6px;
+}
+
+.mobile-shell .message-bubble.mine .mobile-location-message {
+  color: #fff;
+}
+
+.mobile-shell .mobile-location-message svg {
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
+.mobile-shell .message-bubble.mine .mobile-location-message svg {
+  color: #fca5a5;
+}
+
+.mobile-shell .mobile-location-message span {
+  display: grid;
+  gap: 2px;
+}
+
+.mobile-shell .mobile-location-message strong {
+  font-size: 13px;
+  font-weight: 900;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 170px;
+}
+
+.mobile-shell .mobile-location-message small {
+  font-size: 11px;
+  font-weight: 800;
+  display: block;
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 170px;
+}
+
+.mobile-shell .mobile-location-iframe-wrap {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.mobile-shell .message-bubble .message-sender-name {
+  display: block;
+  margin-bottom: 2px;
   color: #52647e;
   font-size: 11px;
   font-weight: 900;
 }
 
-.mobile-shell .message-bubble.mine span {
+.mobile-shell .message-bubble.mine .message-sender-name {
   color: rgba(255, 255, 255, 0.76);
 }
 
@@ -927,17 +1044,357 @@
   line-height: 1.5;
 }
 
-.mobile-shell .message-bubble time {
-  display: block;
-  margin-top: 5px;
-  color: #94a3b8;
-  font-size: 10px;
-  font-weight: 800;
-  text-align: right;
+/* --- Message Content Wrap & Meta (below bubble) --- */
+.mobile-shell .message-content-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 82%;
 }
 
-.mobile-shell .message-bubble.mine time {
-  color: rgba(255, 255, 255, 0.68);
+.mobile-shell .message-row.mine .message-content-wrap {
+  align-items: flex-end;
+}
+
+.mobile-shell .message-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.mobile-shell .message-row.mine .message-meta {
+  justify-content: flex-end;
+}
+
+.mobile-shell .message-meta .read-count {
+  color: var(--mobile-primary);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.mobile-shell .message-meta time {
+  color: #8a98ad;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+/* --- Reply reference outside/above bubble --- */
+.mobile-shell .mobile-reply-ref {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  border: 0;
+  border-left: 3px solid #93c5fd;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  min-height: 0;
+  margin-bottom: 2px;
+}
+
+.mobile-shell .mobile-reply-ref strong {
+  display: block;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 950;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-shell .mobile-reply-ref span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 800;
+  margin: 0;
+}
+
+/* --- More button wrapper (right of bubble) --- */
+.mobile-shell .mobile-msg-more-wrap {
+  display: flex;
+  align-items: flex-start;
+  position: relative;
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.mobile-shell .mobile-msg-more-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #94a3b8;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+  box-shadow: none;
+  min-height: 0;
+}
+
+.mobile-shell .mobile-msg-more-btn:active,
+.mobile-shell .mobile-msg-more-btn:hover {
+  background: #eef2ff;
+  border-color: rgba(79, 70, 229, 0.12);
+  color: var(--mobile-primary);
+}
+
+/* --- Options dropdown menu --- */
+.mobile-shell .mobile-msg-options-menu {
+  position: absolute;
+  top: 32px;
+  right: 0;
+  z-index: 50;
+  display: grid;
+  min-width: 148px;
+  border: 1px solid rgba(79, 70, 229, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.98);
+  padding: 6px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.13), 0 2px 6px rgba(15, 23, 42, 0.05);
+  backdrop-filter: blur(14px);
+  animation: mobile-menu-appear 0.16s ease;
+}
+
+.mobile-shell .message-row.mine .mobile-msg-options-menu {
+  right: auto;
+  left: 0;
+}
+
+@keyframes mobile-menu-appear {
+  from { opacity: 0; transform: translateY(-6px) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.mobile-shell .mobile-msg-options-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  padding: 11px 12px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  min-height: 0;
+  box-shadow: none;
+  transition: background 0.14s, border-color 0.14s;
+}
+
+.mobile-shell .mobile-msg-options-menu button:active,
+.mobile-shell .mobile-msg-options-menu button:hover {
+  background: #f8faff;
+  border-color: rgba(79, 70, 229, 0.10);
+}
+
+.mobile-shell .mobile-msg-options-menu button svg {
+  flex: 0 0 14px;
+  color: var(--mobile-primary);
+}
+
+/* --- Reply preview bar above input --- */
+.mobile-shell .mobile-reply-preview {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(79, 70, 229, 0.14);
+  border-left: 3px solid var(--mobile-primary);
+  border-radius: 14px;
+  background: #eef2ff;
+  padding: 10px 14px;
+  animation: mobile-menu-appear 0.16s ease;
+}
+
+.mobile-shell .mobile-reply-preview > svg {
+  flex: 0 0 15px;
+  color: var(--mobile-primary);
+}
+
+.mobile-shell .mobile-reply-preview > span {
+  flex: 1 1 0;
+  display: grid;
+  gap: 2px;
+  overflow: hidden;
+  margin: 0;
+}
+
+.mobile-shell .mobile-reply-preview b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--mobile-text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.mobile-shell .mobile-reply-preview small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.mobile-shell .mobile-reply-preview > button {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(79, 70, 229, 0.12);
+  border-radius: 10px;
+  background: #f8faff;
+  color: var(--mobile-primary);
+  padding: 0;
+  cursor: pointer;
+  min-height: 0;
+  box-shadow: none;
+  transition: background 0.14s;
+}
+
+.mobile-shell .mobile-reply-preview > button:active {
+  background: #eef2ff;
+}
+
+/* --- Notice form modal --- */
+.mobile-shell .mobile-notice-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: end center;
+}
+
+.mobile-shell .mobile-notice-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.36);
+  border: 0;
+  padding: 0;
+  min-height: 0;
+  box-shadow: none;
+}
+
+.mobile-shell .mobile-notice-modal > section {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  max-width: 430px;
+  max-height: 80vh;
+  overflow-y: auto;
+  border-radius: 26px 26px 0 0;
+  background: #fff;
+  padding: 22px 18px calc(26px + env(safe-area-inset-bottom));
+  box-shadow: 0 -8px 36px rgba(15, 23, 42, 0.14);
+  animation: mobile-sheet-up 0.22s ease;
+}
+
+@keyframes mobile-sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.mobile-shell .mobile-notice-modal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mobile-shell .mobile-notice-modal__header > span {
+  color: var(--mobile-text);
+  font-size: 17px;
+  font-weight: 950;
+}
+
+.mobile-shell .mobile-notice-modal__header > button {
+  border: 0;
+  background: transparent;
+  color: var(--mobile-primary);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 4px 8px;
+  min-height: 0;
+  box-shadow: none;
+}
+
+.mobile-shell .mobile-notice-modal__error {
+  margin: 0;
+  border-radius: 10px;
+  background: #fef2f2;
+  padding: 8px 12px;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mobile-shell .mobile-notice-modal form {
+  display: grid;
+  gap: 12px;
+}
+
+.mobile-shell .mobile-notice-modal form label {
+  display: grid;
+  gap: 6px;
+  color: var(--mobile-text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mobile-shell .mobile-notice-modal form input,
+.mobile-shell .mobile-notice-modal form textarea {
+  border: 1px solid rgba(79, 70, 229, 0.14);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 800;
+  resize: vertical;
+  background: #f8faff;
+  transition: border-color 0.15s;
+}
+
+.mobile-shell .mobile-notice-modal form input:focus,
+.mobile-shell .mobile-notice-modal form textarea:focus {
+  outline: none;
+  border-color: var(--mobile-primary);
+  background: #fff;
+}
+
+.mobile-shell .mobile-notice-modal form > button[type="submit"] {
+  min-height: 48px;
+  border: 0;
+  border-radius: 15px;
+  background: var(--mobile-primary);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.22);
+  transition: opacity 0.15s, box-shadow 0.15s;
+}
+
+.mobile-shell .mobile-notice-modal form > button[type="submit"]:active {
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.28);
+}
+
+.mobile-shell .mobile-notice-modal form > button[type="submit"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .mobile-shell .message-empty {
@@ -3944,66 +4401,7 @@
   font-weight: 900;
 }
 
-.mobile-shell .message-row {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-}
 
-.mobile-shell .message-row.mine {
-  justify-content: flex-end;
-}
-
-.mobile-shell .message-avatar {
-  display: flex;
-  width: 34px;
-  flex: 0 0 34px;
-  justify-content: center;
-}
-
-.mobile-shell .message-avatar button {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  min-width: 0;
-  place-items: center;
-  overflow: hidden;
-  border: 1px solid var(--mobile-soft-border);
-  border-radius: 999px;
-  background: #e0f2fe;
-  color: #0369a1;
-  padding: 0;
-  box-shadow: none;
-}
-
-.mobile-shell .message-avatar img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.mobile-shell .message-bubble {
-  display: grid;
-  gap: 4px;
-  max-width: min(78%, 288px);
-  border: 1px solid rgba(226, 232, 240, 0.82);
-}
-
-.mobile-shell .message-bubble.mine {
-  border-color: transparent;
-}
-
-.mobile-shell .message-bubble time {
-  justify-self: end;
-  color: #8a98ad;
-  font-size: 10px;
-  font-weight: 800;
-}
-
-.mobile-shell .message-bubble.mine time {
-  color: rgba(255, 255, 255, 0.72);
-}
 
 /* iOS Safari에서 입력창 포커스 시 자동 확대되지 않도록 모바일 폼 컨트롤은 16px 이상을 유지합니다. */
 .mobile-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
@@ -5207,4 +5605,153 @@
   padding: 0 12px !important;
   font-size: 12px !important;
   font-weight: 700 !important;
+}
+
+/* --- Photo Lightbox --- */
+.mobile-shell .mobile-photo-lightbox {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  padding: 16px;
+}
+
+.mobile-shell .mobile-photo-lightbox .lightbox-content {
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-shell .mobile-photo-lightbox img {
+  max-width: 100%;
+  max-height: 85vh;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.mobile-shell .mobile-photo-lightbox .lightbox-close-btn {
+  position: absolute;
+  top: -48px;
+  right: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border: 0;
+  color: #fff;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- Location Selection Sheet --- */
+.mobile-shell .mobile-location-select-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.mobile-shell .mobile-location-select-modal__backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.4);
+  border: 0;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+.mobile-shell .mobile-location-select-modal > section {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 500px;
+  background: #fff;
+  border-radius: 20px 20px 0 0;
+  padding: 20px 16px env(safe-area-inset-bottom, 16px) 16px;
+  box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.1);
+  animation: slide-up-modal 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slide-up-modal {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.mobile-shell .mobile-location-select-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.mobile-shell .mobile-location-select-modal__header > span {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.mobile-shell .mobile-location-select-modal__header > button {
+  background: transparent;
+  border: 0;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mobile-shell .mobile-location-select-modal__buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.mobile-shell .mobile-location-select-modal__buttons > button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 96px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mobile-shell .mobile-location-select-modal__buttons > button:active {
+  background: #f1f5f9;
+  transform: scale(0.98);
+}
+
+.mobile-shell .mobile-location-select-modal__buttons svg {
+  color: var(--mobile-primary);
+}
+
+.mobile-shell .mobile-location-select-modal__buttons span {
+  font-size: 13px;
+  font-weight: 800;
+  color: #334155;
 }

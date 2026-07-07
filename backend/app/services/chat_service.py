@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import current_app
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
@@ -26,8 +28,8 @@ def _room_options(include_messages=False):
 
 def ensure_chat_access(room_id, user_id, include_messages=False):
     room = ChatRoom.query.options(*_room_options(include_messages)).get_or_404(room_id)
-    if room.meeting and room.meeting.status == "suspended":
-        raise PermissionError("폐쇄(비활성화) 처리된 모임의 채팅방입니다.")
+    if room.meeting and room.meeting.status in {"cancelled", "suspended"}:
+        raise PermissionError("종료된 모임의 채팅방입니다.")
     if room.meeting and room.meeting.host_id == user_id:
         return room
     participant = Participant.query.filter_by(meeting_id=room.meeting_id, user_id=user_id, status="approved").first()
@@ -201,12 +203,42 @@ def ensure_direct_room_access(room_id, user_id):
     return room
 
 
-def send_direct_message(room_id, user_id, content):
+def send_direct_message(room_id, user_id, data):
     room = ensure_direct_room_access(room_id, user_id)
-    content = (content or "").strip()
-    if not content:
+    if not isinstance(data, dict):
+        data = {"content": str(data or "")}
+    message_type = data.get("message_type") or "text"
+    content = (data.get("content") or "").strip()
+    attachment_url = data.get("attachment_url")
+    attachment_name = (data.get("attachment_name") or "").strip() or None
+    location = data.get("location") or {}
+    location_latitude = _coerce_float(location.get("latitude", data.get("location_latitude")))
+    location_longitude = _coerce_float(location.get("longitude", data.get("location_longitude")))
+    location_label = (location.get("label", data.get("location_label")) or "").strip() or None
+
+    if message_type not in {"text", "image", "location"}:
+        raise ValueError("지원하지 않는 메시지 형식입니다.")
+    if message_type == "text" and not content:
         raise ValueError("메시지를 입력해주세요.")
-    message = DirectChatMessage(direct_chat_room_id=room.id, sender_id=user_id, content=content)
+    if message_type == "image" and not attachment_url:
+        raise ValueError("전송할 사진을 선택해주세요.")
+    if message_type == "location":
+        if location_latitude is None or location_longitude is None:
+            raise ValueError("공유할 위치를 확인하지 못했습니다.")
+        content = content or (location_label or "위치를 공유했습니다.")
+
+    message = DirectChatMessage(
+        direct_chat_room_id=room.id,
+        sender_id=user_id,
+        content=content or ("사진" if message_type == "image" else "위치를 공유했습니다."),
+        message_type=message_type,
+        attachment_url=attachment_url,
+        attachment_name=attachment_name,
+        location_latitude=location_latitude,
+        location_longitude=location_longitude,
+        location_label=location_label,
+    )
+    room.updated_at = datetime.utcnow()
     db.session.add(message)
     db.session.commit()
     return message

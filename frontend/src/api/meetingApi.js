@@ -13,6 +13,7 @@ export const meetingApi = {
     apiClient.patch(`/meetings/${meetingId}/applicants/${userId}/approve`).then((res) => res.data),
   reject: (meetingId, userId) =>
     apiClient.patch(`/meetings/${meetingId}/applicants/${userId}/reject`).then((res) => res.data),
+  kickMember: (meetingId, userId) => apiClient.delete(`/meetings/${meetingId}/members/${userId}`).then((res) => res.data),
   reviews: (id) => apiClient.get(`/meetings/${id}/reviews`).then((res) => res.data),
   createReview: (id, payload) => apiClient.post(`/meetings/${id}/reviews`, payload).then((res) => res.data),
   notices: (id) => apiClient.get(`/meetings/${id}/notices`).then((res) => res.data),

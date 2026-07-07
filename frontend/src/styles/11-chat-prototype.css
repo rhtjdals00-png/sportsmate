@@ -277,6 +277,34 @@
   transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), filter 180ms ease;
 }
 
+.desktop-prototype .talk-list-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 24px 14px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  padding: 4px;
+}
+
+.desktop-prototype .talk-list-tabs button {
+  display: grid;
+  min-height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.desktop-prototype .talk-list-tabs button.is-active {
+  background: #ffffff;
+  color: #4f46e5;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+}
+
 .desktop-prototype .talk-bubble b {
   display: block;
   margin-bottom: 5px;
@@ -357,6 +385,15 @@
   margin: 0;
 }
 
+.desktop-prototype .talk-photo-message button {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: zoom-in;
+}
+
 .desktop-prototype .talk-bubble.right .talk-photo-message {
   margin-left: auto;
 }
@@ -367,6 +404,102 @@
   max-height: 360px;
   border-radius: 14px;
   object-fit: cover;
+}
+
+.desktop-prototype .chat-photo-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.desktop-prototype .chat-photo-viewer__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.desktop-prototype .chat-photo-viewer section {
+  position: relative;
+  display: grid;
+  width: min(1120px, calc(100vw - 48px));
+  height: min(820px, calc(100vh - 48px));
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: 8px;
+  background: #0f172a;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+}
+
+.desktop-prototype .chat-photo-viewer header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 38px;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.96);
+  padding: 10px 12px;
+}
+
+.desktop-prototype .chat-photo-viewer strong {
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-prototype .chat-photo-viewer header span {
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.desktop-prototype .chat-photo-viewer header button {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.desktop-prototype .chat-photo-viewer__stage {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%),
+    #020617;
+  background-position: 0 0, 0 10px;
+  background-size: 20px 20px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.desktop-prototype .chat-photo-viewer img {
+  display: block;
+  max-width: min(100%, 920px);
+  max-height: 100%;
+  margin: auto;
+  object-fit: contain;
+  transform-origin: center center;
+  transition: transform 70ms linear;
+  user-select: none;
+  will-change: transform;
+}
+
+.desktop-prototype .chat-photo-viewer__stage:active {
+  cursor: grabbing;
 }
 
 .desktop-prototype .talk-photo-message figcaption {
@@ -661,6 +794,11 @@
   gap: 8px;
 }
 
+.desktop-prototype .talk-member-row {
+  display: block;
+}
+
+.desktop-prototype .talk-member-row > button:first-child,
 .desktop-prototype .talk-members-panel > div > button {
   display: grid;
   min-width: 0;
@@ -676,6 +814,7 @@
 }
 
 .desktop-prototype .talk-members-panel img,
+.desktop-prototype .talk-member-row > button:first-child > span,
 .desktop-prototype .talk-members-panel > div > button > span {
   display: grid;
   width: 34px;
@@ -729,7 +868,8 @@
 
 .desktop-prototype .talk-input {
   position: relative;
-  grid-template-columns: 42px minmax(0, 1fr) 42px;
+  grid-template-columns: 46px minmax(0, 1fr) 46px;
+  padding: 18px 22px;
 }
 
 .desktop-prototype .talk-input .talk-input-more {
@@ -754,35 +894,40 @@
 
 .desktop-prototype .chat-action-menu {
   position: absolute;
-  right: 20px;
+  right: auto;
   bottom: calc(100% + 8px);
-  left: 20px;
-  z-index: 3;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  left: 22px;
+  z-index: 30;
+  display: flex;
+  width: max-content;
+  max-width: min(520px, calc(100% - 44px));
+  flex-wrap: wrap;
   gap: 8px;
   border: 1px solid #dbe4ff;
-  border-radius: 18px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.96);
-  padding: 10px;
+  padding: 8px;
   box-shadow: 0 16px 38px rgba(15, 23, 42, 0.16);
   backdrop-filter: blur(14px);
 }
 
 .desktop-prototype .chat-action-menu button {
-  display: grid;
-  width: auto;
-  min-height: 58px;
-  height: auto;
-  place-items: center;
+  display: inline-flex;
+  width: 104px;
+  min-height: 46px;
+  height: 46px;
+  align-items: center;
+  justify-content: center;
   gap: 5px;
   border: 1px solid rgba(79, 70, 229, 0.12);
-  border-radius: 14px;
+  border-radius: 12px;
   background: #f8faff;
   color: #334155;
-  padding: 8px;
+  padding: 0 10px;
   font-size: 12px;
   font-weight: 900;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .desktop-prototype .chat-profile-sheet,
@@ -845,6 +990,22 @@
   font-weight: 950;
 }
 
+.desktop-prototype .chat-profile-sheet__name {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.desktop-prototype .chat-profile-sheet__name small {
+  color: #4f46e5;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
 .desktop-prototype .chat-profile-sheet p {
   margin: 0;
   color: #64748b;
@@ -882,6 +1043,7 @@
   padding: 0;
 }
 
+.desktop-prototype .chat-profile-sheet__actions button.is-danger,
 .desktop-prototype .chat-profile-sheet__actions button:last-child {
   border-color: rgba(239, 68, 68, 0.18);
   background: #fef2f2;
@@ -1492,21 +1654,82 @@
 }
 
 .desktop-prototype .talk-message-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 5px;
+  display: grid;
+  flex: 0 0 auto;
+  align-items: end;
+  gap: 2px;
+  margin: 0 0 2px;
 }
 
 .desktop-prototype .talk-bubble.right .talk-message-meta {
-  justify-content: flex-end;
+  text-align: right;
 }
 
 .desktop-prototype .talk-message-meta span,
 .desktop-prototype .talk-message-meta time {
+  display: block;
+  margin: 0;
   color: #94a3b8;
   font-size: 11px;
   font-weight: 850;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.desktop-prototype .talk-bubble:not(.is-system) {
+  display: flex;
+  max-width: min(82%, 720px);
+  align-items: flex-end;
+  gap: 6px;
+  margin-bottom: 9px;
+}
+
+.desktop-prototype .talk-bubble.right:not(.is-system) {
+  flex-direction: row-reverse;
+}
+
+.desktop-prototype .talk-message-main {
+  display: grid;
+  min-width: 0;
+  max-width: min(100%, 560px);
+}
+
+.desktop-prototype .talk-bubble.is-system .talk-message-main {
+  justify-items: center;
+}
+
+.desktop-prototype .talk-bubble.is-system .talk-message-meta {
+  justify-content: center;
+  margin-top: 5px;
+  text-align: center;
+}
+
+.desktop-prototype .talk-input.is-direct {
+  grid-template-columns: minmax(0, 1fr) 46px;
+}
+
+.desktop-prototype .talk-input input {
+  min-height: 48px;
+  padding: 14px 18px;
+}
+
+.desktop-prototype .talk-input button {
+  width: 46px;
+  height: 46px;
+}
+
+.desktop-prototype .talk-input .chat-action-menu button {
+  width: 118px;
+  min-width: 118px;
+  height: 46px;
+  min-height: 46px;
+  padding: 0 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.desktop-prototype .talk-input .chat-action-menu {
+  max-width: min(540px, calc(100% - 44px));
 }
 
 @keyframes talk-message-focus {

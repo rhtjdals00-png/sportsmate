@@ -165,6 +165,12 @@ class DirectChatMessage(db.Model):
     direct_chat_room_id = db.Column(db.Integer, db.ForeignKey("direct_chat_rooms.id"), nullable=False)
     sender_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     content = db.Column(db.Text, nullable=False)
+    message_type = db.Column(db.String(30), default="text", nullable=False)
+    attachment_url = db.Column(db.Text, nullable=True)
+    attachment_name = db.Column(db.String(255), nullable=True)
+    location_latitude = db.Column(db.Float, nullable=True)
+    location_longitude = db.Column(db.Float, nullable=True)
+    location_label = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     room = db.relationship("DirectChatRoom", back_populates="messages")
@@ -177,5 +183,11 @@ class DirectChatMessage(db.Model):
             "sender_id": self.sender_id,
             "sender": self.sender.to_dict() if self.sender else None,
             "content": self.content,
+            "message_type": self.message_type,
+            "attachment_url": self.attachment_url,
+            "attachment_name": self.attachment_name,
+            "location_latitude": self.location_latitude,
+            "location_longitude": self.location_longitude,
+            "location_label": self.location_label,
             "created_at": to_kst_iso(self.created_at),
         }
