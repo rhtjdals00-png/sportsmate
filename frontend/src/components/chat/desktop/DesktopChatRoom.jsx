@@ -6,6 +6,7 @@
   Eye,
   EyeOff,
   FileText,
+  LocateFixed,
   LogOut,
   MapPin,
   Megaphone,
@@ -25,6 +26,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import EmptyState from "../../common/EmptyState.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import { chatApi } from "../../../api/chatApi";
+import { locationApi } from "../../../api/locationApi";
 import { meetingApi } from "../../../api/meetingApi";
 import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { voteApi } from "../../../api/voteApi";
@@ -292,6 +294,11 @@ function DesktopChatRoom() {
   const [photoPreview, setPhotoPreview] = useState(null);
   const [photoZoom, setPhotoZoom] = useState(1);
   const [photoPan, setPhotoPan] = useState({ x: 0, y: 0 });
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
+  const [locationKeyword, setLocationKeyword] = useState("");
+  const [locationResults, setLocationResults] = useState([]);
+  const [locationSearching, setLocationSearching] = useState(false);
+  const [locationPickerMessage, setLocationPickerMessage] = useState("");
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [noticeFormOpen, setNoticeFormOpen] = useState(false);
   const [noticeRefreshKey, setNoticeRefreshKey] = useState(0);
@@ -631,53 +638,119 @@ function DesktopChatRoom() {
       });
   };
 
-  const shareLocation = () => {
+  const sendLocationPayload = async ({ latitude, longitude, label }) => {
+    const payload = {
+      content: "위치를 공유했습니다.",
+      message_type: "location",
+      location: {
+        latitude,
+        longitude,
+        label: label || "공유한 위치"
+      }
+    };
+    if (isDirectChat) {
+      await chatApi.sendDirect(directRoomId, payload);
+    } else {
+      await chatApi.send(chatRoomId, {
+        ...payload,
+        reply_to_message_id: replyTarget?.id || null
+      });
+    }
+    setReplyTarget(null);
+    if (isDirectChat) {
+      setDirectRefreshKey((value) => value + 1);
+      setDirectRoomRefreshKey((value) => value + 1);
+    } else {
+      setRefreshKey((value) => value + 1);
+      setRoomRefreshKey((value) => value + 1);
+    }
+  };
+
+  const openLocationPicker = () => {
     setActionNotice("");
     setError("");
+    setActionMenuOpen(false);
+    setLocationPickerMessage("");
+    setLocationPickerOpen(true);
+  };
+
+  const shareLocation = () => {
+    openLocationPicker();
+  };
+
+  const shareCurrentLocation = () => {
+    setLocationPickerMessage("");
     if (!("geolocation" in navigator)) {
-      setActionNotice("이 브라우저에서는 위치 공유를 사용할 수 없습니다.");
+      setLocationPickerMessage("이 브라우저에서는 현재 위치를 확인할 수 없습니다.");
       return;
     }
+    setSending(true);
     navigator.geolocation.getCurrentPosition(
       async (position) => {
-        setActionMenuOpen(false);
-        setSending(true);
         try {
           const { latitude, longitude } = position.coords;
-          const payload = {
-            content: "위치를 공유했습니다.",
-            message_type: "location",
-            location: {
-              latitude,
-              longitude,
-              label: "현재 위치"
-            }
-          };
-          if (isDirectChat) {
-            await chatApi.sendDirect(directRoomId, payload);
-          } else {
-            await chatApi.send(chatRoomId, {
-              ...payload,
-              reply_to_message_id: replyTarget?.id || null
-            });
-          }
-          setReplyTarget(null);
-          if (isDirectChat) {
-            setDirectRefreshKey((value) => value + 1);
-            setDirectRoomRefreshKey((value) => value + 1);
-          } else {
-            setRefreshKey((value) => value + 1);
-            setRoomRefreshKey((value) => value + 1);
-          }
+          await sendLocationPayload({ latitude, longitude, label: "현재 위치" });
+          setLocationPickerOpen(false);
         } catch (locationError) {
-          setError(locationError.response?.data?.message || "위치 공유에 실패했습니다.");
+          setLocationPickerMessage(locationError.response?.data?.message || "위치 공유에 실패했습니다.");
         } finally {
           setSending(false);
         }
       },
-      () => setActionNotice("위치 권한이 허용되지 않았습니다. 브라우저 설정을 확인해주세요."),
+      () => {
+        setLocationPickerMessage("위치 권한이 허용되지 않았습니다. 브라우저 설정을 확인해주세요.");
+        setSending(false);
+      },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
     );
+  };
+
+  const searchLocationPlaces = async (event) => {
+    event?.preventDefault();
+    const keyword = locationKeyword.trim();
+    if (!keyword) {
+      setLocationPickerMessage("검색할 장소나 주소를 입력해주세요.");
+      return;
+    }
+    setLocationSearching(true);
+    setLocationPickerMessage("");
+    try {
+      const data = await locationApi.searchPlaces({ keyword, size: 8 });
+      const items = data.items || [];
+      setLocationResults(items);
+      setLocationPickerMessage(items.length ? "" : "검색 결과가 없습니다.");
+    } catch (searchError) {
+      setLocationPickerMessage(searchError.response?.data?.message || "장소 검색에 실패했습니다.");
+    } finally {
+      setLocationSearching(false);
+    }
+  };
+
+  const shareSelectedLocation = async (place) => {
+    const latitude = Number(place.latitude);
+    const longitude = Number(place.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      setLocationPickerMessage("좌표가 있는 장소만 공유할 수 있습니다.");
+      return;
+    }
+    setSending(true);
+    setLocationPickerMessage("");
+    try {
+      const title = String(place.title || "").replace(/<[^>]+>/g, "").trim();
+      const address = place.road_address || place.address || "";
+      await sendLocationPayload({
+        latitude,
+        longitude,
+        label: title || address || "선택한 위치"
+      });
+      setLocationPickerOpen(false);
+      setLocationKeyword("");
+      setLocationResults([]);
+    } catch (locationError) {
+      setLocationPickerMessage(locationError.response?.data?.message || "위치 공유에 실패했습니다.");
+    } finally {
+      setSending(false);
+    }
   };
 
   const openVoteList = () => {
@@ -1395,6 +1468,55 @@ function DesktopChatRoom() {
                 ) : null;
               })()}
               <button type="button">차단</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {locationPickerOpen ? (
+        <div className="chat-location-picker" role="dialog" aria-modal="true" aria-label="위치 공유">
+          <button className="chat-location-picker__backdrop" type="button" onClick={() => setLocationPickerOpen(false)} aria-label="닫기" />
+          <section>
+            <header>
+              <div>
+                <strong>위치 공유</strong>
+                <p>현재 위치를 보내거나 장소를 검색해서 공유할 수 있습니다.</p>
+              </div>
+              <button type="button" onClick={() => setLocationPickerOpen(false)} aria-label="닫기"><X size={18} /></button>
+            </header>
+            <button className="chat-location-picker__current" type="button" onClick={shareCurrentLocation} disabled={sending}>
+              <LocateFixed size={18} />
+              현재 위치 보내기
+            </button>
+            <form className="chat-location-picker__search" onSubmit={searchLocationPlaces}>
+              <input
+                value={locationKeyword}
+                onChange={(event) => setLocationKeyword(event.target.value)}
+                placeholder="장소명이나 주소를 입력하세요."
+                aria-label="공유할 위치 검색"
+              />
+              <button type="submit" disabled={locationSearching}>{locationSearching ? "검색 중" : "검색"}</button>
+            </form>
+            {locationPickerMessage ? <p className="chat-location-picker__message">{locationPickerMessage}</p> : null}
+            <div className="chat-location-picker__results">
+              {locationResults.map((place, index) => {
+                const title = String(place.title || place.address || "장소").replace(/<[^>]+>/g, "").trim();
+                const address = place.road_address || place.address || "";
+                return (
+                  <button
+                    key={`${title}-${address}-${index}`}
+                    type="button"
+                    onClick={() => shareSelectedLocation(place)}
+                    disabled={sending}
+                  >
+                    <MapPin size={17} />
+                    <span>
+                      <strong>{title}</strong>
+                      {address ? <small>{address}</small> : null}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </section>
         </div>
