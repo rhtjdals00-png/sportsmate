@@ -1,4 +1,4 @@
-import { Camera, CheckCircle2, KeyRound, MapPin, Search, X } from "lucide-react";
+import { Camera, CheckCircle2, KeyRound, MapPin, Search, X, CircleAlert, LockKeyhole, XCircle } from "lucide-react";
 import StatusMessages from "../constants/statusMessages";
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
@@ -11,7 +11,8 @@ import { sportApi } from "../api/sportApi";
 import { locationApi } from "../api/locationApi";
 import { koreaRegions } from "../data/koreaRegions";
 import { useResponsive } from "../hooks/useResponsive";
-import { isProfileEditVerified } from "../utils/profileEditAccess";
+import { isProfileEditVerified, markProfileEditVerified } from "../utils/profileEditAccess";
+import { isSupabaseConfigured, supabase } from "../api/supabaseClient";
 
 const T = {
   title: "프로필 설정",
@@ -92,6 +93,28 @@ function splitSports(value) {
     .filter(Boolean);
 }
 
+const passwordChecks = [
+  { id: "length", label: "8자 이상", test: (password) => password.length >= 8 },
+  { id: "upper", label: "영문 대문자", test: (password) => /[A-Z]/.test(password) },
+  { id: "lower", label: "영문 소문자", test: (password) => /[a-z]/.test(password) },
+  { id: "number", label: "숫자", test: (password) => /\d/.test(password) },
+  { id: "special", label: "특수문자", test: (password) => /[^A-Za-z0-9]/.test(password) }
+];
+
+const isValidPassword = (password) => passwordChecks.every((item) => item.test(password));
+
+function getPasswordCheckItems(password) {
+  return passwordChecks.map((item) => ({ ...item, passed: item.test(password) }));
+}
+
+function getPasswordStrength(password) {
+  const passedCount = getPasswordCheckItems(password).filter((item) => item.passed).length;
+  if (!password) return { label: "입력 전", level: "empty", percent: 0 };
+  if (passedCount <= 2) return { label: "위험", level: "danger", percent: 32 };
+  if (passedCount <= 4) return { label: "보통", level: "normal", percent: 66 };
+  return { label: "안전", level: "safe", percent: 100 };
+}
+
 // 모바일 프로필 수정 화면은 PC 프로필 수정 화면과 분리해 관리합니다.
 function MobileProfileEditPage() {
   const { isMobile } = useResponsive();
@@ -99,6 +122,40 @@ function MobileProfileEditPage() {
   const { user, setCurrentUser } = useAuth();
   const initialSports = useMemo(() => splitSports(user?.profile?.preferred_sports), [user?.profile?.preferred_sports]);
   const initialLevels = useMemo(() => parsePreferredLevels(user?.profile?.preferred_sport_levels), [user?.profile?.preferred_sport_levels]);
+
+  const [unlocked, setUnlocked] = useState(() => isProfileEditVerified());
+  const [verifyPasswordVal, setVerifyPasswordVal] = useState("");
+  const [verifyError, setVerifyError] = useState("");
+  const [verifyChecking, setVerifyChecking] = useState(false);
+
+  const handleVerifyPassword = async (e) => {
+    e.preventDefault();
+    if (!verifyPasswordVal.trim()) {
+      setVerifyError("비밀번호를 입력해주세요.");
+      return;
+    }
+    setVerifyChecking(true);
+    setVerifyError("");
+    try {
+      if (!isSupabaseConfigured || !supabase) {
+        throw new Error("인증 서비스 설정을 확인해주세요.");
+      }
+      const { error: supabaseError } = await supabase.auth.signInWithPassword({
+        email: user?.email || "",
+        password: verifyPasswordVal
+      });
+      if (supabaseError) {
+        throw new Error("비밀번호가 올바르지 않습니다.");
+      }
+      await userApi.verifyPassword({ password: verifyPasswordVal });
+      markProfileEditVerified();
+      setUnlocked(true);
+    } catch (err) {
+      setVerifyError(err.message || "비밀번호 확인에 실패했습니다.");
+    } finally {
+      setVerifyChecking(false);
+    }
+  };
 
   const [form, setForm] = useState({
     name: user?.name || "",
@@ -126,6 +183,14 @@ function MobileProfileEditPage() {
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" });
   const [passwordStatus, setPasswordStatus] = useState("idle");
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [toast, setToast] = useState("");
+
+  const newPasswordChecks = getPasswordCheckItems(passwordForm.next);
+  const newPasswordStrength = getPasswordStrength(passwordForm.next);
+  const hasPasswordConfirm = Boolean(passwordForm.confirm);
+  const passwordMatches = Boolean(passwordForm.next) && passwordForm.next === passwordForm.confirm;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -287,17 +352,84 @@ function MobileProfileEditPage() {
     setPasswordForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const submitPasswordChange = () => {
-    // 실제 비밀번호 변경 API가 연결되기 전까지 모바일과 PC의 확인 흐름을 동일하게 맞춥니다.
+  const closePasswordModal = () => {
+    if (passwordSaving) return;
+    setPasswordModalOpen(false);
+    setPasswordForm({ current: "", next: "", confirm: "" });
+    setPasswordStatus("idle");
+    setPasswordMessage("");
+  };
+
+  const submitPasswordChange = async () => {
     if (!passwordForm.current || !passwordForm.next || !passwordForm.confirm) {
       setPasswordStatus("empty");
+      setPasswordMessage("모든 비밀번호 항목을 입력해주세요.");
+      return;
+    }
+    if (!isValidPassword(passwordForm.next)) {
+      setPasswordStatus("invalid");
+      setPasswordMessage("비밀번호는 8자 이상이며 영문 대문자, 영문 소문자, 숫자, 특수문자를 모두 포함해야 합니다.");
       return;
     }
     if (passwordForm.next !== passwordForm.confirm) {
       setPasswordStatus("mismatch");
+      setPasswordMessage("새 비밀번호와 확인 값이 일치하지 않습니다.");
       return;
     }
-    setPasswordStatus("success");
+    if (passwordForm.current === passwordForm.next) {
+      setPasswordStatus("invalid");
+      setPasswordMessage("현재 비밀번호와 다른 새 비밀번호를 입력해주세요.");
+      return;
+    }
+    if (!isSupabaseConfigured || !supabase) {
+      setPasswordStatus("error");
+      setPasswordMessage("인증 서비스 설정을 확인해주세요.");
+      return;
+    }
+
+    setPasswordSaving(true);
+    setPasswordStatus("idle");
+    setPasswordMessage("");
+    try {
+      const email = user?.email || "";
+      if (!email) {
+        setPasswordStatus("error");
+        setPasswordMessage("계정 이메일 정보를 확인할 수 없습니다.");
+        return;
+      }
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password: passwordForm.current
+      });
+      if (signInError) {
+        setPasswordStatus("error");
+        setPasswordMessage("현재 비밀번호가 올바르지 않습니다.");
+        return;
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: passwordForm.next });
+      if (updateError) throw updateError;
+
+      setPasswordStatus("success");
+      setPasswordMessage("비밀번호가 변경되었습니다.");
+      setPasswordForm({ current: "", next: "", confirm: "" });
+      
+      setToast("비밀번호가 성공적으로 변경되었습니다.");
+      setTimeout(() => {
+        setToast("");
+      }, 3000);
+
+      setTimeout(() => {
+        setPasswordModalOpen(false);
+        setPasswordStatus("idle");
+        setPasswordMessage("");
+      }, 1500);
+    } catch (err) {
+      setPasswordStatus("error");
+      setPasswordMessage(err?.message || "비밀번호 변경에 실패했습니다.");
+    } finally {
+      setPasswordSaving(false);
+    }
   };
 
   const submit = async (event) => {
@@ -326,6 +458,178 @@ function MobileProfileEditPage() {
       setSaving(false);
     }
   };
+
+  if (user && !user.has_password) {
+    return (
+      <div className="mobile-shell" style={{ background: '#f8fafc', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <MobileHeader title="계정 연동 필요" showBack={true} />
+        <main style={{ padding: '24px 16px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+            <div style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              background: 'rgba(239, 68, 68, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px auto',
+              color: '#ef4444'
+            }}>
+              <KeyRound size={28} />
+            </div>
+            <h2 style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a', marginBottom: '8px' }}>이메일 연동 필요</h2>
+            <p style={{ fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
+              소셜 로그인 계정은 프로필 수정 전<br />
+              이메일 연동 및 비밀번호 등록이 필요합니다.
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gap: '12px' }}>
+            <button
+              type="button"
+              onClick={() => navigate("/mypage/account-link")}
+              style={{
+                width: '100%',
+                padding: '14px',
+                background: 'var(--mobile-primary)',
+                color: '#fff',
+                border: 0,
+                borderRadius: '12px',
+                fontSize: '15px',
+                fontWeight: '800',
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(79, 70, 229, 0.2)',
+                textAlign: 'center'
+              }}
+            >
+              이메일 계정 연동하기
+            </button>
+            
+            <button
+              type="button"
+              onClick={() => navigate("/mypage")}
+              style={{
+                width: '100%',
+                padding: '14px',
+                background: 'transparent',
+                color: '#64748b',
+                border: 0,
+                borderRadius: '12px',
+                fontSize: '15px',
+                fontWeight: '800',
+                cursor: 'pointer'
+              }}
+            >
+              취소
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!unlocked) {
+    return (
+      <div className="mobile-shell" style={{ background: '#f8fafc', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <MobileHeader title="비밀번호 확인" showBack={true} />
+        <main style={{ padding: '24px 16px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+            <div style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              background: 'rgba(79, 70, 229, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px auto',
+              color: 'var(--mobile-primary)'
+            }}>
+              <KeyRound size={28} />
+            </div>
+            <h2 style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a', marginBottom: '8px' }}>비밀번호 입력</h2>
+            <p style={{ fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
+              회원님의 개인정보 보호를 위해<br />
+              비밀번호를 다시 한 번 입력해주세요.
+            </p>
+          </div>
+
+          <form onSubmit={handleVerifyPassword} style={{ display: 'grid', gap: '16px' }}>
+            {verifyError && (
+              <p style={{
+                fontSize: '13px',
+                color: '#ef4444',
+                background: '#fef2f2',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: '1px solid #fecaca',
+                textAlign: 'center',
+                margin: 0,
+                fontWeight: '700'
+              }}>{verifyError}</p>
+            )}
+            
+            <input
+              type="password"
+              value={verifyPasswordVal}
+              onChange={(e) => setVerifyPasswordVal(e.target.value)}
+              placeholder="비밀번호를 입력하세요"
+              style={{
+                width: '100%',
+                padding: '14px 16px',
+                border: '1px solid #e2e8f0',
+                borderRadius: '12px',
+                fontSize: '15px',
+                background: '#fff',
+                outline: 'none',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                boxSizing: 'border-box'
+              }}
+              autoFocus
+            />
+
+            <button
+              type="submit"
+              disabled={verifyChecking}
+              style={{
+                width: '100%',
+                padding: '14px',
+                background: 'var(--mobile-primary)',
+                color: '#fff',
+                border: 0,
+                borderRadius: '12px',
+                fontSize: '15px',
+                fontWeight: '800',
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(79, 70, 229, 0.2)'
+              }}
+            >
+              {verifyChecking ? "확인 중..." : "확인"}
+            </button>
+            
+            <button
+              type="button"
+              onClick={() => navigate("/mypage")}
+              style={{
+                width: '100%',
+                padding: '14px',
+                background: 'transparent',
+                color: '#64748b',
+                border: 0,
+                borderRadius: '12px',
+                fontSize: '15px',
+                fontWeight: '800',
+                cursor: 'pointer'
+              }}
+            >
+              취소
+            </button>
+          </form>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -553,34 +857,166 @@ function MobileProfileEditPage() {
           </div>
         </form>
       </main>
-      {passwordModalOpen ? (
-        <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setPasswordModalOpen(false)}>
-          <section className="profile-auth-modal password-change-modal">
-            <button className="schedule-modal-close" type="button" onClick={() => setPasswordModalOpen(false)}><X size={18} /></button>
-            <h2>비밀번호 변경</h2>
-            <p>현재 비밀번호를 확인한 뒤 새 비밀번호로 변경합니다.</p>
-            <label>
-              현재 비밀번호
-              <input type="password" value={passwordForm.current} onChange={(event) => updatePassword("current", event.target.value)} />
+      {passwordModalOpen && (
+        <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closePasswordModal()}>
+          <section className="profile-auth-modal password-change-modal" style={{ width: '95%', maxWidth: '360px', padding: '24px 20px', borderRadius: '16px', boxSizing: 'border-box' }}>
+            <button className="schedule-modal-close" type="button" onClick={closePasswordModal} disabled={passwordSaving}><X size={18} /></button>
+            <h2 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '8px' }}>비밀번호 변경</h2>
+            <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '20px' }}>현재 비밀번호를 확인한 뒤 새 비밀번호로 변경합니다.</p>
+            
+            <label style={{ display: 'block', marginBottom: '14px' }}>
+              <span style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>현재 비밀번호</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', background: '#fff' }}>
+                <LockKeyhole size={16} style={{ color: '#94a3b8' }} />
+                <input 
+                  type="password" 
+                  value={passwordForm.current} 
+                  onChange={(event) => updatePassword("current", event.target.value)} 
+                  autoComplete="current-password"
+                  disabled={passwordSaving}
+                  style={{ border: 0, outline: 'none', fontSize: '14px', flex: 1, padding: 0 }}
+                />
+              </span>
             </label>
-            <label>
-              새 비밀번호
-              <input type="password" value={passwordForm.next} onChange={(event) => updatePassword("next", event.target.value)} />
+
+            <label style={{ display: 'block', marginBottom: '10px' }}>
+              <span style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>새 비밀번호</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', background: '#fff' }}>
+                <LockKeyhole size={16} style={{ color: '#94a3b8' }} />
+                <input 
+                  type="password" 
+                  minLength="8" 
+                  value={passwordForm.next} 
+                  onChange={(event) => updatePassword("next", event.target.value)} 
+                  placeholder="대소문자, 숫자, 특수문자 포함" 
+                  autoComplete="new-password"
+                  disabled={passwordSaving}
+                  style={{ border: 0, outline: 'none', fontSize: '14px', flex: 1, padding: 0 }}
+                />
+              </span>
             </label>
-            <label>
-              새 비밀번호 확인
-              <input type="password" value={passwordForm.confirm} onChange={(event) => updatePassword("confirm", event.target.value)} />
+
+            {/* Real-time Validation Checker */}
+            <div style={{
+              background: '#f8fafc',
+              borderRadius: '8px',
+              padding: '12px',
+              marginBottom: '14px',
+              border: '1px solid #f1f5f9'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '8px', fontWeight: '800' }}>
+                <span style={{ color: '#475569' }}>비밀번호 안전도</span>
+                <span style={{
+                  color: newPasswordStrength.level === 'safe' ? '#10b981' : (newPasswordStrength.level === 'normal' ? '#f59e0b' : '#ef4444')
+                }}>{newPasswordStrength.label}</span>
+              </div>
+              <div style={{ height: '4px', background: '#e2e8f0', borderRadius: '2px', overflow: 'hidden', marginBottom: '10px' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${newPasswordStrength.percent}%`,
+                  background: newPasswordStrength.level === 'safe' ? '#10b981' : (newPasswordStrength.level === 'normal' ? '#f59e0b' : '#ef4444'),
+                  transition: 'width 0.3s ease'
+                }} />
+              </div>
+              <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                {newPasswordChecks.map((item) => (
+                  <li key={item.id} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    color: item.passed ? '#10b981' : '#94a3b8'
+                  }}>
+                    {item.passed ? <CheckCircle2 size={13} /> : <CircleAlert size={13} />}
+                    {item.label}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <label style={{ display: 'block', marginBottom: '14px' }}>
+              <span style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>새 비밀번호 확인</span>
+              <span style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                border: `1px solid ${hasPasswordConfirm ? (passwordMatches ? '#10b981' : '#ef4444') : '#e2e8f0'}`,
+                borderRadius: '8px',
+                padding: '10px 12px',
+                background: '#fff'
+              }}>
+                <LockKeyhole size={16} style={{ color: '#94a3b8' }} />
+                <input 
+                  type="password" 
+                  minLength="8" 
+                  value={passwordForm.confirm} 
+                  onChange={(event) => updatePassword("confirm", event.target.value)} 
+                  placeholder="비밀번호를 한 번 더 입력" 
+                  autoComplete="new-password"
+                  disabled={passwordSaving}
+                  style={{ border: 0, outline: 'none', fontSize: '14px', flex: 1, padding: 0 }}
+                />
+              </span>
             </label>
-            {passwordStatus === "empty" ? <em className="nickname-check warn">모든 비밀번호 항목을 입력해주세요.</em> : null}
-            {passwordStatus === "mismatch" ? <em className="nickname-check warn">새 비밀번호가 일치하지 않습니다.</em> : null}
-            {passwordStatus === "success" ? <em className="nickname-check ok">비밀번호 변경 흐름이 확인되었습니다.</em> : null}
-            <div>
-              <button className="ghost-btn" type="button" onClick={() => setPasswordModalOpen(false)}>취소</button>
-              <button className="primary-small" type="button" onClick={submitPasswordChange}>변경하기</button>
+
+            {hasPasswordConfirm && (
+              <p style={{
+                margin: '0 0 14px 0',
+                fontSize: '12px',
+                fontWeight: '700',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                color: passwordMatches ? '#10b981' : '#ef4444'
+              }}>
+                {passwordMatches ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                {passwordMatches ? "비밀번호가 일치합니다." : "비밀번호가 일치하지 않습니다."}
+              </p>
+            )}
+
+            {passwordMessage && (
+              <em className={`nickname-check ${passwordStatus === "success" ? "ok" : "warn"}`} style={{ display: 'block', marginBottom: '16px', fontSize: '12px', fontWeight: '800' }}>
+                {passwordMessage}
+              </em>
+            )}
+
+            <div className="profile-auth-actions" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+              <button className="ghost-btn" type="button" onClick={closePasswordModal} disabled={passwordSaving} style={{ flex: 1 }}>취소</button>
+              <button className="primary-small" type="button" onClick={submitPasswordChange} disabled={passwordSaving || (hasPasswordConfirm && !passwordMatches)} style={{ flex: 1 }}>
+                {passwordSaving ? "변경 중..." : "변경하기"}
+              </button>
             </div>
           </section>
         </div>
-      ) : null}
+      )}
+
+      {/* Local Toast Alert Notification */}
+      {toast && (
+        <div 
+          role="status" 
+          aria-live="polite" 
+          style={{ 
+            position: 'fixed', 
+            bottom: '80px', 
+            left: '50%', 
+            transform: 'translateX(-50%)', 
+            background: 'rgba(15, 23, 42, 0.9)', 
+            color: '#fff', 
+            padding: '10px 18px', 
+            borderRadius: '20px', 
+            fontSize: '13px', 
+            fontWeight: '700', 
+            zIndex: 999999, 
+            whiteSpace: 'nowrap', 
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            textAlign: 'center',
+            border: 'none'
+          }}
+        >
+          {toast}
+        </div>
+      )}
     </>
   );
 }
