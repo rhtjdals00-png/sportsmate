@@ -1,0 +1,51 @@
+[
+  {
+    "timestamp": "2026-07-07 13:15:02",
+    "admin": "ms",
+    "action_type": "모임 복구",
+    "description": "폐쇄된 모임 ID 19 (폐쇄 유예 테스트 모임)을(를) 정상 복구했습니다.",
+    "target_id": 19
+  },
+  {
+    "timestamp": "2026-07-07 13:15:06",
+    "admin": "ms",
+    "action_type": "모임 폐쇄",
+    "description": "모임 ID 19 (폐쇄 유예 테스트 모임)을(를) 강제 폐쇄(정지)했습니다.",
+    "target_id": 19
+  },
+  {
+    "timestamp": "2026-07-07 13:16:11",
+    "admin": "ms",
+    "action_type": "설정 변경",
+    "description": "시스템 환경 설정을 변경했습니다. (세션 만료 시간 변경: 50 ➔ 60)",
+    "target_id": null
+  },
+  {
+    "timestamp": "2026-07-07 15:33:16",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 엄준식(ID 21)의 계정 정지 처리 작업을 수행했습니다.",
+    "target_id": 21
+  },
+  {
+    "timestamp": "2026-07-07 15:33:40",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 엄준식(ID 21)의 계정 활성화 상태 변경 작업을 수행했습니다.",
+    "target_id": 21
+  },
+  {
+    "timestamp": "2026-07-07 15:58:24",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 고성민(ID 22)의 계정 정지 처리 작업을 수행했습니다.",
+    "target_id": 22
+  },
+  {
+    "timestamp": "2026-07-07 15:59:01",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 고성민(ID 22)의 계정 활성화 상태 변경 작업을 수행했습니다.",
+    "target_id": 22
+  }
+]

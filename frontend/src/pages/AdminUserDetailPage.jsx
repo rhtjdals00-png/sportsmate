@@ -15,7 +15,8 @@ import {
   ShieldAlert,
   Edit3,
   Ban,
-  ArrowLeft
+  ArrowLeft,
+  Bell
 } from "lucide-react";
 
 // Mock Database of user details mapped by userId
@@ -264,13 +265,21 @@ function AdminUserDetailPage() {
     }
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!userData) return;
-    const text = prompt(`${userData.name} 회원에게 전송할 메시지를 입력해 주세요:`);
+    const text = prompt(`${userData.name} 회원에게 전송할 알림 내용을 입력해 주세요:`);
     if (text) {
-      alert(`[메시지 전송 성공]
-수신: ${userData.email}
-내용: "${text}"`);
+      try {
+        await adminApi.sendMessage(userId, text);
+        alert(`[알림 전송 성공]
+수신자: ${userData.name}
+내용: "${text}"
+
+해당 회원의 알림 내역에 등록 및 푸시 알림이 발송되었습니다.`);
+      } catch (err) {
+        console.error("Failed to send notification", err);
+        alert(err.response?.data?.message || "알림 전송에 실패했습니다.");
+      }
     }
   };
 
@@ -384,8 +393,8 @@ function AdminUserDetailPage() {
             onClick={handleSendMessage}
             className="admin-detail-action-btn admin-detail-action-btn--outline"
           >
-            <Mail size={15} />
-            <span>메시지 전송</span>
+            <Bell size={15} />
+            <span>알림 전송</span>
           </button>
         </div>
       </section>
