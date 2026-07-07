@@ -1,4 +1,4 @@
-﻿.profile-setup-page {
+.profile-setup-page {
   min-height: calc(100vh - 72px);
   padding: 44px 24px 72px;
   background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
@@ -57,6 +57,14 @@
   color: #0369a1;
   font-weight: 800;
   white-space: nowrap;
+}
+
+/* New class for edit page layout */
+.profile-setup__status--edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .profile-setup__panel {

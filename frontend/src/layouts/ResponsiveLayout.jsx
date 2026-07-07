@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BellRing, MapPin, ShieldCheck } from "lucide-react";
+import { BellRing, MapPin, ShieldCheck, X } from "lucide-react";
 import { Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useResponsive } from "../hooks/useResponsive";
@@ -16,6 +16,8 @@ function ResponsiveLayout() {
   const [toast, setToast] = useState("");
   const [permissionGuideOpen, setPermissionGuideOpen] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState("");
+  const [pushPermissionGranted, setPushPermissionGranted] = useState(false);
+  const [locationPermissionGranted, setLocationPermissionGranted] = useState(false);
   const permissionStorageKey = user?.id ? `sportsmate_permission_onboarding_${user.id}` : "";
 
   useEffect(() => {
@@ -50,6 +52,7 @@ function ResponsiveLayout() {
     setPermissionMessage("");
     try {
       await enablePushNotifications();
+      setPushPermissionGranted(true);
       setPermissionMessage("알림 권한이 설정되었습니다.");
     } catch (error) {
       setPermissionMessage(error?.message || "알림 권한을 설정하지 못했습니다.");
@@ -63,7 +66,7 @@ function ResponsiveLayout() {
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      () => setPermissionMessage("위치 권한이 확인되었습니다."),
+      () => { setPermissionMessage("위치 권한이 확인되었습니다."); setLocationPermissionGranted(true); },
       () => setPermissionMessage("위치 권한이 허용되지 않았습니다. 브라우저 설정에서 위치 권한을 확인해주세요."),
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
     );
@@ -86,6 +89,7 @@ function ResponsiveLayout() {
       {permissionGuideOpen ? (
         <div className="mobile-permission-guide" role="dialog" aria-modal="true" aria-label="앱 권한 안내">
           <button className="mobile-permission-guide__backdrop" type="button" onClick={closePermissionGuide} aria-label="닫기" />
+        <button className="mobile-permission-guide__close" type="button" onClick={closePermissionGuide} aria-label="닫기"><X size={20} /></button>
           <section>
             <div className="mobile-permission-guide__icon">
               <ShieldCheck size={26} />
@@ -98,7 +102,7 @@ function ResponsiveLayout() {
               <button className="is-location" type="button" onClick={requestLocationPermission}><MapPin size={17} />위치 권한 설정하기</button>
             </div>
             {permissionMessage ? <p className="mobile-permission-guide__message">{permissionMessage}</p> : null}
-            <button className="mobile-permission-guide__skip" type="button" onClick={closePermissionGuide}>나중에 하기</button>
+            <button className="mobile-permission-guide__skip" type="button" onClick={closePermissionGuide}>{(pushPermissionGranted && locationPermissionGranted) ? "닫기" : "나중에 하기"}</button>
           </section>
         </div>
       ) : null}

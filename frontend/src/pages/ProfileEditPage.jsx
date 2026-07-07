@@ -1,4 +1,5 @@
 import { Camera, CheckCircle2, KeyRound, MapPin, Search, X } from "lucide-react";
+import StatusMessages from "../constants/statusMessages";
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import Button from "../components/common/Button.jsx";
@@ -337,9 +338,9 @@ function MobileProfileEditPage() {
               <h1>{T.heading}</h1>
               <p>{T.description}</p>
             </div>
-            <div className="profile-setup__status">
+            <div className="profile-setup__status profile-setup__status--edit">
               <CheckCircle2 size={18} />
-              <span>{T.connected}</span>
+              <span>{StatusMessages.connected}</span>
             </div>
           </section>
 

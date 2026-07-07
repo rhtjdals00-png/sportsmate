@@ -57,7 +57,8 @@ function unregisterServiceWorkersInDev() {
   });
 }
 
-if (import.meta.env.PROD) {
+const isMobile = /Mobi|Android|iPhone|iPad|iPod/.test(navigator.userAgent);
+if (import.meta.env.PROD && isMobile) {
   registerServiceWorker();
 } else {
   unregisterServiceWorkersInDev();

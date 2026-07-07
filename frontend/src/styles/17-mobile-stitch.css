@@ -4805,6 +4805,24 @@
   color: #52647e;
 }
 
+.mobile-permission-guide__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  border-radius: 999px;
+  padding: 0;
+  cursor: pointer;
+  color: #111827;
+  z-index: 121;
+}
+
 .mobile-my-calendar {
   margin: 16px 20px;
   padding: 18px;
