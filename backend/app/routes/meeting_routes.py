@@ -35,6 +35,23 @@ def can_manage_meeting_tools(meeting_id, user_id):
     return bool(participant and participant.role in ["host", "cohost", "subhost", "assistant"])
 
 
+def user_display_name(user):
+    return (user.nickname or user.name) if user else "참여자"
+
+
+def add_meeting_system_message(meeting, user_id, content):
+    chat_room = meeting.chat_room or ChatRoom(meeting_id=meeting.id)
+    if not meeting.chat_room:
+        db.session.add(chat_room)
+        db.session.flush()
+    db.session.add(ChatMessage(
+        chat_room_id=chat_room.id,
+        user_id=user_id,
+        content=content,
+        message_type="system",
+    ))
+
+
 def parse_client_datetime(value):
     if not value:
         return None
@@ -149,6 +166,7 @@ def cancel_join(meeting_id):
         if meeting:
             meeting.current_participants = max(1, meeting.current_participants - 1)
             meeting.sync_status()
+            add_meeting_system_message(meeting, participant.user_id, f"{user_display_name(participant.user)}님이 나가셨습니다.")
             
     db.session.commit()
     return jsonify({"participant": participant.to_dict()})
@@ -241,11 +259,29 @@ def post_notice(meeting_id):
     db.session.add(ChatMessage(
         chat_room_id=chat_room.id,
         user_id=user_id,
-        content=f"공지가 등록되었습니다: {notice.title}",
+        content=f"공지가 등록되었습니다: {notice.content}",
         message_type="notice",
     ))
     db.session.commit()
     return jsonify({"notice": notice.to_dict()}), 201
+
+
+@meeting_bp.delete("/<int:meeting_id>/members/<int:user_id>")
+@jwt_required()
+def kick_member(meeting_id, user_id):
+    meeting = Meeting.query.get_or_404(meeting_id)
+    current_user_id = int(get_jwt_identity())
+    if meeting.host_id != current_user_id:
+        return jsonify({"message": "방장만 멤버를 추방할 수 있습니다."}), 403
+    if meeting.host_id == user_id:
+        return jsonify({"message": "방장은 추방할 수 없습니다."}), 400
+    participant = Participant.query.filter_by(meeting_id=meeting_id, user_id=user_id, status="approved").first_or_404()
+    participant.status = "kicked"
+    meeting.current_participants = max(1, int(meeting.current_participants or 1) - 1)
+    meeting.sync_status()
+    add_meeting_system_message(meeting, current_user_id, f"{user_display_name(participant.user)}님이 추방되셨습니다.")
+    db.session.commit()
+    return jsonify({"participant": participant.to_dict(), "meeting": meeting.to_dict(current_user_id=current_user_id)})
 
 
 @meeting_bp.get("/<int:meeting_id>/votes")

@@ -16,12 +16,25 @@ CHAT_MESSAGE_COLUMNS = {
     "reply_to_message_type": "VARCHAR(30)",
 }
 
+DIRECT_CHAT_MESSAGE_COLUMNS = {
+    "message_type": "VARCHAR(30) NOT NULL DEFAULT 'text'",
+    "attachment_url": "TEXT",
+    "attachment_name": "VARCHAR(255)",
+    "location_latitude": "DOUBLE PRECISION",
+    "location_longitude": "DOUBLE PRECISION",
+    "location_label": "VARCHAR(255)",
+}
+
 
 def ensure_chat_schema(app):
     try:
         inspector = inspect(db.engine)
         existing = {column["name"] for column in inspector.get_columns("chat_messages")}
         missing = [(name, column_type) for name, column_type in CHAT_MESSAGE_COLUMNS.items() if name not in existing]
+        direct_existing = set()
+        if inspector.has_table("direct_chat_messages"):
+            direct_existing = {column["name"] for column in inspector.get_columns("direct_chat_messages")}
+        direct_missing = [(name, column_type) for name, column_type in DIRECT_CHAT_MESSAGE_COLUMNS.items() if name not in direct_existing]
         with db.engine.begin() as connection:
             for name, column_type in missing:
                 connection.execute(text(f"ALTER TABLE chat_messages ADD COLUMN {name} {column_type}"))
@@ -51,9 +64,17 @@ def ensure_chat_schema(app):
                     direct_chat_room_id INTEGER NOT NULL REFERENCES direct_chat_rooms(id),
                     sender_id INTEGER NOT NULL REFERENCES users(id),
                     content TEXT NOT NULL,
+                    message_type VARCHAR(30) NOT NULL DEFAULT 'text',
+                    attachment_url TEXT,
+                    attachment_name VARCHAR(255),
+                    location_latitude DOUBLE PRECISION,
+                    location_longitude DOUBLE PRECISION,
+                    location_label VARCHAR(255),
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
             """))
+            for name, column_type in direct_missing:
+                connection.execute(text(f"ALTER TABLE direct_chat_messages ADD COLUMN {name} {column_type}"))
     except Exception as error:
         app.logger.warning("Chat message schema compatibility check failed: %s", error)
 

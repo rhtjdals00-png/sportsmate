@@ -58,6 +58,7 @@ function AppRouter() {
         <Route path="/meetings/:meetingId" element={<MeetingDetailPage />} />
         <Route path="/meetings/:meetingId/edit" element={protect(<MeetingEditPage />)} />
         <Route path="/chats" element={protect(<ChatListPage />)} />
+        <Route path="/chats/direct/:directRoomId" element={protect(<ChatRoomPage />)} />
         <Route path="/chats/:chatRoomId" element={protect(<ChatRoomPage />)} />
         <Route path="/notifications" element={protect(<NotificationsPage />)} />
         <Route path="/settings" element={protect(<AppSettingsPage />)} />
