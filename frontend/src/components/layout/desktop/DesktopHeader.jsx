@@ -239,7 +239,7 @@ function DesktopHeader() {
             <p>{copy.modalBody}</p>
             <div className="desktop-logout-modal__actions">
               <button type="button" onClick={() => setShowLogoutConfirm(false)} disabled={loggingOut}>{copy.cancel}</button>
-              <button type="button" className="is-primary" onClick={confirmLogout} disabled={loggingOut}>{loggingOut ? copy.logout : copy.confirm}</button>
+              <button type="button" className="is-primary" onClick={confirmLogout} disabled={loggingOut}>{copy.logout}</button>
             </div>
           </section>
         </div>

@@ -48,7 +48,7 @@ function isHostMeeting(meeting) {
 
 function getStatusLabel(status) {
   if (status === "full") return "모집 마감";
-  if (status === "closed") return "기간 마감";
+  if (status === "closed") return "모집종료";
   if (status === "cancelled") return "취소됨";
   return "모집중";
 }

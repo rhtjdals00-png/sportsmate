@@ -53,7 +53,7 @@ function MeetingCard({ meeting, compact = false }) {
 function getStatusLabel(status) {
   if (status === "open") return "모집중";
   if (status === "full") return "모집 마감";
-  if (status === "closed") return "기간 마감";
+  if (status === "closed") return "모집종료";
   if (status === "cancelled") return "취소됨";
   return "마감";
 }

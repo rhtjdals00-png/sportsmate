@@ -330,6 +330,7 @@ def update_user(user_id):
         return jsonify({"message": "관리자 권한이 필요합니다."}), 403
         
     user = User.query.options(joinedload(User.profile)).get_or_404(user_id)
+    was_suspended = (user.role == "suspended" or not user.is_active)
     from flask import request
     from app.extensions import db
     from app.models import UserProfile
@@ -414,6 +415,19 @@ def update_user(user_id):
             profile.region = data["region"]
         if "preferred_sports" in data:
             profile.preferred_sports = data["preferred_sports"]
+            
+    is_suspended = (user.role == "suspended" or not user.is_active)
+    if is_suspended and not was_suspended:
+        from app.services.notification_service import create_notification
+        create_notification(
+            user_id=user.id,
+            type="account_suspension",
+            title="계정 정지 안내",
+            message="귀하의 계정이 정지되었습니다. 관련 문의사항은 고객센터로 연락해주시기 바랍니다.",
+            link_url="/notifications",
+            commit=False,
+            send_push=True
+        )
             
     db.session.commit()
 

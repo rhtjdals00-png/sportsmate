@@ -356,6 +356,7 @@ export function AuthProvider({ children }) {
         setAuthError("");
         setUser(null);
         setSession(null);
+        alert("로그아웃 되었습니다.");
       },
       setCurrentUser(nextUser) {
         setUser(nextUser);
