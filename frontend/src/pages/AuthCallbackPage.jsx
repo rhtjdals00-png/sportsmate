@@ -3,6 +3,11 @@ import { useNavigate } from "react-router-dom";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 
+const providerLinkMessages = {
+  google: "기존 이메일 계정에 Google 로그인이 연결되었습니다. 앞으로 이메일 로그인과 Google 로그인을 모두 사용할 수 있습니다.",
+  kakao: "기존 이메일 계정에 카카오 로그인이 연결되었습니다. 앞으로 이메일 로그인과 카카오 로그인을 모두 사용할 수 있습니다."
+};
+
 function AuthCallbackPage() {
   const navigate = useNavigate();
   const [message, setMessage] = useState("로그인 정보를 확인하고 있습니다.");
@@ -17,12 +22,20 @@ function AuthCallbackPage() {
 
     async function finishLogin() {
       try {
-        await completeOAuthCallback(window.location.href);
+        const result = await completeOAuthCallback(window.location.href);
         window.history.replaceState({}, document.title, window.location.pathname);
         const redirectPath = localStorage.getItem("sportsmate_post_auth_redirect") || "/";
         localStorage.removeItem("sportsmate_post_auth_redirect");
-        sessionStorage.setItem("sportsmate_flash", "로그인하셨습니다.");
-        navigate(redirectPath, { replace: true });
+
+        const linkMessage = result?.provider_linked ? providerLinkMessages[result.linked_provider] : "";
+        sessionStorage.setItem("sportsmate_flash", linkMessage || "로그인했습니다.");
+
+        if (mounted && linkMessage) {
+          setMessage(linkMessage);
+          redirectTimer = window.setTimeout(() => navigate(redirectPath, { replace: true }), 1600);
+        } else {
+          navigate(redirectPath, { replace: true });
+        }
       } catch (error) {
         const errorMessage = error?.message || "로그인 세션을 확인하지 못했습니다. 다시 로그인해주세요.";
         sessionStorage.setItem("sportsmate_auth_error", errorMessage);
@@ -52,7 +65,6 @@ function AuthCallbackPage() {
       </section>
     </>
   );
-
 }
 
 export default AuthCallbackPage;

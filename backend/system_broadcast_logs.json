@@ -9,5 +9,27 @@
     "target_value": "",
     "target_count": 11,
     "send_push": true
+  },
+  {
+    "timestamp": "2026-07-08 11:05:14",
+    "admin": "임승찬",
+    "title": "ㅎㅇ",
+    "message": "ㅎㅇ",
+    "link_url": "/notifications",
+    "target_type": "all",
+    "target_value": "",
+    "target_count": 12,
+    "send_push": true
+  },
+  {
+    "timestamp": "2026-07-08 11:36:57",
+    "admin": "임승찬",
+    "title": "관리자 알림 테스트",
+    "message": "오늘 술 ㄱㄱ?",
+    "link_url": "/notifications",
+    "target_type": "role",
+    "target_value": "admin",
+    "target_count": 5,
+    "send_push": true
   }
 ]

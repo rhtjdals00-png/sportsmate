@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { CalendarCheck, Check, Dumbbell, Footprints, MapPin, MessageCircle, Pencil, ShieldCheck, Star, Trophy, X } from "lucide-react";
+import { CalendarCheck, Check, Dumbbell, Footprints, MapPin, MessageCircle, Pencil, ShieldCheck, Star, Trophy, X, ChevronDown, ChevronUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import Button from "../../common/Button.jsx";
@@ -109,6 +109,7 @@ function MobileMyPage() {
   ].filter((item) => validDate(item.start_at)).sort((a, b) => new Date(a.start_at) - new Date(b.start_at)), [meetings.data]);
   const monthBase = useMemo(() => new Date(), []);
   const [selectedScheduleKey, setSelectedScheduleKey] = useState("");
+  const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
   const calendarCells = useMemo(() => buildMonthCells(monthBase, scheduleItems), [monthBase, scheduleItems]);
   const activeScheduleKey = selectedScheduleKey || dateKey(new Date());
   const selectedSchedules = scheduleItems.filter((item) => dateKey(item.start_at) === activeScheduleKey);
@@ -215,33 +216,42 @@ function MobileMyPage() {
           <strong>{meetings.loading ? "확인 중" : `${pendingCount}건`}</strong>
         </Link>
       </section>
-      <section className="mobile-my-calendar" aria-label="내 운동 일정">
-        <div className="mobile-my-calendar__head">
+      <section className={`mobile-my-calendar ${isCalendarExpanded ? "is-expanded" : ""}`} aria-label="내 운동 일정">
+        <div 
+          className="mobile-my-calendar__head" 
+          onClick={() => setIsCalendarExpanded(!isCalendarExpanded)} 
+          style={{ cursor: 'pointer', userSelect: 'none' }}
+        >
           <div>
             <span>{monthBase.getFullYear()}년 {monthBase.getMonth() + 1}월</span>
-            <h2>내 운동 일정</h2>
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              내 운동 일정
+              {isCalendarExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </h2>
           </div>
-          <Link to="/mypage/meetings">전체 보기</Link>
+          <Link to="/mypage/meetings" onClick={(e) => e.stopPropagation()}>전체 보기</Link>
         </div>
-        <div className="mobile-my-calendar__week"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
-        <div className="mobile-my-calendar__grid">
-          {calendarCells.map((cell) => cell.empty ? (
-            <span key={cell.key} aria-hidden="true" />
-          ) : (
-            <button key={cell.key} type="button" className={`${cell.items.length ? "has-event" : ""} ${activeScheduleKey === cell.key ? "is-active" : ""}`} onClick={() => cell.items.length && setSelectedScheduleKey(cell.key)} disabled={!cell.items.length}>
-              <b>{cell.day}</b>
-              {cell.items.length ? <em>{cell.items.length}</em> : null}
-            </button>
-          ))}
-        </div>
-        <div className="mobile-my-calendar__list">
-          {selectedSchedules.length ? selectedSchedules.map((item) => (
-            <Link key={`${item.state}-${item.id}`} to={item.state === "host" ? `/host/meetings/${item.id}` : `/meetings/${item.id}`}>
-              <span>{item.state === "host" ? "방장" : "참여"} · {shortTime(item.start_at)}</span>
-              <strong>{item.title}</strong>
-              <p>{item.place}</p>
-            </Link>
-          )) : <p>표시할 일정이 없습니다.</p>}
+        <div className={`mobile-my-calendar__body ${isCalendarExpanded ? "is-expanded" : ""}`}>
+          <div className="mobile-my-calendar__week"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+          <div className="mobile-my-calendar__grid">
+            {calendarCells.map((cell) => cell.empty ? (
+              <span key={cell.key} aria-hidden="true" />
+            ) : (
+              <button key={cell.key} type="button" className={`${cell.items.length ? "has-event" : ""} ${activeScheduleKey === cell.key ? "is-active" : ""}`} onClick={() => cell.items.length && setSelectedScheduleKey(cell.key)} disabled={!cell.items.length}>
+                <b>{cell.day}</b>
+                {cell.items.length ? <em>{cell.items.length}</em> : null}
+              </button>
+            ))}
+          </div>
+          <div className="mobile-my-calendar__list">
+            {selectedSchedules.length ? selectedSchedules.map((item) => (
+              <Link key={`${item.state}-${item.id}`} to={item.state === "host" ? `/host/meetings/${item.id}` : `/meetings/${item.id}`}>
+                <span>{item.state === "host" ? "방장" : "참여"} · {shortTime(item.start_at)}</span>
+                <strong>{item.title}</strong>
+                <p>{item.place}</p>
+              </Link>
+            )) : <p>표시할 일정이 없습니다.</p>}
+          </div>
         </div>
       </section>
       <div className="menu-list">

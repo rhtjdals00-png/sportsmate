@@ -35,6 +35,7 @@ function MobileNotifications() {
   const [pushLoading, setPushLoading] = useState(false);
   const [locationMessage, setLocationMessage] = useState("");
   const [locationLoading, setLocationLoading] = useState(false);
+  const [permission, setPermission] = useState(() => ("Notification" in window ? Notification.permission : "default"));
   const notifications = useAsync(() => notificationApi.list(), [refreshKey]);
   const pushSupport = useMemo(() => getPushSupportState(), []);
 
@@ -48,6 +49,7 @@ function MobileNotifications() {
     setPushMessage("");
     try {
       await enablePushNotifications();
+      setPermission("granted");
       setPushMessage("푸시 알림이 켜졌습니다.");
     } catch (error) {
       setPushMessage(error.message || "푸시 알림을 켜지 못했습니다.");
@@ -88,9 +90,15 @@ function MobileNotifications() {
           {pushMessage ? <span>{pushMessage}</span> : null}
         </div>
         {pushSupport.supported && (
-          <Button type="button" onClick={enablePush} disabled={pushLoading}>
-            {pushLoading ? "설정 중" : "알림 켜기"}
-          </Button>
+          permission === "granted" ? (
+            <Button type="button" disabled variant="secondary">
+              알림 켜짐
+            </Button>
+          ) : (
+            <Button type="button" onClick={enablePush} disabled={pushLoading}>
+              {pushLoading ? "설정 중" : "알림 켜기"}
+            </Button>
+          )
         )}
         <Button type="button" variant="secondary" onClick={enableLocation} disabled={locationLoading}>
           {locationLoading ? "확인 중" : "위치 권한 확인"}

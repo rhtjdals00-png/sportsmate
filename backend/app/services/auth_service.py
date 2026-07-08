@@ -61,10 +61,22 @@ def merge_auth_providers(primary_provider, existing_provider=""):
     providers = []
     for value in [primary_provider, existing_provider]:
         for item in (value or "").split(","):
-            provider = item.strip()
+            provider = item.strip().lower()
             if provider and provider not in providers:
                 providers.append(provider)
     return ",".join(providers) or "email"
+
+
+def provider_set(value):
+    return {item.strip().lower() for item in (value or "").split(",") if item.strip()}
+
+
+def newly_linked_social_provider(before_provider, after_provider):
+    added = provider_set(after_provider) - provider_set(before_provider)
+    for provider in ["google", "kakao"]:
+        if provider in added:
+            return provider
+    return ""
 
 
 def supabase_auth_user_exists(auth_user_id):
@@ -111,6 +123,8 @@ def sync_supabase_user(data):
             raise ValueError("현재 서비스 점검 중입니다. 일반 회원은 로그인할 수 없습니다.")
 
 
+    before_provider = user.provider if user else ""
+
     if not user:
         user = User(email=email, auth_user_id=auth_user_id, name=name, phone_number=phone_number, nickname=nickname, user_tag=generate_user_tag())
         db.session.add(user)
@@ -143,6 +157,9 @@ def sync_supabase_user(data):
     response = build_auth_response(user)
     response["is_new_user"] = is_new_user
     response["profile_complete"] = is_profile_complete(user)
+    linked_provider = "" if is_new_user else newly_linked_social_provider(before_provider, user.provider)
+    response["provider_linked"] = bool(linked_provider)
+    response["linked_provider"] = linked_provider
     return response
 
 
