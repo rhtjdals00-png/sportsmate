@@ -104,12 +104,14 @@ function replyContent(message) {
 }
 
 function MobileChatRoom() {
-  const { chatRoomId } = useParams();
+  const { chatRoomId, directRoomId } = useParams();
+  const isDirectChat = Boolean(directRoomId);
   const { user } = useAuth();
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [directRefreshKey, setDirectRefreshKey] = useState(0);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [voteOpen, setVoteOpen] = useState(false);
@@ -155,8 +157,20 @@ function MobileChatRoom() {
   const fileInputRef = useRef(null);
   const messageInputRef = useRef(null);
   const messageRefs = useRef({});
-  const messages = useAsync(() => chatApi.messages(chatRoomId), [chatRoomId, refreshKey]);
-  const room = messages.data?.room;
+
+  // 모임 채팅 메시지
+  const messages = useAsync(
+    () => chatRoomId ? chatApi.messages(chatRoomId) : Promise.resolve(null),
+    [chatRoomId, refreshKey]
+  );
+  // 1:1 채팅 메시지
+  const directMessages = useAsync(
+    () => directRoomId ? chatApi.directMessages(directRoomId) : Promise.resolve(null),
+    [directRoomId, directRefreshKey]
+  );
+
+  const activeMessages = isDirectChat ? directMessages : messages;
+  const room = activeMessages.data?.room;
   const meeting = room?.meeting;
   const isRoomHost = String(meeting?.host?.id ?? "") === String(user?.id ?? "");
   const myRole = isRoomHost ? "host" : (meeting?.my_participant?.role || "member");
@@ -168,7 +182,7 @@ function MobileChatRoom() {
     const items = notices.data?.items || [];
     return items.find((item) => item.is_pinned) || items[0] || null;
   })();
-  const renderedMessages = messages.data?.items || [];
+  const renderedMessages = activeMessages.data?.items || [];
 
   const isSystemMessage = (msg) => {
     return ["notice", "system"].includes(msg?.message_type);
@@ -183,7 +197,7 @@ function MobileChatRoom() {
   };
 
   useLayoutEffect(() => {
-    if (!messages.data?.items) return undefined;
+    if (!activeMessages.data?.items) return undefined;
     const frame = window.requestAnimationFrame(() => {
       window.scrollTo({
         top: document.documentElement.scrollHeight,
@@ -191,19 +205,24 @@ function MobileChatRoom() {
       });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [messages.data?.items?.length]);
+  }, [activeMessages.data?.items?.length]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (document.hidden || sending || realtimeConnected) return;
-      setRefreshKey((value) => value + 1);
+      if (isDirectChat) {
+        setDirectRefreshKey((value) => value + 1);
+      } else {
+        setRefreshKey((value) => value + 1);
+      }
     }, 1500);
     return () => window.clearInterval(timer);
-  }, [realtimeConnected, sending]);
+  }, [realtimeConnected, sending, isDirectChat]);
 
+  // Supabase realtime - 모임 채팅
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !chatRoomId) {
-      setRealtimeConnected(false);
+      if (!isDirectChat) setRealtimeConnected(false);
       return undefined;
     }
 
@@ -229,14 +248,43 @@ function MobileChatRoom() {
         () => setRefreshKey((value) => value + 1)
       )
       .subscribe((status) => {
-        setRealtimeConnected(status === "SUBSCRIBED");
+        if (!isDirectChat) setRealtimeConnected(status === "SUBSCRIBED");
       });
 
     return () => {
-      setRealtimeConnected(false);
+      if (!isDirectChat) setRealtimeConnected(false);
       supabase.removeChannel(channel);
     };
-  }, [chatRoomId]);
+  }, [chatRoomId, isDirectChat]);
+
+  // Supabase realtime - 1:1 채팅
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase || !directRoomId) {
+      if (isDirectChat) setRealtimeConnected(false);
+      return undefined;
+    }
+
+    const channel = supabase
+      .channel(`mobile-direct-chat-${directRoomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "direct_chat_messages",
+          filter: `direct_chat_room_id=eq.${directRoomId}`
+        },
+        () => setDirectRefreshKey((value) => value + 1)
+      )
+      .subscribe((status) => {
+        if (isDirectChat) setRealtimeConnected(status === "SUBSCRIBED");
+      });
+
+    return () => {
+      if (isDirectChat) setRealtimeConnected(false);
+      supabase.removeChannel(channel);
+    };
+  }, [directRoomId, isDirectChat]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !meeting?.id) return undefined;
@@ -267,13 +315,21 @@ function MobileChatRoom() {
     setError("");
     setSending(true);
     try {
-      await chatApi.send(chatRoomId, {
-        content: content.trim(),
-        reply_to_message_id: replyTarget?.id || null
-      });
-      setContent("");
-      setReplyTarget(null);
-      setRefreshKey((value) => value + 1);
+      if (isDirectChat) {
+        // 1:1 채팅 전송
+        await chatApi.sendDirect(directRoomId, { content: content.trim() });
+        setContent("");
+        setDirectRefreshKey((value) => value + 1);
+      } else {
+        // 모임 채팅 전송
+        await chatApi.send(chatRoomId, {
+          content: content.trim(),
+          reply_to_message_id: replyTarget?.id || null
+        });
+        setContent("");
+        setReplyTarget(null);
+        setRefreshKey((value) => value + 1);
+      }
     } catch (sendError) {
       setError(sendError.response?.data?.message || "메시지 전송에 실패했습니다.");
     } finally {

@@ -8,6 +8,7 @@ from .report_routes import report_bp
 from .sport_routes import sport_bp
 from .user_routes import user_bp
 from .vote_routes import vote_bp
+from .chatbot_routes import chatbot_bp
 
 
 def register_blueprints(app):
@@ -21,3 +22,5 @@ def register_blueprints(app):
     app.register_blueprint(report_bp, url_prefix="/api/v1/reports")
     app.register_blueprint(admin_bp, url_prefix="/api/v1/admin")
     app.register_blueprint(vote_bp, url_prefix="/api/v1/votes")
+    app.register_blueprint(chatbot_bp, url_prefix="/api/v1/chatbot")
+
