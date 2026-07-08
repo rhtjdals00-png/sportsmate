@@ -222,5 +222,12 @@
     "action_type": "회원 관리",
     "description": "회원 고성민(ID 22)의 계정 활성화 상태 변경 작업을 수행했습니다.",
     "target_id": 22
+  },
+  {
+    "timestamp": "2026-07-08 16:28:53",
+    "admin": "ms",
+    "action_type": "설정 변경",
+    "description": "시스템 환경 설정을 변경했습니다. (기본 개설 최대 정원 변경: 6 ➔ 30)",
+    "target_id": null
   }
 ]
