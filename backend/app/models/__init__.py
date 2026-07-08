@@ -6,6 +6,7 @@ from .chat import ChatRoom, ChatMessage, ChatMessageRead, DirectChatRoom, Direct
 from .notifications import Notification, PushSubscription
 from .engagement import Review, Notice, Vote, VoteOption, VoteResponse, Attendance
 from .moderation import Report
+from .chatbot import ChatbotSession, ChatbotMessage
 
 __all__ = [
     "TimestampMixin",
@@ -30,4 +31,7 @@ __all__ = [
     "VoteResponse",
     "Attendance",
     "Report",
+    "ChatbotSession",
+    "ChatbotMessage",
 ]
+

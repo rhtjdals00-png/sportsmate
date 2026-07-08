@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, Search, Settings } from "lucide-react";
+import { ArrowLeft, Bell, Bot, Search, Settings } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 const titles = {
@@ -35,6 +35,15 @@ function MobileHeader({ title, showLogo = false, actions = null, showBack = true
       </Link>
       {actions || (
         <div className="mobile-header__actions">
+          <button
+            type="button"
+            className="mobile-header__chatbot-btn"
+            onClick={() => navigate("/chatbot")}
+            aria-label="AI 챗봇"
+          >
+            <Bot size={17} />
+            <span>AI</span>
+          </button>
           <Link to="/meetings" aria-label="검색">
             <Search size={20} />
           </Link>
@@ -46,6 +55,7 @@ function MobileHeader({ title, showLogo = false, actions = null, showBack = true
           </Link>
         </div>
       )}
+
     </header>
   );
 }

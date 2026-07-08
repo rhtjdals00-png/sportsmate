@@ -1,5 +1,16 @@
 [
   {
+    "timestamp": "2026-07-07 17:54:51",
+    "admin": "ms",
+    "title": "긴급 공지",
+    "message": "안녕하세요 생활맥주로 오세요 안와도 엔빵",
+    "link_url": "/notifications",
+    "target_type": "all",
+    "target_value": "",
+    "target_count": 11,
+    "send_push": true
+  },
+  {
     "timestamp": "2026-07-08 11:05:14",
     "admin": "임승찬",
     "title": "ㅎㅇ",
@@ -19,6 +30,39 @@
     "target_type": "role",
     "target_value": "admin",
     "target_count": 5,
+    "send_push": true
+  },
+  {
+    "timestamp": "2026-07-08 14:25:29",
+    "admin": "임승찬",
+    "title": "술 ㄱㄱ",
+    "message": "오늘 물회에 소주 ㄱㄱ",
+    "link_url": "/notifications",
+    "target_type": "role",
+    "target_value": "admin",
+    "target_count": 5,
+    "send_push": true
+  },
+  {
+    "timestamp": "2026-07-08 14:29:57",
+    "admin": "임승찬",
+    "title": "술 ㄱㄱ",
+    "message": "생활맥주로 6시까지",
+    "link_url": "/notifications",
+    "target_type": "role",
+    "target_value": "admin",
+    "target_count": 6,
+    "send_push": true
+  },
+  {
+    "timestamp": "2026-07-08 14:31:18",
+    "admin": "임승찬",
+    "title": "ㅎㅇㅋㅋ",
+    "message": "술 ㄱㄱ ㅋㅋ",
+    "link_url": "/notifications",
+    "target_type": "all",
+    "target_value": "",
+    "target_count": 13,
     "send_push": true
   }
 ]

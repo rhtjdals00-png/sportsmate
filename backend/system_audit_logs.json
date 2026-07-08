@@ -70,6 +70,34 @@
     "target_id": 21
   },
   {
+    "timestamp": "2026-07-07 17:49:34",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 엄준식(ID 21)의 계정 정지 처리 작업을 수행했습니다.",
+    "target_id": 21
+  },
+  {
+    "timestamp": "2026-07-07 17:49:57",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 엄준식(ID 21)의 계정 활성화 상태 변경 작업을 수행했습니다.",
+    "target_id": 21
+  },
+  {
+    "timestamp": "2026-07-07 17:50:17",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 엄준식(ID 21)의 권한을 admin(으)로 변경, 회원 개인 정보 수정 작업을 수행했습니다.",
+    "target_id": 21
+  },
+  {
+    "timestamp": "2026-07-07 17:54:51",
+    "admin": "ms",
+    "action_type": "단체 알림 발송",
+    "description": "대상 [전체 회원]에게 단체 공지 알림을 발송했습니다. 수신 대상: 11명, 제목: '긴급 공지'",
+    "target_id": null
+  },
+  {
     "timestamp": "2026-07-08 11:05:14",
     "admin": "임승찬",
     "action_type": "단체 알림 발송",
@@ -81,6 +109,143 @@
     "admin": "임승찬",
     "action_type": "단체 알림 발송",
     "description": "대상 [등급: admin]에게 단체 공지 알림을 발송했습니다. 수신 대상: 5명, 제목: '관리자 알림 테스트'",
+    "target_id": null
+  },
+  {
+    "timestamp": "2026-07-08 14:27:59",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 고성민(ID 22)의 권한을 admin(으)로 변경, 회원 개인 정보 수정 작업을 수행했습니다.",
+    "target_id": 22
+  },
+  {
+    "timestamp": "2026-07-08 15:00:28",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 재호(ID 58)의 계정 정지 처리 작업을 수행했습니다.",
+    "target_id": 58
+  },
+  {
+    "timestamp": "2026-07-08 15:00:32",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 재호(ID 58)의 계정 활성화 상태 변경 작업을 수행했습니다.",
+    "target_id": 58
+  },
+  {
+    "timestamp": "2026-07-08 15:14:49",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 엄준식(ID 21)의 계정 정지 처리 작업을 수행했습니다.",
+    "target_id": 21
+  },
+  {
+    "timestamp": "2026-07-08 15:18:59",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 엄준식(ID 21)의 계정 활성화 상태 변경 작업을 수행했습니다.",
+    "target_id": 21
+  },
+  {
+    "timestamp": "2026-07-08 15:19:14",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 엄준식(ID 21)의 권한을 admin(으)로 변경, 회원 개인 정보 수정 작업을 수행했습니다.",
+    "target_id": 21
+  },
+  {
+    "timestamp": "2026-07-08 15:22:15",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 엄준식(ID 21)의 계정 정지 처리 작업을 수행했습니다.",
+    "target_id": 21
+  },
+  {
+    "timestamp": "2026-07-08 15:22:25",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 엄준식(ID 21)의 계정 활성화 상태 변경 작업을 수행했습니다.",
+    "target_id": 21
+  },
+  {
+    "timestamp": "2026-07-08 15:22:32",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 엄준식(ID 21)의 권한을 admin(으)로 변경, 회원 개인 정보 수정 작업을 수행했습니다.",
+    "target_id": 21
+  },
+  {
+    "timestamp": "2026-07-08 15:24:17",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 엄준식(ID 21)의 계정 정지 처리 작업을 수행했습니다.",
+    "target_id": 21
+  },
+  {
+    "timestamp": "2026-07-08 15:24:23",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 엄준식(ID 21)의 계정 활성화 상태 변경 작업을 수행했습니다.",
+    "target_id": 21
+  },
+  {
+    "timestamp": "2026-07-08 15:24:29",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 엄준식(ID 21)의 권한을 admin(으)로 변경, 회원 개인 정보 수정 작업을 수행했습니다.",
+    "target_id": 21
+  },
+  {
+    "timestamp": "2026-07-08 15:28:38",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 고성민(ID 22)의 계정 정지 처리 작업을 수행했습니다.",
+    "target_id": 22
+  },
+  {
+    "timestamp": "2026-07-08 15:29:16",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 고성민(ID 22)의 계정 활성화 상태 변경 작업을 수행했습니다.",
+    "target_id": 22
+  },
+  {
+    "timestamp": "2026-07-08 15:29:20",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 고성민(ID 22)의 계정 정지 처리 작업을 수행했습니다.",
+    "target_id": 22
+  },
+  {
+    "timestamp": "2026-07-08 15:29:25",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 고성민(ID 22)의 계정 활성화 상태 변경 작업을 수행했습니다.",
+    "target_id": 22
+  },
+  {
+    "timestamp": "2026-07-08 16:28:53",
+    "admin": "ms",
+    "action_type": "설정 변경",
+    "description": "시스템 환경 설정을 변경했습니다. (기본 개설 최대 정원 변경: 6 ➔ 30)",
+    "timestamp": "2026-07-08 14:25:29",
+    "admin": "임승찬",
+    "action_type": "단체 알림 발송",
+    "description": "대상 [등급: admin]에게 단체 공지 알림을 발송했습니다. 수신 대상: 5명, 제목: '술 ㄱㄱ'",
+    "target_id": null
+  },
+  {
+    "timestamp": "2026-07-08 14:29:57",
+    "admin": "임승찬",
+    "action_type": "단체 알림 발송",
+    "description": "대상 [등급: admin]에게 단체 공지 알림을 발송했습니다. 수신 대상: 6명, 제목: '술 ㄱㄱ'",
+    "target_id": null
+  },
+  {
+    "timestamp": "2026-07-08 14:31:18",
+    "admin": "임승찬",
+    "action_type": "단체 알림 발송",
+    "description": "대상 [전체 회원]에게 단체 공지 알림을 발송했습니다. 수신 대상: 13명, 제목: 'ㅎㅇㅋㅋ'",
     "target_id": null
   }
 ]

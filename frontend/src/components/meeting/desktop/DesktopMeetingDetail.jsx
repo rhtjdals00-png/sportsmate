@@ -454,7 +454,7 @@ function DesktopMeetingDetail() {
 function getStatusLabel(status) {
   if (status === "open") return "모집중";
   if (status === "full") return "모집 마감";
-  if (status === "closed") return "기간 마감";
+  if (status === "closed") return "모집종료";
   if (status === "cancelled") return "취소됨";
   return "마감";
 }
@@ -476,7 +476,7 @@ function getActionLabel({ joining, isClosed, isFull, isHost, myParticipant }) {
   if (myParticipant?.status === "approved") return "참여중";
   if (myParticipant?.status === "rejected") return "신청 거절됨";
   if (isFull) return "모집 마감";
-  if (isClosed) return "기간 마감";
+  if (isClosed) return "모집종료";
   return "참가 신청";
 }
 

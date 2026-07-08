@@ -104,9 +104,12 @@ function StaticMapCard({ meeting }) {
 
     const timer = window.setTimeout(() => {
       setOriginLoading(true);
-      locationApi.searchPlaces({ query: keyword, size: 6 })
+      locationApi.searchPlaces({ keyword: keyword, size: 6 })
         .then((data) => setOriginResults(data.items || []))
-        .catch(() => setOriginResults([]))
+        .catch((error) => {
+          console.error('Location search error:', error);
+          setOriginResults([]);
+        })
         .finally(() => setOriginLoading(false));
     }, 300);
 

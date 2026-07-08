@@ -12,6 +12,7 @@ import MeetingCreatePage from "../pages/MeetingCreatePage.jsx";
 import MeetingEditPage from "../pages/MeetingEditPage.jsx";
 import ChatListPage from "../pages/ChatListPage.jsx";
 import ChatRoomPage from "../pages/ChatRoomPage.jsx";
+import ChatbotPage from "../pages/ChatbotPage.jsx";
 import MyPage from "../pages/MyPage.jsx";
 import ProfileEditPage from "../pages/ProfileEditPage.jsx";
 import AccountLinkPage from "../pages/AccountLinkPage.jsx";
@@ -62,6 +63,7 @@ function AppRouter() {
         <Route path="/chats" element={protect(<ChatListPage />)} />
         <Route path="/chats/direct/:directRoomId" element={protect(<ChatRoomPage />)} />
         <Route path="/chats/:chatRoomId" element={protect(<ChatRoomPage />)} />
+        <Route path="/chatbot" element={protect(<ChatbotPage />)} />
         <Route path="/notifications" element={protect(<NotificationsPage />)} />
         <Route path="/settings" element={protect(<AppSettingsPage />)} />
         <Route path="/map" element={<MapPage />} />

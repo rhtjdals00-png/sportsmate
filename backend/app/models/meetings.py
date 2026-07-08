@@ -27,7 +27,7 @@ class Meeting(db.Model, TimestampMixin):
     status = db.Column(db.String(30), default="open", nullable=False)
     suspended_at = db.Column(db.DateTime)
     approval_required = db.Column(db.Boolean, default=True, nullable=False)
-    cover_image_url = db.Column(db.String(500))
+    cover_image_url = db.Column(db.Text)
     view_count = db.Column(db.Integer, default=0, nullable=False)
 
     host = db.relationship("User", back_populates="hosted_meetings")
@@ -41,7 +41,7 @@ class Meeting(db.Model, TimestampMixin):
         if self.status == "full":
             return "모집 마감"
         if self.status == "closed":
-            return "기간 마감"
+            return "모집종료"
         if self.status == "cancelled":
             return "취소됨"
         if self.status == "suspended":
