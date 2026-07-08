@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { adminApi } from "../api/adminApi";
 import { User, Shield, Ban, CheckCircle } from "lucide-react";
+import { useResponsive } from "../hooks/useResponsive";
+import MobileAdminUsersPage from "../components/admin/mobile/MobileAdminUsersPage.jsx";
 
 // Mock database fallback for offline/empty states
 const mockUsers = [
@@ -14,6 +16,12 @@ const mockUsers = [
 
 function AdminUsersPage() {
   const navigate = useNavigate();
+  const { isMobile } = useResponsive();
+  
+  if (isMobile) {
+    return <MobileAdminUsersPage />;
+  }
+
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchField, setSearchField] = useState("all");

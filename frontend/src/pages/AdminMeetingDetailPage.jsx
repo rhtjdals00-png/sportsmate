@@ -16,6 +16,8 @@ import {
   RotateCcw
 } from "lucide-react";
 import { adminApi } from "../api/adminApi";
+import { useResponsive } from "../hooks/useResponsive";
+import MobileAdminMeetingDetailPage from "../components/admin/mobile/MobileAdminMeetingDetailPage.jsx";
 
 // Mock Database of meeting details mapped by meetingId
 const meetingDetailDb = {
@@ -120,6 +122,12 @@ const meetingDetailDb = {
 function AdminMeetingDetailPage() {
   const { meetingId } = useParams();
   const navigate = useNavigate();
+  const { isMobile } = useResponsive();
+
+  if (isMobile) {
+    return <MobileAdminMeetingDetailPage />;
+  }
+
   const [meetingData, setMeetingData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);

@@ -11,8 +11,16 @@ import {
   Layers
 } from "lucide-react";
 import { adminApi } from "../api/adminApi";
+import { useResponsive } from "../hooks/useResponsive";
+import MobileAdminBroadcastPage from "../components/admin/mobile/MobileAdminBroadcastPage.jsx";
 
 function AdminBroadcastPage() {
+  const { isMobile } = useResponsive();
+
+  if (isMobile) {
+    return <MobileAdminBroadcastPage />;
+  }
+
   const [loading, setLoading] = useState(false);
   const [logsLoading, setLogsLoading] = useState(false);
   const [logs, setLogs] = useState([]);
