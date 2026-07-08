@@ -133,6 +133,25 @@ function HostMeetingManagePage() {
   );
 }
 
+function formatMeetingDate(dateStr) {
+  if (!dateStr || dateStr === "일정 미정") return "일정 미정";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return new Intl.DateTimeFormat("ko-KR", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    }).format(d);
+  } catch {
+    return dateStr;
+  }
+}
+
 function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading, setNotice, submitNotice, cancelMeeting }) {
   const meetingDate = meeting.start_at || meeting.starts_at || meeting.time || "일정 미정";
   const current = meeting.current_participants ?? 0;
@@ -157,12 +176,11 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
           <div className="desktop-host-meeting-info">
             <span className="host-status-pill">모집중</span>
             <h2>{meeting.title}</h2>
-            <p><CalendarDays size={15} />{meetingDate}</p>
-            <p><MapPin size={15} />{place}</p>
-          </div>
-          <div className="desktop-host-meeting-meta">
-            <strong><Users size={17} />{current} / {max}명</strong>
-            <Link to={`/meetings/${meeting.id}`}>모임 상세 보기</Link>
+            <div className="desktop-host-meeting-details-grid">
+              <p><CalendarDays size={15} />{formatMeetingDate(meetingDate)}</p>
+              <p><MapPin size={15} />{place}</p>
+              <p><Users size={15} />참여 인원: {current} / {max}명</p>
+            </div>
           </div>
         </section>
 
