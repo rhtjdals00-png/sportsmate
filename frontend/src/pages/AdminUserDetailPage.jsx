@@ -19,6 +19,9 @@ import {
   Bell
 } from "lucide-react";
 
+import { useResponsive } from "../hooks/useResponsive";
+import MobileAdminUserDetailPage from "../components/admin/mobile/MobileAdminUserDetailPage.jsx";
+
 // Mock Database of user details mapped by userId
 const userDetailDb = {
   // 김민수 (Default / 1)
@@ -157,6 +160,12 @@ const userDetailDb = {
 function AdminUserDetailPage() {
   const { userId } = useParams();
   const navigate = useNavigate();
+  const { isMobile } = useResponsive();
+
+  if (isMobile) {
+    return <MobileAdminUserDetailPage />;
+  }
+
   const { user: currentUser } = useAuth();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);

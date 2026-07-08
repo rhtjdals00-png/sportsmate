@@ -14,6 +14,8 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { adminApi } from "../api/adminApi";
+import { useResponsive } from "../hooks/useResponsive";
+import MobileAdminAnalyticsPage from "../components/admin/mobile/MobileAdminAnalyticsPage.jsx";
 
 // Default/Fallback stats
 // Default/Fallback stats
@@ -44,6 +46,12 @@ const systemLogs = [
 ];
 
 function AdminAnalyticsPage() {
+  const { isMobile } = useResponsive();
+
+  if (isMobile) {
+    return <MobileAdminAnalyticsPage />;
+  }
+
   const [activeTab, setActiveTab] = useState("30일"); // Filter options: 오늘, 7일, 30일
   const [stats, setStats] = useState(initialStats);
   const [logs, setLogs] = useState(systemLogs);

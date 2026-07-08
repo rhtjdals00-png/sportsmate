@@ -39,6 +39,34 @@ function splitCommaText(value) {
     .filter(Boolean);
 }
 
+function formatVoteDateTimeOption(date, time) {
+  if (!date) return "";
+  const value = `${date}T${time || "00:00"}:00+09:00`;
+  const options = {
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+    timeZone: "Asia/Seoul"
+  };
+  if (time) {
+    options.hour = "2-digit";
+    options.minute = "2-digit";
+  }
+  return new Intl.DateTimeFormat("ko-KR", options).format(new Date(value));
+}
+
+function formatVoteDeadline(value) {
+  if (!value) return "종료일 없음";
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Seoul"
+  }).format(new Date(value));
+}
+
 function senderLabel(sender) {
   return sender?.nickname || sender?.name || "참여자";
 }
@@ -87,7 +115,15 @@ function MobileChatRoom() {
   const [voteOpen, setVoteOpen] = useState(false);
   const [voteMode, setVoteMode] = useState("list");
   const [voteRefreshKey, setVoteRefreshKey] = useState(0);
-  const [voteForm, setVoteForm] = useState({ title: "", options: ["참여", "불참"] });
+  const [voteForm, setVoteForm] = useState({
+    title: "",
+    options: ["참여", "불참"],
+    ends_at: "",
+    allow_multiple: false,
+    is_anonymous: true
+  });
+  const [voteKind, setVoteKind] = useState("general");
+  const [voteDateTime, setVoteDateTime] = useState({ date: "", time: "" });
   const [voteSubmitting, setVoteSubmitting] = useState(false);
   const [voteError, setVoteError] = useState("");
   const [voteNotice, setVoteNotice] = useState("");
@@ -133,6 +169,18 @@ function MobileChatRoom() {
     return items.find((item) => item.is_pinned) || items[0] || null;
   })();
   const renderedMessages = messages.data?.items || [];
+
+  const isSystemMessage = (msg) => {
+    return ["notice", "system"].includes(msg?.message_type);
+  };
+
+  const systemMessageText = (msg) => {
+    if (msg.message_type === "system") return msg.content;
+    if (msg.message_type !== "notice") return msg.content;
+    const pinnedNoticeText = pinnedNotice?.content || pinnedNotice?.title || "";
+    if (msg.content && !msg.content.endsWith(": 채팅 공지")) return msg.content;
+    return pinnedNoticeText ? `공지가 등록되었습니다: ${pinnedNoticeText}` : msg.content;
+  };
 
   useLayoutEffect(() => {
     if (!messages.data?.items) return undefined;
@@ -428,6 +476,48 @@ function MobileChatRoom() {
     setVoteOpen(true);
   };
 
+  const selectVoteKind = (kind) => {
+    setVoteKind(kind);
+    setVoteError("");
+    if (kind === "datetime") {
+      setVoteForm((current) => ({
+        ...current,
+        title: current.title || "모임 날짜/시간 투표",
+        options: current.options.length === 2 && current.options[0] === "참여" && current.options[1] === "불참" ? ["", ""] : current.options
+      }));
+    }
+  };
+
+  const appendVoteOption = (value) => {
+    const normalized = value.trim();
+    if (!normalized) return;
+    setVoteForm((current) => {
+      if (current.options.some((option) => option.trim() === normalized)) return current;
+      const emptyIndex = current.options.findIndex((option) => !option.trim());
+      if (emptyIndex >= 0) {
+        return {
+          ...current,
+          options: current.options.map((option, index) => index === emptyIndex ? normalized : option)
+        };
+      }
+      return {
+        ...current,
+        options: [...current.options, normalized]
+      };
+    });
+  };
+
+  const addDateTimeVoteOption = () => {
+    const option = formatVoteDateTimeOption(voteDateTime.date, voteDateTime.time);
+    if (!option) {
+      setVoteError("날짜를 먼저 선택해주세요.");
+      return;
+    }
+    appendVoteOption(option);
+    setVoteDateTime({ date: "", time: "" });
+    setVoteError("");
+  };
+
   const updateVoteOption = (index, value) => {
     setVoteForm((current) => ({
       ...current,
@@ -447,8 +537,21 @@ function MobileChatRoom() {
     setVoteError("");
     setVoteNotice("");
     try {
-      await meetingApi.createVote(meeting.id, { title: voteForm.title.trim(), options });
-      setVoteForm({ title: "", options: ["참여", "불참"] });
+      await meetingApi.createVote(meeting.id, {
+        title: voteForm.title.trim(),
+        options,
+        ends_at: voteForm.ends_at || null,
+        allow_multiple: voteForm.allow_multiple,
+        is_anonymous: voteForm.is_anonymous
+      });
+      setVoteForm({
+        title: "",
+        options: ["참여", "불참"],
+        ends_at: "",
+        allow_multiple: false,
+        is_anonymous: true
+      });
+      setVoteKind("general");
       setVoteMode("list");
       setVoteNotice("투표가 등록되었습니다.");
       setVoteRefreshKey((value) => value + 1);
@@ -610,129 +713,156 @@ function MobileChatRoom() {
                 return (
                   <div key={message.id} className="message-group">
                     {showDivider ? <div className="message-day-divider">{isTodayKst(message.created_at) ? "오늘" : formatMessageDate(message.created_at)}</div> : null}
-                    <div
-                      className={`message-row ${mine ? "mine" : ""} ${focusedMessageId === message.id ? "is-focused" : ""}`}
-                      ref={(node) => {
-                        if (node) messageRefs.current[message.id] = node;
-                        else delete messageRefs.current[message.id];
-                      }}
-                    >
-                      {!mine && (
-                        <div className="message-avatar">
-                          <button type="button" onClick={() => openUserProfile(message.sender)} aria-label="사용자 정보 보기">
-                            {message.sender?.profile_image_url ? <img src={message.sender.profile_image_url} alt="" /> : <UsersRound size={16} />}
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Options button for own messages (left of bubble) */}
-                      {mine && (
-                        <div className="mobile-msg-more-wrap">
-                          <button
-                            type="button"
-                            className="mobile-msg-more-btn"
-                            onClick={() => toggleOptionsMenu(message.id)}
-                            aria-label="메시지 옵션"
-                          >
-                            <MoreVertical size={16} />
-                          </button>
-                          {optionsMenuMessageId === message.id && (
-                            <div className="mobile-msg-options-menu" role="menu" onPointerDown={(e) => e.stopPropagation()}>
-                              <button type="button" role="menuitem" onClick={() => startReply(message)}>
-                                <Reply size={14} />
-                                답장하기
-                              </button>
-                              {canManageRoom && (
-                                <button type="button" role="menuitem" onClick={() => openNoticeDraft(message)}>
-                                  <Pin size={14} />
-                                  공지로 등록
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="message-content-wrap">
-                        {/* Reply reference (Rendered outside/above the main bubble) */}
-                        {hasReply && (
-                          <button
-                            className="mobile-reply-ref"
-                            type="button"
-                            onClick={() => focusReplySource(message.reply_to_message_id)}
-                          >
-                            <strong>{replySenderLabel(message)}</strong>
-                            <span>{replyContent(message)}</span>
-                          </button>
+                    {isSystemMessage(message) ? (
+                      <div 
+                        className="message-system-row" 
+                        ref={(node) => {
+                          if (node) messageRefs.current[message.id] = node;
+                          else delete messageRefs.current[message.id];
+                        }}
+                        style={{ display: 'flex', justifyContent: 'center', margin: '10px 0' }}
+                      >
+                        <span style={{
+                          background: '#f1f5f9',
+                          color: '#475569',
+                          fontSize: '12px',
+                          fontWeight: '800',
+                          padding: '6px 14px',
+                          borderRadius: '999px',
+                          textAlign: 'center',
+                          maxWidth: '85%',
+                          wordBreak: 'break-all',
+                          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+                          lineHeight: 1.4
+                        }}>
+                          {systemMessageText(message)}
+                        </span>
+                      </div>
+                    ) : (
+                      <div
+                        className={`message-row ${mine ? "mine" : ""} ${focusedMessageId === message.id ? "is-focused" : ""}`}
+                        ref={(node) => {
+                          if (node) messageRefs.current[message.id] = node;
+                          else delete messageRefs.current[message.id];
+                        }}
+                      >
+                        {!mine && (
+                          <div className="message-avatar">
+                            <button type="button" onClick={() => openUserProfile(message.sender)} aria-label="사용자 정보 보기">
+                              {message.sender?.profile_image_url ? <img src={message.sender.profile_image_url} alt="" /> : <UsersRound size={16} />}
+                            </button>
+                          </div>
                         )}
 
-                        <div className={`message-bubble ${mine ? "mine" : ""} ${message.message_type === "image" ? "photo-bubble" : ""} ${message.message_type === "location" ? "location-bubble" : ""}`}>
-                          {!mine && <span className="message-sender-name">{senderLabel(message.sender)}</span>}
-                          {message.message_type === "image" ? (
-                            <figure className="mobile-photo-message" onClick={() => setActivePhotoUrl(message.attachment_url)} style={{ cursor: 'pointer' }}>
-                              <img src={message.attachment_url} alt={message.attachment_name || "사진"} />
-                            </figure>
-                          ) : message.message_type === "location" ? (
-                            <div className="mobile-location-message-wrap">
-                              <a className="mobile-location-message" href={mapUrl(message)} target="_blank" rel="noreferrer">
-                                <MapPin size={18} />
-                                <span>
-                                  <strong>{message.location_label || "공유한 위치"}</strong>
-                                  <small>{message.content}</small>
-                                </span>
-                              </a>
-                              <div className="mobile-location-iframe-wrap">
-                                <iframe
-                                  src={`https://maps.google.com/maps?q=${message.location_latitude},${message.location_longitude}&z=15&output=embed`}
-                                  width="100%"
-                                  height="140"
-                                  style={{ border: 0, borderRadius: '10px', marginTop: '6px', display: 'block' }}
-                                  allowFullScreen=""
-                                  loading="lazy"
-                                  title="Shared Location Map"
-                                ></iframe>
-                              </div>
-                            </div>
-                          ) : (
-                            <p>{message.content}</p>
-                          )}
-                        </div>
-                        <div className="message-meta">
-                          {message.message_type !== "notice" && (
-                            <span className="read-count">{Number(message.read_count || 0)} 읽음</span>
-                          )}
-                          <time>{formatMessageTime(message.created_at)}</time>
-                        </div>
-                      </div>
-
-                      {/* Options button for others' messages (right of bubble) */}
-                      {!mine && (
-                        <div className="mobile-msg-more-wrap">
-                          <button
-                            type="button"
-                            className="mobile-msg-more-btn"
-                            onClick={() => toggleOptionsMenu(message.id)}
-                            aria-label="메시지 옵션"
-                          >
-                            <MoreVertical size={16} />
-                          </button>
-                          {optionsMenuMessageId === message.id && (
-                            <div className="mobile-msg-options-menu" role="menu" onPointerDown={(e) => e.stopPropagation()}>
-                              <button type="button" role="menuitem" onClick={() => startReply(message)}>
-                                <Reply size={14} />
-                                답장하기
-                              </button>
-                              {canManageRoom && (
-                                <button type="button" role="menuitem" onClick={() => openNoticeDraft(message)}>
-                                  <Pin size={14} />
-                                  공지로 등록
+                        {/* Options button for own messages (left of bubble) */}
+                        {mine && (
+                          <div className="mobile-msg-more-wrap">
+                            <button
+                              type="button"
+                              className="mobile-msg-more-btn"
+                              onClick={() => toggleOptionsMenu(message.id)}
+                              aria-label="메시지 옵션"
+                            >
+                              <MoreVertical size={16} />
+                            </button>
+                            {optionsMenuMessageId === message.id && (
+                              <div className="mobile-msg-options-menu" role="menu" onPointerDown={(e) => e.stopPropagation()}>
+                                <button type="button" role="menuitem" onClick={() => startReply(message)}>
+                                  <Reply size={14} />
+                                  답장하기
                                 </button>
-                              )}
-                            </div>
+                                {canManageRoom && (
+                                  <button type="button" role="menuitem" onClick={() => openNoticeDraft(message)}>
+                                    <Pin size={14} />
+                                    공지로 등록
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="message-content-wrap">
+                          {/* Reply reference (Rendered outside/above the main bubble) */}
+                          {hasReply && (
+                            <button
+                              className="mobile-reply-ref"
+                              type="button"
+                              onClick={() => focusReplySource(message.reply_to_message_id)}
+                            >
+                              <strong>{replySenderLabel(message)}</strong>
+                              <span>{replyContent(message)}</span>
+                            </button>
                           )}
+
+                          <div className={`message-bubble ${mine ? "mine" : ""} ${message.message_type === "image" ? "photo-bubble" : ""} ${message.message_type === "location" ? "location-bubble" : ""}`}>
+                            {!mine && <span className="message-sender-name">{senderLabel(message.sender)}</span>}
+                            {message.message_type === "image" ? (
+                              <figure className="mobile-photo-message" onClick={() => setActivePhotoUrl(message.attachment_url)} style={{ cursor: 'pointer' }}>
+                                <img src={message.attachment_url} alt={message.attachment_name || "사진"} />
+                              </figure>
+                            ) : message.message_type === "location" ? (
+                              <div className="mobile-location-message-wrap">
+                                <a className="mobile-location-message" href={mapUrl(message)} target="_blank" rel="noreferrer">
+                                  <MapPin size={18} />
+                                  <span>
+                                    <strong>{message.location_label || "공유한 위치"}</strong>
+                                    <small>{message.content}</small>
+                                  </span>
+                                </a>
+                                <div className="mobile-location-iframe-wrap">
+                                  <iframe
+                                    src={`https://maps.google.com/maps?q=${message.location_latitude},${message.location_longitude}&z=15&output=embed`}
+                                    width="100%"
+                                    height="140"
+                                    style={{ border: 0, borderRadius: '10px', marginTop: '6px', display: 'block' }}
+                                    allowFullScreen=""
+                                    loading="lazy"
+                                    title="Shared Location Map"
+                                  ></iframe>
+                                </div>
+                              </div>
+                            ) : (
+                              <p>{message.content}</p>
+                            )}
+                          </div>
+                          <div className="message-meta">
+                            {message.message_type !== "notice" && (
+                              <span className="read-count">{Number(message.read_count || 0)} 읽음</span>
+                            )}
+                            <time>{formatMessageTime(message.created_at)}</time>
+                          </div>
                         </div>
-                      )}
-                    </div>
+
+                        {/* Options button for others' messages (right of bubble) */}
+                        {!mine && (
+                          <div className="mobile-msg-more-wrap">
+                            <button
+                              type="button"
+                              className="mobile-msg-more-btn"
+                              onClick={() => toggleOptionsMenu(message.id)}
+                              aria-label="메시지 옵션"
+                            >
+                              <MoreVertical size={16} />
+                            </button>
+                            {optionsMenuMessageId === message.id && (
+                              <div className="mobile-msg-options-menu" role="menu" onPointerDown={(e) => e.stopPropagation()}>
+                                <button type="button" role="menuitem" onClick={() => startReply(message)}>
+                                  <Reply size={14} />
+                                  답장하기
+                                </button>
+                                {canManageRoom && (
+                                  <button type="button" role="menuitem" onClick={() => openNoticeDraft(message)}>
+                                    <Pin size={14} />
+                                    공지로 등록
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -840,14 +970,133 @@ function MobileChatRoom() {
             {voteNotice ? <p className="chat-vote-modal__notice">{voteNotice}</p> : null}
             {voteMode === "create" ? (
               <form className="chat-vote-create" onSubmit={createVote}>
+                <div className="chat-vote-create__type" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '4px' }}>
+                  <button 
+                    type="button" 
+                    className={voteKind === "general" ? "active" : ""} 
+                    onClick={() => selectVoteKind("general")}
+                    style={{
+                      height: '40px',
+                      borderRadius: '12px',
+                      border: '1px solid',
+                      borderColor: voteKind === "general" ? 'var(--mobile-primary)' : '#e2e8f0',
+                      background: voteKind === "general" ? 'rgba(79, 70, 229, 0.08)' : '#fff',
+                      color: voteKind === "general" ? 'var(--mobile-primary)' : '#64748b',
+                      fontSize: '13px',
+                      fontWeight: '800'
+                    }}
+                  >
+                    일반 투표
+                  </button>
+                  <button 
+                    type="button" 
+                    className={voteKind === "datetime" ? "active" : ""} 
+                    onClick={() => selectVoteKind("datetime")}
+                    style={{
+                      height: '40px',
+                      borderRadius: '12px',
+                      border: '1px solid',
+                      borderColor: voteKind === "datetime" ? 'var(--mobile-primary)' : '#e2e8f0',
+                      background: voteKind === "datetime" ? 'rgba(79, 70, 229, 0.08)' : '#fff',
+                      color: voteKind === "datetime" ? 'var(--mobile-primary)' : '#64748b',
+                      fontSize: '13px',
+                      fontWeight: '800'
+                    }}
+                  >
+                    날짜/시간 투표
+                  </button>
+                </div>
                 <label>투표 제목<input value={voteForm.title} onChange={(event) => setVoteForm({ ...voteForm, title: event.target.value })} placeholder="예: 오늘 참석 여부" /></label>
+                {voteKind === "datetime" ? (
+                  <div style={{
+                    background: '#f8fafc',
+                    borderRadius: '14px',
+                    padding: '12px',
+                    border: '1px solid #f1f5f9',
+                    display: 'grid',
+                    gap: '10px'
+                  }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <label>
+                        날짜
+                        <input 
+                          type="date" 
+                          value={voteDateTime.date} 
+                          onChange={(event) => setVoteDateTime((current) => ({ ...current, date: event.target.value }))} 
+                          style={{ boxSizing: 'border-box', width: '100%', minHeight: '40px', fontSize: '14px' }}
+                        />
+                      </label>
+                      <label>
+                        시간
+                        <input 
+                          type="time" 
+                          value={voteDateTime.time} 
+                          onChange={(event) => setVoteDateTime((current) => ({ ...current, time: event.target.value }))} 
+                          style={{ boxSizing: 'border-box', width: '100%', minHeight: '40px', fontSize: '14px' }}
+                        />
+                      </label>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={addDateTimeVoteOption} 
+                      disabled={!voteDateTime.date}
+                      style={{
+                        minHeight: '38px',
+                        borderRadius: '10px',
+                        border: '1px solid var(--mobile-primary)',
+                        background: '#fff',
+                        color: 'var(--mobile-primary)',
+                        fontSize: '12px',
+                        fontWeight: '800',
+                        cursor: voteDateTime.date ? 'pointer' : 'not-allowed',
+                        opacity: voteDateTime.date ? 1 : 0.6
+                      }}
+                    >
+                      선택지 추가
+                    </button>
+                    <p style={{ margin: 0, fontSize: '11px', color: '#64748b', lineHeight: 1.4 }}>
+                      날짜와 시간을 고른 뒤 선택지로 추가해주세요. 여러 후보 시간을 빠르게 등록할 수 있습니다.
+                    </p>
+                  </div>
+                ) : null}
                 <div>
                   {voteForm.options.map((option, index) => (
                     <label key={index}>선택지 {index + 1}<input value={option} onChange={(event) => updateVoteOption(index, event.target.value)} /></label>
                   ))}
                 </div>
                 <button type="button" onClick={() => setVoteForm((current) => ({ ...current, options: [...current.options, ""] }))}>선택지 추가</button>
-                <button type="submit" disabled={voteSubmitting}>{voteSubmitting ? "등록 중" : "투표 등록"}</button>
+                
+                <div style={{ display: 'grid', gap: '10px', margin: '8px 0', borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
+                  <label>
+                    투표 종료일자
+                    <input 
+                      type="datetime-local" 
+                      value={voteForm.ends_at} 
+                      onChange={(event) => setVoteForm({ ...voteForm, ends_at: event.target.value })} 
+                      style={{ boxSizing: 'border-box', width: '100%', minHeight: '42px' }}
+                    />
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={voteForm.allow_multiple} 
+                      onChange={(event) => setVoteForm({ ...voteForm, allow_multiple: event.target.checked })} 
+                      style={{ width: '18px', height: '18px', margin: 0 }}
+                    /> 
+                    복수 선택 허용
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={!voteForm.is_anonymous} 
+                      onChange={(event) => setVoteForm({ ...voteForm, is_anonymous: !event.target.checked })} 
+                      style={{ width: '18px', height: '18px', margin: 0 }}
+                    /> 
+                    공개 투표
+                  </label>
+                </div>
+
+                <button type="submit" disabled={voteSubmitting}>{voteSubmitting ? "등록 중..." : "투표 등록"}</button>
               </form>
             ) : votes.loading ? (
               <p>투표를 불러오는 중입니다.</p>
@@ -856,7 +1105,9 @@ function MobileChatRoom() {
                 {votes.data.items.map((vote) => (
                   <article key={vote.id}>
                     <strong>{vote.title}</strong>
-                    <p>총 {vote.options.reduce((sum, option) => sum + Number(option.response_count || 0), 0)}명 참여</p>
+                    <small style={{ display: 'block', fontSize: '11px', color: '#64748b', marginTop: '3px', marginBottom: '8px' }}>
+                      총 {vote.options.reduce((sum, option) => sum + Number(option.response_count || 0), 0)}표 · {vote.allow_multiple ? "복수 선택" : "단일 선택"} · {vote.is_anonymous ? "비공개" : "공개"} · {formatVoteDeadline(vote.ends_at)}
+                    </small>
                     <div>
                       {vote.options.map((option) => (
                         <button type="button" key={option.id} className={Number(vote.selected_option_id) === Number(option.id) ? "selected" : ""} onClick={() => participateVote(vote.id, option.id)}>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { CalendarClock, Eye, LockKeyhole, MessageCircle, UserRound, Users } from "lucide-react";
+import { CalendarClock, Eye, LockKeyhole, MessageCircle, UserRound, Users, ChevronDown, Star, Crown } from "lucide-react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import Badge from "../../common/Badge.jsx";
 import Button from "../../common/Button.jsx";
@@ -25,6 +25,7 @@ function MobileMeetingDetail() {
   const [reviewing, setReviewing] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [checkingAttendance, setCheckingAttendance] = useState(false);
+  const [hostProfileOpen, setHostProfileOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId, refreshKey]);
   const detailMeeting = detail.data?.meeting;
@@ -63,6 +64,36 @@ function MobileMeetingDetail() {
   const canJoin = !isHost && !isApprovedParticipant && !isPendingParticipant && !isClosed && !isFull && !joining;
   const chatRoomId = meeting.chat_room_id || location.state?.chatRoomId;
   const canViewMemberContent = isHost || viewerStatus === "approved";
+
+  const partBadge = (() => {
+    const myParticipant = meeting?.my_participant;
+    if (!myParticipant) return null;
+
+    if (myParticipant.role === "host") {
+      return { 
+        text: (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
+            <Crown size={12} style={{ fill: "currentColor" }} />
+            내가 방장
+          </span>
+        ), 
+        tone: "primary" 
+      };
+    }
+    if (myParticipant.status === "pending") {
+      return { text: "신청 대기중", tone: "warning" };
+    }
+    if (myParticipant.status === "approved") {
+      return { text: "참여중", tone: "success" };
+    }
+    if (myParticipant.status === "rejected") {
+      return { text: "신청 거절됨", tone: "danger" };
+    }
+    if (myParticipant.status === "cancelled") {
+      return { text: "신청 취소됨", tone: "slate" };
+    }
+    return null;
+  })();
 
   const joinMeeting = async () => {
     if (!isAuthenticated) {
@@ -153,8 +184,9 @@ function MobileMeetingDetail() {
         </div>
         <div className="detail-card">
           <div className="meeting-card__top">
-            <Badge tone="success">{meeting.status === "open" ? "모집중" : "모집마감"}</Badge>
+            <Badge tone={meeting.status === "open" ? "success" : "slate"}>{meeting.status === "open" ? "모집중" : "모집마감"}</Badge>
             <Badge tone="sky">{formatMeetingType(meeting.meeting_type)}</Badge>
+            {partBadge && <Badge tone={partBadge.tone}>{partBadge.text}</Badge>}
           </div>
           <p>{meeting.description}</p>
           <dl className="info-list">
@@ -177,8 +209,115 @@ function MobileMeetingDetail() {
               <span>조회 {meeting.view_count || 0}</span>
             </div>
           </dl>
+
+          {/* 방장 상세 프로필 아코디언 */}
+          <div style={{ borderTop: "1px solid #f1f5f9", marginTop: "14px", paddingTop: "12px" }}>
+            <button 
+              type="button" 
+              onClick={() => setHostProfileOpen(!hostProfileOpen)}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "none",
+                border: 0,
+                padding: 0,
+                textAlign: "left",
+                cursor: "pointer"
+              }}
+            >
+              <span style={{ fontSize: "13px", fontWeight: "800", color: "#475569", display: "flex", alignItems: "center", gap: "6px" }}>
+                <UserRound size={15} style={{ color: "var(--mobile-primary)" }} />
+                방장 상세 프로필 {hostProfileOpen ? "접기" : "보기"}
+              </span>
+              <ChevronDown 
+                size={16} 
+                style={{ 
+                  color: "#94a3b8", 
+                  transition: "transform 0.2s ease",
+                  transform: hostProfileOpen ? "rotate(180deg)" : "rotate(0)" 
+                }} 
+              />
+            </button>
+
+            {hostProfileOpen && (
+              <div 
+                style={{ 
+                  marginTop: "12px", 
+                  display: "grid",
+                  gap: "10px",
+                  animation: "mobileChatSlideDown 200ms ease both"
+                }}
+              >
+                {/* 평점 및 통계 그리드 */}
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "3px", backgroundColor: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "4px 8px" }}>
+                    <Star size={13} style={{ color: "#fbbf24", fill: "#fbbf24" }} />
+                    <strong style={{ fontSize: "12px", color: "#b45309" }}>
+                      {Number((meeting.host_summary || {}).rating_average || 0).toFixed(1)}
+                    </strong>
+                    <span style={{ fontSize: "10px", color: "#d97706" }}>/ 5.0</span>
+                  </div>
+                  
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "6px", flex: 1, textAlign: "center" }}>
+                    <div style={{ background: "#f8fafc", borderRadius: "8px", padding: "4px 0" }}>
+                      <span style={{ fontSize: "9px", color: "#64748b", display: "block" }}>개설</span>
+                      <strong style={{ fontSize: "10px", color: "#334155" }}>{(meeting.host_summary || {}).hosted_count || 0}개</strong>
+                    </div>
+                    <div style={{ background: "#f8fafc", borderRadius: "8px", padding: "4px 0" }}>
+                      <span style={{ fontSize: "9px", color: "#64748b", display: "block" }}>진행</span>
+                      <strong style={{ fontSize: "10px", color: "#334155" }}>{(meeting.host_summary || {}).active_hosted_count || 0}개</strong>
+                    </div>
+                    <div style={{ background: "#f8fafc", borderRadius: "8px", padding: "4px 0" }}>
+                      <span style={{ fontSize: "9px", color: "#64748b", display: "block" }}>마감</span>
+                      <strong style={{ fontSize: "10px", color: "#334155" }}>{(meeting.host_summary || {}).completed_hosted_count || 0}개</strong>
+                    </div>
+                    <div style={{ background: "#f8fafc", borderRadius: "8px", padding: "4px 0" }}>
+                      <span style={{ fontSize: "9px", color: "#64748b", display: "block" }}>후기</span>
+                      <strong style={{ fontSize: "10px", color: "#334155" }}>{(meeting.host_summary || {}).review_count || 0}개</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 소개글 */}
+                <p style={{ margin: 0, fontSize: "12px", color: "#475569", lineHeight: "1.45" }}>
+                  {(meeting.host_summary || {}).bio || "등록된 방장 소개글이 없습니다."}
+                </p>
+
+                {/* 태그 리스트 */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "2px" }}>
+                  {(meeting.host_summary || {}).region && (
+                    <span style={{ fontSize: "10px", background: "#eff6ff", color: "#1d4ed8", padding: "2px 6px", borderRadius: "4px", fontWeight: "800" }}>
+                      {(meeting.host_summary || {}).region}
+                    </span>
+                  )}
+                  {(meeting.host_summary || {}).exercise_level && (
+                    <span style={{ fontSize: "10px", background: "#ecfdf5", color: "#047857", padding: "2px 6px", borderRadius: "4px", fontWeight: "800" }}>
+                      {(meeting.host_summary || {}).exercise_level === "beginner" ? "입문" : (meeting.host_summary || {}).exercise_level === "intermediate" ? "중급" : "상급"}
+                    </span>
+                  )}
+                  {(meeting.host_summary || {}).preferred_sports && (
+                    <span style={{ fontSize: "10px", background: "#f5f3ff", color: "#5b21b6", padding: "2px 6px", borderRadius: "4px", fontWeight: "800" }}>
+                      {(meeting.host_summary || {}).preferred_sports}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-        <StaticMapCard meeting={meeting} />
+        {canViewMemberContent ? (
+          <StaticMapCard meeting={meeting} />
+        ) : (
+          <section className="detail-card member-only-card" style={{ marginBottom: '14px' }}>
+            <LockKeyhole size={22} />
+            <div>
+              <h2>장소 정보</h2>
+              <p>상세 장소 및 지도는 참여 승인 후 확인할 수 있습니다.</p>
+            </div>
+          </section>
+        )}
         {canViewMemberContent ? (
           <>
             <section className="detail-card">
@@ -210,7 +349,24 @@ function MobileMeetingDetail() {
                 ))}
                 {!votes.loading && !votes.data?.items?.length && <p>진행 중인 투표가 없습니다.</p>}
               </div>
-              {isAuthenticated && <Button type="button" variant="secondary" onClick={checkAttendance} disabled={checkingAttendance}>{checkingAttendance ? "처리 중..." : "출석 체크"}</Button>}
+            </section>
+
+            <section className="detail-card">
+              <h2>출석 체크</h2>
+              <p style={{ fontSize: "12px", color: "#64748b", marginBottom: "12px", lineHeight: "1.4" }}>
+                모임 참여가 완료되었다면 본인의 출석 현황을 확인하여 반영해 주세요.
+              </p>
+              {isAuthenticated && (
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  onClick={checkAttendance} 
+                  disabled={checkingAttendance}
+                  style={{ width: "100%" }}
+                >
+                  {checkingAttendance ? "처리 중..." : "출석 체크 하기"}
+                </Button>
+              )}
             </section>
           </>
         ) : (
