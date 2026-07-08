@@ -1,8 +1,16 @@
 import { useState, useEffect } from "react";
 import { Settings, Save, RefreshCw, Shield, Bell, HeartHandshake, Database, Search, Calendar, ChevronDown, X } from "lucide-react";
 import { adminApi } from "../api/adminApi";
+import { useResponsive } from "../hooks/useResponsive";
+import MobileAdminSettingsPage from "../components/admin/mobile/MobileAdminSettingsPage.jsx";
 
 function AdminSettingsPage() {
+  const { isMobile } = useResponsive();
+
+  if (isMobile) {
+    return <MobileAdminSettingsPage />;
+  }
+
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState({
     siteName: "SportsMate",

@@ -11,8 +11,16 @@ import {
   AlertCircle
 } from "lucide-react";
 import { adminApi } from "../api/adminApi";
+import { useResponsive } from "../hooks/useResponsive";
+import MobileAdminAuditLogsPage from "../components/admin/mobile/MobileAdminAuditLogsPage.jsx";
 
 export default function AdminAuditLogsPage() {
+  const { isMobile } = useResponsive();
+
+  if (isMobile) {
+    return <MobileAdminAuditLogsPage />;
+  }
+
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");

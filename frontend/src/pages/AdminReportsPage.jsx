@@ -1,16 +1,24 @@
 import { useState, useEffect } from "react";
 import { adminApi } from "../api/adminApi";
 import { CheckCircle, AlertTriangle } from "lucide-react";
+import { useResponsive } from "../hooks/useResponsive";
+import MobileAdminReportsPage from "../components/admin/mobile/MobileAdminReportsPage.jsx";
 
 // Mock reports database
 const mockReports = [
-  { id: 1, type: "욕설", target: "User_FC02", reporter: "킥마스터", reason: "대화방에서 지속적인 언어폭력과 인격 모독을 자행함", date: "2023.10.27", status: "대기 중" },
+  { id: 1, type: "욕설", target: "User_FC02", reporter: "킥마스터", reason: "대화방에서 지속적인 언어폭력 and 인격 모독을 자행함", date: "2023.10.27", status: "대기 중" },
   { id: 2, type: "노쇼", target: "러닝초보", reporter: "야간러너", date: "2023.10.26", reason: "모임 시간 직전 무단 탈퇴 후 당일 연락 두절", status: "대기 중" },
   { id: 3, type: "기타", target: "스팸계정99", reporter: "농구조아", date: "2023.10.25", reason: "프로필 소개란에 음란성 도배 광고 링크 게재", status: "처리 완료" },
   { id: 4, type: "욕설", target: "화난사람", reporter: "테니스킹", date: "2023.10.24", reason: "댓글란에 비속어 작성 및 시비조 댓글 반복 작성", status: "처리 완료" }
 ];
 
 function AdminReportsPage() {
+  const { isMobile } = useResponsive();
+
+  if (isMobile) {
+    return <MobileAdminReportsPage />;
+  }
+
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchField, setSearchField] = useState("all");

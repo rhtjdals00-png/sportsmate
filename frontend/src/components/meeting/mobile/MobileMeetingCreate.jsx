@@ -250,7 +250,7 @@ function MobileMeetingCreate() {
     }
     const timer = window.setTimeout(() => {
       setAddressLoading(true);
-      locationApi.searchPlaces({ keyword: addressKeyword.trim(), size: 8 })
+      locationApi.searchPlaces({ query: addressKeyword.trim(), size: 8 })
         .then((data) => setAddressResults(data.items || []))
         .catch(() => setAddressResults([]))
         .finally(() => setAddressLoading(false));
