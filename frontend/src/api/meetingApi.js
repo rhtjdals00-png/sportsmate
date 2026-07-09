@@ -20,6 +20,8 @@ export const meetingApi = {
   createNotice: (id, payload) => apiClient.post(`/meetings/${id}/notices`, payload).then((res) => res.data),
   votes: (id) => apiClient.get(`/meetings/${id}/votes`).then((res) => res.data),
   createVote: (id, payload) => apiClient.post(`/meetings/${id}/votes`, payload).then((res) => res.data),
+  deleteNotice: (meetingId, noticeId) => apiClient.delete(`/meetings/${meetingId}/notices/${noticeId}`).then((res) => res.data),
+  deleteVote: (meetingId, voteId) => apiClient.delete(`/meetings/${meetingId}/votes/${voteId}`).then((res) => res.data),
   attendance: (id) => apiClient.get(`/meetings/${id}/attendance`).then((res) => res.data),
   checkAttendance: (id, payload = {}) => apiClient.post(`/meetings/${id}/attendance/check`, payload).then((res) => res.data),
   getConfig: () => apiClient.get("/meetings/config").then((res) => res.data)

@@ -612,6 +612,7 @@
 
 .desktop-meeting-row__thumb,
 .desktop-meeting-map__thumb {
+  position: relative;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -883,6 +884,7 @@
 }
 
 .desktop-meeting-detail__hero {
+  position: relative;
   display: grid;
   min-height: 360px;
   place-items: center;
@@ -899,6 +901,20 @@
 .desktop-meeting-detail__hero span {
   font-size: 24px;
   font-weight: 950;
+}
+
+.desktop-meeting-detail__hero .sport-thumbnail-label {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  color: #ffffff;
+  font-size: 52px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
+  text-shadow: 0 3px 14px rgba(15, 23, 42, 0.44);
+  white-space: nowrap;
 }
 
 .desktop-meeting-detail__pictogram {

@@ -1,17 +1,24 @@
 import { useEffect, useState } from "react";
 
 function AppLoader() {
-  const [visible, setVisible] = useState(true);
-  const [mounted, setMounted] = useState(true);
+  const isCallbackRoute = typeof window !== "undefined" && window.location.pathname.startsWith("/auth/callback");
+  const isAlreadyShown = (typeof window !== "undefined" && Boolean(window.__app_loader_shown)) || isCallbackRoute;
+
+  const [visible, setVisible] = useState(!isAlreadyShown);
+  const [mounted, setMounted] = useState(!isAlreadyShown);
 
   useEffect(() => {
+    if (isAlreadyShown) return;
+    if (typeof window !== "undefined") {
+      window.__app_loader_shown = true;
+    }
     const hideTimer = window.setTimeout(() => setVisible(false), 900);
     const unmountTimer = window.setTimeout(() => setMounted(false), 1500);
     return () => {
       window.clearTimeout(hideTimer);
       window.clearTimeout(unmountTimer);
     };
-  }, []);
+  }, [isAlreadyShown]);
 
   if (!mounted) return null;
 

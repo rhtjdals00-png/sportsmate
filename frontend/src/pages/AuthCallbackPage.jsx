@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 
@@ -63,6 +64,14 @@ function AuthCallbackPage() {
         <strong>SportsMate</strong>
         <p>{message}</p>
       </section>
+
+      {/* 소셜 로그인 진행 중 회전하는 로딩 모달 스피너 */}
+      <div className="mobile-logout-modal-overlay">
+        <div className="mobile-logout-modal-content">
+          <Loader2 size={36} className="mobile-logout-spinner" />
+          <p>소셜 로그인 중입니다...</p>
+        </div>
+      </div>
     </>
   );
 }

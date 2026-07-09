@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import Button from "../components/common/Button.jsx";
 import DesktopAuthPage from "../components/auth/desktop/DesktopAuthPage.jsx";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
@@ -88,6 +89,16 @@ function LoginPage() {
         <SocialLoginButtons />
         <Link to="/register">계정 만들기</Link>
       </form>
+
+      {/* 로그인 시도 중 모달 로딩 팝업 */}
+      {loading && (
+        <div className="mobile-logout-modal-overlay">
+          <div className="mobile-logout-modal-content">
+            <Loader2 size={36} className="mobile-logout-spinner" />
+            <p>로그인 중입니다...</p>
+          </div>
+        </div>
+      )}
     </>
   );
 }

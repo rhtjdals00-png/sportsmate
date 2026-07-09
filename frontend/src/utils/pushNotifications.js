@@ -39,11 +39,33 @@ export async function enablePushNotifications() {
   const { publicKey } = await notificationApi.pushPublicKey();
   if (!publicKey) throw new Error("푸시 알림 키가 아직 서버에 설정되지 않았습니다.");
 
-  const existing = await registration.pushManager.getSubscription();
-  const subscription = existing || await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(publicKey)
-  });
+  let subscription = await registration.pushManager.getSubscription();
+  const currentKey = urlBase64ToUint8Array(publicKey);
+
+  if (subscription) {
+    const existingKey = subscription.options.applicationServerKey;
+    let keyMismatch = false;
+    if (existingKey) {
+      const existingKeyArr = new Uint8Array(existingKey);
+      if (existingKeyArr.length !== currentKey.length || !existingKeyArr.every((val, i) => val === currentKey[i])) {
+        keyMismatch = true;
+      }
+    } else {
+      keyMismatch = true;
+    }
+
+    if (keyMismatch) {
+      await subscription.unsubscribe();
+      subscription = null;
+    }
+  }
+
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: currentKey
+    });
+  }
 
   const saved = await notificationApi.savePushSubscription(subscription.toJSON());
   localStorage.setItem("sportsmate_push_subscription_id", String(saved.subscription_id));

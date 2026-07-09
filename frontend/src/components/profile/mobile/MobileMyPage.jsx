@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { CalendarCheck, Check, Dumbbell, Footprints, MapPin, MessageCircle, Pencil, ShieldCheck, Star, Trophy, X, ChevronDown, ChevronUp } from "lucide-react";
+import { CalendarCheck, Check, Dumbbell, Footprints, MapPin, MessageCircle, Pencil, ShieldCheck, Star, Trophy, X, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import Button from "../../common/Button.jsx";
@@ -29,7 +29,7 @@ function splitPreferredSports(value) {
 
 function formatAttendanceRate(value) {
   const rate = Number(value || 0);
-  return rate > 0 ? `${Math.round(rate)}%` : "준비중";
+  return `${Math.round(rate)}%`;
 }
 
 function formatRating(value) {
@@ -116,13 +116,23 @@ function MobileMyPage() {
   const monthBase = useMemo(() => new Date(), []);
   const [selectedScheduleKey, setSelectedScheduleKey] = useState("");
   const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const calendarCells = useMemo(() => buildMonthCells(monthBase, scheduleItems), [monthBase, scheduleItems]);
   const activeScheduleKey = selectedScheduleKey || dateKey(new Date());
   const selectedSchedules = scheduleItems.filter((item) => dateKey(item.start_at) === activeScheduleKey);
 
   const handleLogout = async () => {
-    await logout();
-    navigate("/login", { replace: true });
+    setIsLoggingOut(true);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      await logout();
+      sessionStorage.setItem("sportsmate_flash", "로그아웃 되었습니다.");
+      navigate("/login", { replace: true });
+    } catch (err) {
+      console.error("로그아웃 실패:", err);
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   const saveIntro = async () => {
@@ -289,7 +299,19 @@ function MobileMyPage() {
         <Link to="/meetings">관심 모임</Link>
         <Link to="/mypage/reviews">내 후기 <span>{reviewCount}</span></Link>
       </div>
-      <Button variant="secondary" onClick={handleLogout}>로그아웃</Button>
+      <div className="mobile-mypage-logout-wrapper">
+        <Button variant="danger" className="mobile-mypage-logout-btn" onClick={handleLogout}>로그아웃</Button>
+      </div>
+
+      {/* 로그아웃 대기 상태 모달 팝업 */}
+      {isLoggingOut && (
+        <div className="mobile-logout-modal-overlay">
+          <div className="mobile-logout-modal-content">
+            <Loader2 size={36} className="mobile-logout-spinner" />
+            <p>로그아웃 중입니다...</p>
+          </div>
+        </div>
+      )}
     </>
   );
 }

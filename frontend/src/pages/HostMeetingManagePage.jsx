@@ -12,7 +12,9 @@ import {
   Users,
   Vote,
   Plus,
-  Trash2
+  Trash2,
+  FileText,
+  MessageCircle
 } from "lucide-react";
 import Button from "../components/common/Button.jsx";
 import EmptyState from "../components/common/EmptyState.jsx";
@@ -62,6 +64,26 @@ function HostMeetingManagePage() {
     }
   };
 
+  const toggleMeetingStatus = async () => {
+    const isCurrentlyOpen = meeting.status === "open";
+    const confirmMessage = isCurrentlyOpen
+      ? "모집을 종료하시겠습니까?"
+      : "모집을 다시 시작하시겠습니까?";
+    
+    const ok = window.confirm(confirmMessage);
+    if (!ok) return;
+
+    try {
+      const nextStatus = isCurrentlyOpen ? "closed" : "open";
+      await meetingApi.update(meeting.id, { status: nextStatus });
+      alert(isCurrentlyOpen ? "모집이 종료되었습니다." : "모집이 시작되었습니다.");
+      window.location.reload();
+    } catch (err) {
+      console.error("Failed to update meeting status", err);
+      alert(isCurrentlyOpen ? "모집 종료 중 오류가 발생했습니다." : "모집 시작 중 오류가 발생했습니다.");
+    }
+  };
+
   const submitNotice = async (event) => {
     event.preventDefault();
     await meetingApi.createNotice(meeting.id, notice);
@@ -78,7 +100,7 @@ function HostMeetingManagePage() {
         noticesLoading={notices.loading}
         setNotice={setNotice}
         submitNotice={submitNotice}
-        cancelMeeting={cancelMeeting}
+        toggleMeetingStatus={toggleMeetingStatus}
       />
     );
   }
@@ -139,7 +161,10 @@ function HostMeetingManagePage() {
             {!notices.loading && !noticeItems.length && <p>등록된 공지가 없습니다.</p>}
           </div>
         </section>
-        <Button variant="secondary" onClick={cancelMeeting}>모집종료</Button>
+        <div className="host-manage-bottom-buttons">
+          <Button variant="outline" onClick={() => navigate(`/meetings/${meeting.id}`)}>수정 취소</Button>
+          <Button variant="danger" onClick={cancelMeeting}>모집종료</Button>
+        </div>
       </div>
     </>
   );
@@ -164,7 +189,7 @@ function formatMeetingDate(dateStr) {
   }
 }
 
-function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading, setNotice, submitNotice, cancelMeeting }) {
+function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading, setNotice, submitNotice, toggleMeetingStatus }) {
   const [activeTab, setActiveTab] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const fileInputRef = useRef(null);
@@ -328,6 +353,40 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
     }));
   };
 
+  const removeVoteOption = (indexToRemove) => {
+    if (voteForm.options.length <= 2) return;
+    setVoteForm((current) => ({
+      ...current,
+      options: current.options.filter((_, idx) => idx !== indexToRemove)
+    }));
+  };
+
+  const handleDeleteVote = async (voteId) => {
+    const ok = window.confirm("투표를 삭제하시겠습니까? 삭제 시 채팅방의 투표 공지도 '삭제된 투표입니다.'로 변경됩니다.");
+    if (!ok) return;
+    try {
+      await meetingApi.deleteVote(meeting.id, voteId);
+      alert("투표가 삭제되었습니다.");
+      setRefreshKey((value) => value + 1);
+    } catch (err) {
+      console.error("Failed to delete vote", err);
+      alert("투표 삭제 중 오류가 발생했습니다.");
+    }
+  };
+
+  const handleDeleteNotice = async (noticeId) => {
+    const ok = window.confirm("공지를 삭제하시겠습니까? 삭제 시 채팅방의 공지도 '삭제된 공지입니다.'로 변경됩니다.");
+    if (!ok) return;
+    try {
+      await meetingApi.deleteNotice(meeting.id, noticeId);
+      alert("공지가 삭제되었습니다.");
+      setRefreshKey((value) => value + 1);
+    } catch (err) {
+      console.error("Failed to delete notice", err);
+      alert("공지 삭제 중 오류가 발생했습니다.");
+    }
+  };
+
   return (
     <div className="desktop-page">
       <div className="screen-title">
@@ -360,13 +419,25 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
             </button>
           </div>
           <div className="desktop-host-meeting-info">
-            <span className="host-status-pill">모집중</span>
+            <span className={`host-status-pill ${meeting.status !== "open" ? "closed" : ""}`}>
+              {meeting.status === "open" ? "모집중" : "모집마감"}
+            </span>
             <h2>{meeting.title}</h2>
             <div className="desktop-host-meeting-details-grid">
               <p><CalendarDays size={15} />{formatMeetingDate(meetingDate)}</p>
               <p><MapPin size={15} />{place}</p>
               <p><Users size={15} />참여 인원: {current} / {max}명</p>
             </div>
+          </div>
+          <div className="desktop-host-card-actions">
+            <Link to={`/meetings/${meeting.id}`} className="ghost-btn">
+              <FileText size={14} />
+              <span>상세</span>
+            </Link>
+            <Link to={meeting.chat_room_id ? `/chats/${meeting.chat_room_id}` : "/chats"} className="ghost-btn">
+              <MessageCircle size={14} />
+              <span>채팅</span>
+            </Link>
           </div>
         </section>
 
@@ -421,30 +492,88 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
         {activeTab === "edit" && (
           <section className="page-card desktop-host-tab-content-card">
             <div className="section-head"><h2>모임 정보 수정</h2></div>
-            <form className="review-form desktop-host-edit-form" onSubmit={submitEdit}>
-              <div className="form-row-2">
-                <label>
-                  종목
-                  <select value={editForm.sport_id} onChange={(e) => setEditForm({ ...editForm, sport_id: e.target.value })}>
-                    {(sports.data?.items || []).map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>정원 (2~{maxLimit}명)<input type="number" min="2" max={maxLimit} value={editForm.max_participants} onChange={(e) => setEditForm({ ...editForm, max_participants: e.target.value })} /></label>
+            <form className="desktop-host-edit-form" onSubmit={submitEdit}>
+              <div className="form-section">
+                <h3 className="form-section-title">기본 정보</h3>
+                <div className="form-grid-2">
+                  <div className="form-group">
+                    <label htmlFor="sport_id">운동 종목</label>
+                    <select id="sport_id" value={editForm.sport_id} onChange={(e) => setEditForm({ ...editForm, sport_id: e.target.value })}>
+                      {(sports.data?.items || []).map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="max_participants">정원 (2~{maxLimit}명)</label>
+                    <input id="max_participants" type="number" min="2" max={maxLimit} value={editForm.max_participants} onChange={(e) => setEditForm({ ...editForm, max_participants: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="title">모임 제목</label>
+                  <input id="title" required placeholder="모임의 매력적인 제목을 지어보세요" value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="purpose">모집 목적</label>
+                  <input id="purpose" placeholder="예: 운동 실력 향상, 메이트 찾기, 친목 도모 등" value={editForm.purpose} onChange={(e) => setEditForm({ ...editForm, purpose: e.target.value })} />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="description">모임 설명</label>
+                  <textarea id="description" required placeholder="진행할 운동 루틴이나 상세한 계획을 작성해주세요." value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+                </div>
               </div>
-              <label>제목<input required value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} /></label>
-              <label>설명<textarea required value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} /></label>
-              <label>모집 목적<input value={editForm.purpose} onChange={(e) => setEditForm({ ...editForm, purpose: e.target.value })} /></label>
-              <div className="form-row-2">
-                <label>장소명<input required value={editForm.location_name} onChange={(e) => setEditForm({ ...editForm, location_name: e.target.value })} /></label>
-                <label>주소<input required value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} /></label>
+
+              <div className="form-section">
+                <h3 className="form-section-title">일정 및 장소</h3>
+                <div className="form-grid-2">
+                  <div className="form-group">
+                    <label htmlFor="start_at">시작 시간</label>
+                    <input id="start_at" required type="datetime-local" value={editForm.start_at} onChange={(e) => setEditForm({ ...editForm, start_at: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="end_at">종료 시간</label>
+                    <input id="end_at" type="datetime-local" value={editForm.end_at} onChange={(e) => setEditForm({ ...editForm, end_at: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="form-grid-2">
+                  <div className="form-group">
+                    <label htmlFor="location_name">장소명</label>
+                    <input id="location_name" required placeholder="예: 강남 체육공원, 스타피트니스" value={editForm.location_name} onChange={(e) => setEditForm({ ...editForm, location_name: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="address">주소</label>
+                    <input id="address" required placeholder="도로명 주소 또는 상세 주소" value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} />
+                  </div>
+                </div>
               </div>
-              <div className="form-row-2">
-                <label>시작 시간<input required type="datetime-local" value={editForm.start_at} onChange={(e) => setEditForm({ ...editForm, start_at: e.target.value })} /></label>
-                <label>종료 시간<input type="datetime-local" value={editForm.end_at} onChange={(e) => setEditForm({ ...editForm, end_at: e.target.value })} /></label>
+
+              <div className="form-actions">
+                <button
+                  className="cancel-btn"
+                  type="button"
+                  onClick={() => {
+                    setEditForm({
+                      sport_id: meeting.sport?.id || "",
+                      title: meeting.title || "",
+                      description: meeting.description || "",
+                      purpose: meeting.purpose || "",
+                      location_name: meeting.location_name || "",
+                      address: meeting.address || "",
+                      start_at: meeting.start_at?.slice(0, 16) || "",
+                      end_at: meeting.end_at?.slice(0, 16) || "",
+                      max_participants: meeting.max_participants || 2
+                    });
+                    setActiveTab(null);
+                  }}
+                >
+                  취소
+                </button>
+                <button className="submit-btn" type="submit">수정 완료</button>
               </div>
-              <button className="primary-small" type="submit">수정 완료</button>
             </form>
           </section>
         )}
@@ -528,26 +657,72 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
         {activeTab === "vote" && (
           <section className="page-card desktop-host-tab-content-card">
             <div className="section-head"><h2>투표 관리</h2></div>
-            <div className="desktop-two-column" style={{ marginTop: 0 }}>
-              <section className="host-vote-desktop-card" style={{ padding: 0, border: 0, boxShadow: 'none' }}>
+            <div className="desktop-two-column vote-column" style={{ marginTop: 0 }}>
+              <section className="host-vote-desktop-card">
                 <h3>새 투표 만들기</h3>
-                <form className="review-form host-vote-desktop-form" onSubmit={submitVote}>
-                  <label>제목<input required value={voteForm.title} onChange={(event) => setVoteForm({ ...voteForm, title: event.target.value })} /></label>
-                  <div className="host-vote-option-grid">
-                    {voteForm.options.map((option, index) => (
-                      <label key={index}>선택지 {index + 1}<input required value={option} onChange={(event) => updateVoteOption(index, event.target.value)} /></label>
-                    ))}
+                <form className="host-vote-desktop-form" onSubmit={submitVote}>
+                  <div className="form-group">
+                    <label htmlFor="vote-title">제목</label>
+                    <input id="vote-title" type="text" required placeholder="투표 제목을 입력하세요" value={voteForm.title} onChange={(event) => setVoteForm({ ...voteForm, title: event.target.value })} />
                   </div>
-                  <button className="ghost-btn" style={{ marginBottom: 12 }} type="button" onClick={() => setVoteForm((current) => ({ ...current, options: [...current.options, ""] }))}>선택지 추가</button>
-                  <label>투표 종료일자<input type="datetime-local" value={voteForm.ends_at} onChange={(event) => setVoteForm({ ...voteForm, ends_at: event.target.value })} /></label>
-                  <div className="host-vote-desktop-switches">
-                    <label><input type="checkbox" checked={voteForm.allow_multiple} onChange={(event) => setVoteForm({ ...voteForm, allow_multiple: event.target.checked })} /> 복수 선택 허용</label>
-                    <label><input type="checkbox" checked={!voteForm.is_anonymous} onChange={(event) => setVoteForm({ ...voteForm, is_anonymous: !event.target.checked })} /> 공개 투표</label>
+
+                  <div className="form-group">
+                    <label>선택지</label>
+                    <div className="vote-options-list">
+                      {voteForm.options.map((option, index) => (
+                        <div key={index} className="vote-option-item">
+                          <input
+                            type="text"
+                            required
+                            placeholder={`선택지 ${index + 1}`}
+                            value={option}
+                            onChange={(event) => updateVoteOption(index, event.target.value)}
+                          />
+                          {voteForm.options.length > 2 && (
+                            <button
+                              type="button"
+                              className="remove-option-btn"
+                              onClick={() => removeVoteOption(index)}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <button className="add-option-btn" type="button" onClick={() => setVoteForm((current) => ({ ...current, options: [...current.options, ""] }))}>
+                      <Plus size={15} /> 선택지 추가
+                    </button>
                   </div>
-                  <Button type="submit">투표 등록</Button>
+
+                  <div className="form-group">
+                    <label htmlFor="vote-ends-at">투표 종료일자</label>
+                    <input id="vote-ends-at" type="datetime-local" value={voteForm.ends_at} onChange={(event) => setVoteForm({ ...voteForm, ends_at: event.target.value })} />
+                  </div>
+
+                  <div className="host-vote-switches-grid">
+                    <label className={`switch-card ${voteForm.allow_multiple ? "active" : ""}`}>
+                      <input type="checkbox" checked={voteForm.allow_multiple} onChange={(event) => setVoteForm({ ...voteForm, allow_multiple: event.target.checked })} />
+                      <div className="switch-card-content">
+                        <strong>복수 선택 허용</strong>
+                        <span>여러 개의 답변 선택 가능</span>
+                      </div>
+                    </label>
+                    <label className={`switch-card ${!voteForm.is_anonymous ? "active" : ""}`}>
+                      <input type="checkbox" checked={!voteForm.is_anonymous} onChange={(event) => setVoteForm({ ...voteForm, is_anonymous: !event.target.checked })} />
+                      <div className="switch-card-content">
+                        <strong>공개 투표</strong>
+                        <span>누가 투표했는지 투표자 공개</span>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="form-actions">
+                    <button className="submit-btn" type="submit">투표 등록</button>
+                  </div>
                 </form>
               </section>
-              <section className="host-vote-result-card" style={{ padding: 0, border: 0, boxShadow: 'none' }}>
+              <section className="host-vote-result-card">
                 <h3>진행중인 투표 ({votes.data?.items?.length || 0})</h3>
                 {votes.loading ? (
                   <LoadingCards count={1} />
@@ -556,13 +731,23 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
                     {(votes.data?.items || []).map((vote) => {
                       const total = vote.options.reduce((sum, option) => sum + Number(option.response_count || 0), 0);
                       return (
-                        <article key={vote.id} style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '16px', marginBottom: '14px' }}>
+                        <article key={vote.id}>
                           <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                             <div>
                               <strong style={{ display: 'block', fontSize: '15px' }}>{vote.title}</strong>
                               <span style={{ fontSize: '12px', color: '#64748b' }}>{vote.allow_multiple ? "복수 선택" : "단일 선택"} · {vote.is_anonymous ? "비공개" : "공개"}</span>
                             </div>
-                            <b>{total}표</b>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <b style={{ fontSize: '15px' }}>{total}표</b>
+                              <button 
+                                type="button" 
+                                className="delete-vote-btn"
+                                onClick={() => handleDeleteVote(vote.id)}
+                                title="투표 삭제"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
                           </header>
                           <div className="host-vote-result-options">
                             {vote.options.map((option) => {
@@ -594,27 +779,55 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
         )}
 
         {activeTab === "notice" && (
-          <section className="page-card desktop-host-notice-card">
+          <section className="page-card desktop-host-tab-content-card">
             <div className="section-head"><h2>공지 관리</h2></div>
-            <div className="desktop-host-notice-grid">
-              <form className="review-form" onSubmit={submitNotice}>
-                <label>제목<input required value={notice.title} onChange={(event) => setNotice({ ...notice, title: event.target.value })} /></label>
-                <label>내용<textarea required value={notice.content} onChange={(event) => setNotice({ ...notice, content: event.target.value })} /></label>
-                <label className="checkbox-line">
-                  <input type="checkbox" checked={notice.is_pinned} onChange={(event) => setNotice({ ...notice, is_pinned: event.target.checked })} />
-                  상단 고정
-                </label>
-                <button className="primary-small" type="submit"><Megaphone size={15} />공지 등록</button>
+            <div className="desktop-two-column notice-column" style={{ marginTop: 0 }}>
+              <form className="host-notice-desktop-form" onSubmit={submitNotice}>
+                <div className="form-group">
+                  <label htmlFor="notice-title">제목</label>
+                  <input id="notice-title" type="text" required placeholder="공지 제목을 입력하세요" value={notice.title} onChange={(event) => setNotice({ ...notice, title: event.target.value })} />
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="notice-content">내용</label>
+                  <textarea id="notice-content" required placeholder="공지 내용을 입력하세요" value={notice.content} onChange={(event) => setNotice({ ...notice, content: event.target.value })} />
+                </div>
+
+                <div className="host-notice-switches-grid">
+                  <label className={`switch-card ${notice.is_pinned ? "active" : ""}`}>
+                    <input type="checkbox" checked={notice.is_pinned} onChange={(event) => setNotice({ ...notice, is_pinned: event.target.checked })} />
+                    <div className="switch-card-content">
+                      <strong>상단 고정</strong>
+                      <span>공지사항을 목록 최상단에 고정합니다</span>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="form-actions">
+                  <button className="submit-btn" type="submit">
+                    <Megaphone size={15} /> 공지 등록
+                  </button>
+                </div>
               </form>
-              <div className="desktop-host-notice-list">
-                <h3>등록된 공지</h3>
+              <div className="desktop-host-notice-list-container">
+                <h3>등록된 공지 ({noticeItems.length})</h3>
                 {noticesLoading ? (
                   <LoadingCards count={1} />
                 ) : noticeItems.length ? (
                   noticeItems.map((item) => (
                     <article key={item.id}>
-                      <strong>{item.title}</strong>
-                      <p>{item.content}</p>
+                      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                        <strong style={{ fontSize: '15px', color: '#1e293b' }}>{item.title}</strong>
+                        <button 
+                          type="button" 
+                          className="delete-notice-btn"
+                          onClick={() => handleDeleteNotice(item.id)}
+                          title="공지 삭제"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </header>
+                      <p style={{ margin: 0, color: '#475569', fontSize: '13.5px', lineHeight: '1.5' }}>{item.content}</p>
                     </article>
                   ))
                 ) : (
@@ -628,7 +841,13 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
         {/* 모임 취소 구역 */}
         <section className="page-card desktop-host-danger-card">
           <div className="desktop-host-danger-zone">
-            <button type="button" onClick={cancelMeeting}>모집종료</button>
+            <button
+              type="button"
+              className={meeting.status === "open" ? "btn-close" : "btn-start"}
+              onClick={toggleMeetingStatus}
+            >
+              {meeting.status === "open" ? "모집종료" : "모집시작"}
+            </button>
           </div>
         </section>
       </div>

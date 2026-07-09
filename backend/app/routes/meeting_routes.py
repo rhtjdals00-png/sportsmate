@@ -345,6 +345,18 @@ def post_vote(meeting_id):
     for option_text in data.get("options", []):
         if option_text:
             db.session.add(VoteOption(vote_id=vote.id, text=option_text))
+    
+    chat_room = meeting.chat_room or ChatRoom(meeting_id=meeting.id)
+    if not meeting.chat_room:
+        db.session.add(chat_room)
+        db.session.flush()
+    db.session.add(ChatMessage(
+        chat_room_id=chat_room.id,
+        user_id=user_id,
+        content=f"새로운 투표가 등록되었습니다: {vote.title}",
+        message_type="notice",
+    ))
+    
     db.session.commit()
     return jsonify({"vote": vote.to_dict()}), 201
 
@@ -404,3 +416,55 @@ def check_attendance(meeting_id):
         db.session.add(row)
     db.session.commit()
     return jsonify({"attendance": row.to_dict()})
+
+
+@meeting_bp.delete("/<int:meeting_id>/notices/<int:notice_id>")
+@jwt_required()
+def delete_notice(meeting_id, notice_id):
+    meeting = Meeting.query.get_or_404(meeting_id)
+    user_id = int(get_jwt_identity())
+    if meeting.status == "suspended":
+        return jsonify({"message": "폐쇄(비활성화) 처리된 모임입니다."}), 400
+    if meeting.host_id != user_id and not can_manage_meeting_tools(meeting_id, user_id):
+        return jsonify({"message": "방장만 공지를 삭제할 수 있습니다."}), 403
+    notice = Notice.query.filter_by(meeting_id=meeting_id, id=notice_id).first_or_404()
+    
+    # Update the corresponding ChatMessage
+    chat_room = meeting.chat_room
+    if chat_room:
+        msg = ChatMessage.query.filter_by(chat_room_id=chat_room.id, message_type="notice").filter(
+            ChatMessage.content.like(f"공지가 등록되었습니다: {notice.content}%")
+        ).first()
+        if msg:
+            msg.content = "삭제된 공지입니다."
+            
+    db.session.delete(notice)
+    db.session.commit()
+    return jsonify({"message": "공지가 삭제되었습니다."}), 200
+
+
+@meeting_bp.delete("/<int:meeting_id>/votes/<int:vote_id>")
+@jwt_required()
+def delete_vote(meeting_id, vote_id):
+    meeting = Meeting.query.get_or_404(meeting_id)
+    user_id = int(get_jwt_identity())
+    if meeting.status == "suspended":
+        return jsonify({"message": "폐쇄(비활성화) 처리된 모임입니다."}), 400
+    if meeting.host_id != user_id and not can_manage_meeting_tools(meeting_id, user_id):
+        return jsonify({"message": "모임 운영진만 투표를 삭제할 수 있습니다."}), 403
+    vote = Vote.query.filter_by(meeting_id=meeting_id, id=vote_id).first_or_404()
+    
+    # Update the corresponding ChatMessage
+    chat_room = meeting.chat_room
+    if chat_room:
+        msg = ChatMessage.query.filter_by(chat_room_id=chat_room.id, message_type="notice").filter(
+            ChatMessage.content.like(f"새로운 투표가 등록되었습니다: {vote.title}%")
+        ).first()
+        if msg:
+            msg.content = "삭제된 투표입니다."
+            
+    # Delete responses first to avoid foreign key constraint violations
+    VoteResponse.query.filter_by(vote_id=vote_id).delete()
+    db.session.delete(vote)
+    db.session.commit()
+    return jsonify({"message": "투표가 삭제되었습니다."}), 200

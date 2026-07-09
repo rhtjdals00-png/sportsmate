@@ -1,4 +1,4 @@
-﻿.schedule-item footer,
+.schedule-item footer,
 .table-actions {
   display: flex;
   align-items: center;
@@ -433,5 +433,92 @@
   height: 8px;
   border-radius: 999px;
   background: #4f46e5;
+}
+
+/* 채팅방 도구 아코디언 메뉴 스타일 */
+.talk-room-actions-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-accordion-menu {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.chat-accordion-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(30px);
+  pointer-events: none;
+  transition: all 350ms cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.chat-accordion-menu.expanded .chat-accordion-content {
+  max-width: 800px;
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+  margin-right: 8px;
+}
+
+/* 개별 버튼의 호버 스타일 통일 및 개선 */
+.talk-tool-btn {
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.talk-tool-btn:hover {
+  background: #f8fafc;
+  color: #2563eb;
+  border-color: #cbd5e1;
+}
+
+.talk-tool-btn.is-danger-text {
+  color: #dc2626 !important;
+  border-color: #fca5a5 !important;
+  background: #fef2f2 !important;
+}
+
+.talk-tool-btn.is-danger-text:hover {
+  color: #ffffff !important;
+  background: #ef4444 !important;
+  border-color: #ef4444 !important;
+}
+
+.talk-tool-btn.is-gray-text {
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+  border-color: #cbd5e1 !important;
+}
+
+.talk-tool-btn.is-gray-text:hover {
+  background: #e2e8f0 !important;
+  color: #1e293b !important;
+  border-color: #94a3b8 !important;
+}
+
+.menu-toggle-btn {
+  transition: all 200ms ease;
+  background: #ffffff;
+}
+
+.menu-toggle-btn:hover {
+  border-color: #94a3b8;
+  color: #1e293b;
+  background: #f8fafc;
+}
+
+.menu-toggle-btn.active {
+  background: #3b82f6;
+  color: #ffffff;
+  border-color: #3b82f6;
 }
 

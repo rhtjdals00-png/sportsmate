@@ -238,3 +238,42 @@ def leave_room(room_id):
         return jsonify({"left": True, "meeting_id": room.meeting_id})
     except PermissionError as error:
         return jsonify({"message": str(error)}), 403
+
+
+@chat_bp.post("/mute")
+@jwt_required()
+def mute_chat_room():
+    user_id = int(get_jwt_identity())
+    data = request.get_json() or {}
+    room_type = data.get("room_type", "meeting")
+    room_id = data.get("room_id")
+    if not room_id:
+        return jsonify({"message": "채팅방 ID가 필요합니다."}), 400
+    
+    from app.utils.mute_store import mute_room
+    mute_room(user_id, room_type, int(room_id))
+    return jsonify({"success": True, "muted": True}), 200
+
+
+@chat_bp.post("/unmute")
+@jwt_required()
+def unmute_chat_room():
+    user_id = int(get_jwt_identity())
+    data = request.get_json() or {}
+    room_type = data.get("room_type", "meeting")
+    room_id = data.get("room_id")
+    if not room_id:
+        return jsonify({"message": "채팅방 ID가 필요합니다."}), 400
+    
+    from app.utils.mute_store import unmute_room
+    unmute_room(user_id, room_type, int(room_id))
+    return jsonify({"success": True, "muted": False}), 200
+
+
+@chat_bp.get("/muted")
+@jwt_required()
+def get_muted_chat_rooms():
+    user_id = int(get_jwt_identity())
+    from app.utils.mute_store import get_muted_rooms
+    mutes = get_muted_rooms(user_id)
+    return jsonify({"muted_rooms": mutes}), 200
