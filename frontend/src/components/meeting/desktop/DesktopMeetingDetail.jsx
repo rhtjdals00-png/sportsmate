@@ -8,6 +8,7 @@ import { locationApi } from "../../../api/locationApi";
 import { useAsync } from "../../../hooks/useAsync";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { formatDateTime, formatMeetingType } from "../../../utils/formatters";
+import { getMeetingCoverImage, getSportNameFromMeeting, isUsingSportThumbnail } from "../../../utils/sportThumbnails";
 
 const DEFAULT_MAP_CENTER = { latitude: 37.5665, longitude: 126.9780 };
 const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
@@ -339,6 +340,8 @@ function DesktopMeetingDetail() {
   const participantLabel = getParticipantLabel(myParticipant);
   const actionLabel = getActionLabel({ joining, isClosed, isFull, isHost, myParticipant });
   const hostSummary = meeting.host_summary || {};
+  const coverImage = getMeetingCoverImage(meeting);
+  const showSportThumbnailLabel = isUsingSportThumbnail(meeting);
 
   return (
     <div className="desktop-meeting-detail">
@@ -353,8 +356,9 @@ function DesktopMeetingDetail() {
 
       <div className="desktop-meeting-detail__grid">
         <main className="desktop-meeting-detail__main">
-          <section className="desktop-meeting-detail__hero" style={meeting.cover_image_url ? { backgroundImage: `linear-gradient(180deg, rgba(15, 23, 42, 0.12), rgba(15, 23, 42, 0.66)), url(${meeting.cover_image_url})` } : undefined}>
-            {!meeting.cover_image_url && <SportFallbackHero meeting={meeting} />}
+          <section className={`desktop-meeting-detail__hero ${showSportThumbnailLabel ? "is-sport-thumbnail" : ""}`} style={coverImage ? { backgroundImage: `linear-gradient(180deg, rgba(15, 23, 42, 0.12), rgba(15, 23, 42, 0.66)), url(${coverImage})` } : undefined}>
+            {/* {showSportThumbnailLabel && <span className="sport-thumbnail-label">{getSportNameFromMeeting(meeting)}</span>} */}
+            {!coverImage && <SportFallbackHero meeting={meeting} />}
           </section>
 
           <section className="desktop-section desktop-meeting-detail__body">
