@@ -7,6 +7,7 @@ import { locationApi } from "../../../api/locationApi";
 import { meetingApi } from "../../../api/meetingApi";
 import { sportApi } from "../../../api/sportApi";
 import { useAsync } from "../../../hooks/useAsync";
+import { getMeetingCoverImage, getSportNameFromMeeting, isUsingSportThumbnail } from "../../../utils/sportThumbnails";
 import { koreaRegions } from "../../../data/koreaRegions";
 
 const DEFAULT_RADIUS_KM = 6;
@@ -375,12 +376,15 @@ function DesktopMeetingList() {
 }
 
 function DesktopMeetingRow({ meeting }) {
+  const coverImage = getMeetingCoverImage(meeting);
+  const showSportThumbnailLabel = isUsingSportThumbnail(meeting);
   const distanceLabel = formatDistance(meeting.distance_km);
 
   return (
     <Link className="desktop-meeting-row" to={`/meetings/${meeting.id}`}>
-      <span className="desktop-meeting-row__thumb" style={meeting.cover_image_url ? { backgroundImage: `url(${meeting.cover_image_url})` } : undefined}>
-        {!meeting.cover_image_url && getSportName(meeting)}
+      <span className={`desktop-meeting-row__thumb ${showSportThumbnailLabel ? "is-sport-thumbnail" : ""}`} style={coverImage ? { backgroundImage: `url(${coverImage})` } : undefined}>
+        {showSportThumbnailLabel && <span className="sport-thumbnail-label">{getSportNameFromMeeting(meeting)}</span>}
+        {!coverImage && getSportName(meeting)}
       </span>
       <span className="desktop-meeting-row__main">
         <span className="desktop-meeting-row__badges">
@@ -436,7 +440,9 @@ function DesktopMeetingMap({ items, loading, error }) {
         ) : (
           items.slice(0, 5).map((meeting) => (
             <Link key={meeting.id} to={`/meetings/${meeting.id}`}>
-              <span className="desktop-meeting-map__thumb" style={meeting.cover_image_url ? { backgroundImage: `url(${meeting.cover_image_url})` } : undefined} />
+              <span className={`desktop-meeting-map__thumb ${isUsingSportThumbnail(meeting) ? "is-sport-thumbnail" : ""}`} style={getMeetingCoverImage(meeting) ? { backgroundImage: `url(${getMeetingCoverImage(meeting)})` } : undefined}>
+                {isUsingSportThumbnail(meeting) && <span className="sport-thumbnail-label">{getSportNameFromMeeting(meeting)}</span>}
+              </span>
               <span>
                 <strong>{meeting.title}</strong>
                 <small>
