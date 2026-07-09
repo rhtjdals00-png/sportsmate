@@ -1,4 +1,4 @@
-import { ArrowLeft, Bot, MessageSquare, Plus, Send, Trash2, User } from "lucide-react";
+import { ArrowLeft, Bot, MessageSquare, Plus, Send, Trash2, User, Edit2, Check, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { chatbotApi } from "../../../api/chatbotApi";
@@ -21,8 +21,42 @@ function MobileChatbotPage() {
   const [inputText, setInputText] = useState("");
   const [sending, setSending] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [editingSessionId, setEditingSessionId] = useState(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [savingSessionId, setSavingSessionId] = useState(null);
 
   const messagesEndRef = useRef(null);
+
+  const handleStartEdit = (e, session) => {
+    e.stopPropagation();
+    setEditingSessionId(session.id);
+    setEditTitle(session.title);
+  };
+
+  const handleSaveEdit = async (sessionId) => {
+    if (savingSessionId === sessionId) return;
+    if (!editTitle.trim()) {
+      setEditingSessionId(null);
+      return;
+    }
+    setSavingSessionId(sessionId);
+    try {
+      await chatbotApi.updateSession(sessionId, { title: editTitle.trim() });
+      setEditingSessionId(null);
+      await loadSessions();
+    } catch (err) {
+      console.error("세션 제목 수정 실패:", err);
+      setEditingSessionId(null);
+    } finally {
+      setSavingSessionId(null);
+    }
+  };
+
+  const handleCancelEdit = (e) => {
+    if (e) e.stopPropagation();
+    setEditingSessionId(null);
+    setEditTitle("");
+  };
 
   // 1. 세션 목록 로드
   const loadSessions = async (selectFirst = false) => {
@@ -255,19 +289,66 @@ function MobileChatbotPage() {
                   }}
                 >
                   <MessageSquare size={16} />
-                  <span className="mobile-chatbot-sidebar-item-title">
-                    {s.messages && s.messages.length > 0
-                      ? s.messages[0].content.slice(0, 16)
-                      : s.title}
-                  </span>
-                  <button
-                    type="button"
-                    className="mobile-chatbot-sidebar-item-delete"
-                    onClick={(e) => handleDeleteSession(e, s.id)}
-                    aria-label="삭제"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  {editingSessionId === s.id ? (
+                    <>
+                      <input
+                        type="text"
+                        className="mobile-chatbot-sidebar-item-input"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleSaveEdit(s.id);
+                          } else if (e.key === "Escape") {
+                            handleCancelEdit();
+                          }
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        autoFocus
+                      />
+                      <div className="mobile-chatbot-sidebar-item-actions" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className="mobile-chatbot-sidebar-item-save"
+                          onClick={() => handleSaveEdit(s.id)}
+                          aria-label="저장"
+                        >
+                          <Check size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          className="mobile-chatbot-sidebar-item-cancel"
+                          onClick={handleCancelEdit}
+                          aria-label="취소"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <span className="mobile-chatbot-sidebar-item-title">
+                        {s.title || "대화방"}
+                      </span>
+                      <button
+                        type="button"
+                        className="mobile-chatbot-sidebar-item-edit"
+                        onClick={(e) => handleStartEdit(e, s)}
+                        aria-label="이름 수정"
+                      >
+                        <Edit2 size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        className="mobile-chatbot-sidebar-item-delete"
+                        onClick={(e) => handleDeleteSession(e, s.id)}
+                        aria-label="삭제"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </>
+                  )}
                 </div>
               ))}
             </div>

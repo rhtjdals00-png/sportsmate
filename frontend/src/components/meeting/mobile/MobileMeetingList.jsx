@@ -1,5 +1,5 @@
 import { SlidersHorizontal } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import MeetingCard from "../shared/MeetingCard.jsx";
@@ -81,6 +81,12 @@ const mergeByName = (primary = [], fallback = []) => {
 function MobileMeetingList() {
   const [params, setParams] = useSearchParams();
   const [filterOpen, setFilterOpen] = useState(false);
+  const [keywordDraft, setKeywordDraft] = useState(params.get("keyword") || "");
+
+  useEffect(() => {
+    setKeywordDraft(params.get("keyword") || "");
+  }, [params]);
+
   const query = Object.fromEntries(params.entries());
   const meetings = useAsync(() => meetingApi.list({ limit: 10, ...query }), [params.toString()]);
   const categories = useAsync(() => sportApi.categories(), []);
@@ -106,12 +112,27 @@ function MobileMeetingList() {
     : [];
   const sigunguItems = mergeByName(sigunguRegions.data?.items || [], fallbackSigunguRegions);
   const currentSigungu = sigunguItems.find((region) => String(region.code) === String(params.get("sigungu")));
+
+  const filterType = params.get("meeting_type");
+  const displayedMeetings = useMemo(() => {
+    const rawItems = meetings.data?.items || [];
+    if (!filterType) return rawItems;
+    return rawItems.filter((meeting) => meeting.meeting_type === filterType);
+  }, [meetings.data?.items, filterType]);
+
+  const currentMeetingTypeLabel = useMemo(() => {
+    if (filterType === "one_time") return "일회성 모임";
+    if (filterType === "regular") return "정기 모임";
+    return null;
+  }, [filterType]);
+
   const filterSummary = useMemo(() => [
+    currentMeetingTypeLabel,
     currentCategory?.name,
     currentSport?.name,
     currentSido?.name,
     currentSigungu?.name
-  ].filter(Boolean).join(" · ") || "상세 설정", [currentCategory, currentSport, currentSido, currentSigungu]);
+  ].filter(Boolean).join(" · ") || "상세 설정", [currentMeetingTypeLabel, currentCategory, currentSport, currentSido, currentSigungu]);
 
   const setCategory = (categoryId) => {
     const next = new URLSearchParams(params);
@@ -136,6 +157,19 @@ function MobileMeetingList() {
     setParams(next);
   };
 
+  const setMeetingType = (typeValue) => {
+    const next = new URLSearchParams(params);
+    if (typeValue) next.set("meeting_type", typeValue);
+    else next.delete("meeting_type");
+    setParams(next);
+  };
+
+  const resetFilters = () => {
+    const next = new URLSearchParams();
+    setParams(next);
+    setKeywordDraft("");
+  };
+
   return (
     <>
       <MobileHeader title="모임 게시판" />
@@ -143,7 +177,8 @@ function MobileMeetingList() {
         <input
           aria-label="모임 검색"
           placeholder="지역, 종목, 모임명을 검색하세요"
-          defaultValue={params.get("keyword") || ""}
+          value={keywordDraft}
+          onChange={(event) => setKeywordDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key !== "Enter") return;
             const next = new URLSearchParams(params);
@@ -159,6 +194,29 @@ function MobileMeetingList() {
 
       {filterOpen ? (
         <section className="mobile-filter-panel" aria-label={filterSummary}>
+          <div className="mobile-filter-type-tabs">
+            <button
+              type="button"
+              className={!params.get("meeting_type") ? "is-active" : ""}
+              onClick={() => setMeetingType("")}
+            >
+              전체 모임
+            </button>
+            <button
+              type="button"
+              className={params.get("meeting_type") === "one_time" ? "is-active" : ""}
+              onClick={() => setMeetingType("one_time")}
+            >
+              일회성 모임
+            </button>
+            <button
+              type="button"
+              className={params.get("meeting_type") === "regular" ? "is-active" : ""}
+              onClick={() => setMeetingType("regular")}
+            >
+              정기 모임
+            </button>
+          </div>
           <label>
             종목 카테고리
             <select value={params.get("category") || ""} onChange={(event) => setCategory(event.target.value)}>
@@ -187,14 +245,17 @@ function MobileMeetingList() {
               {sigunguItems.map((region) => <option key={region.code} value={region.code}>{region.name}</option>)}
             </select>
           </label>
+          <button type="button" className="mobile-filter-reset-btn" onClick={resetFilters}>
+            조건 초기화
+          </button>
         </section>
       ) : null}
 
       {meetings.loading ? (
         <LoadingCards />
-      ) : meetings.data?.items?.length ? (
+      ) : displayedMeetings.length ? (
         <div className="card-list">
-          {meetings.data.items.map((meeting) => (
+          {displayedMeetings.map((meeting) => (
             <MeetingCard key={meeting.id} meeting={meeting} />
           ))}
         </div>

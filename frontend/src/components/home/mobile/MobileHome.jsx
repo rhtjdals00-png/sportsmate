@@ -1,11 +1,10 @@
 import { Link } from "react-router-dom";
-import { CalendarPlus, Dumbbell, MapPinned, Search, ShieldCheck, Sparkles } from "lucide-react";
+import { CalendarPlus, Dumbbell, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { useMemo } from "react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import MeetingCard from "../../meeting/shared/MeetingCard.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import { meetingApi } from "../../../api/meetingApi";
-import { sportApi } from "../../../api/sportApi";
 import { useAsync } from "../../../hooks/useAsync";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { getSportIcon } from "../../../utils/sportIcons.jsx";
@@ -25,13 +24,12 @@ function isAdminUser(user) {
 function MobileHome() {
   const { user } = useAuth();
   const meetings = useAsync(() => meetingApi.list({ limit: 5, status: "open" }), []);
-  const categories = useAsync(() => sportApi.categories(), []);
   const preferredSports = useMemo(
     () => splitPreferredSports(user?.profile?.preferred_sports),
     [user?.profile?.preferred_sports]
   );
   const sportShortcuts = useMemo(
-    () => preferredSports.slice(0, 7).map((label) => ({ label, icon: getSportIcon(label) })),
+    () => preferredSports.slice(0, 6).map((label) => ({ label, icon: getSportIcon(label) })),
     [preferredSports]
   );
   const hasPreferredSports = sportShortcuts.length > 0;
@@ -86,23 +84,6 @@ function MobileHome() {
         )}
       </section>
 
-      <section className="section">
-        <div className="section-title">
-          <h2>스포츠 카테고리</h2>
-          <MapPinned size={18} />
-        </div>
-        <div className="category-scroll">
-          {(categories.data?.items || []).map((category) => {
-            const Icon = getSportIcon(category.name);
-            return (
-              <Link key={category.id} to={`/meetings?category=${category.id}`}>
-                <Icon size={17} />
-                <span>{category.name}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
 
       <section className="section">
         <div className="section-title">

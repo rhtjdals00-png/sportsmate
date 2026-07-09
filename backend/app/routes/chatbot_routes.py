@@ -74,7 +74,12 @@ def send_message(session_id):
     bot_msg = ChatbotMessage(session_id=session.id, role="assistant", content=bot_reply_content)
     db.session.add(bot_msg)
 
-    # 3. 세션 수정 시각 업데이트 (최근 대화 순으로 상단 노출하기 위함)
+    # 3. 만약 세션의 제목이 기본값 "새로운 대화"라면, 첫 번째 질문 내용으로 제목 자동 업데이트
+    if session.title == "새로운 대화":
+        summary = content[:15] + "..." if len(content) > 15 else content
+        session.title = summary
+
+    # 4. 세션 수정 시각 업데이트 (최근 대화 순으로 상단 노출하기 위함)
     session.updated_at = db.func.now()
 
     db.session.commit()
@@ -83,6 +88,26 @@ def send_message(session_id):
         "user_message": user_msg.to_dict(),
         "bot_message": bot_msg.to_dict()
     }), 210
+
+
+@chatbot_bp.route("/sessions/<int:session_id>", methods=["PUT"])
+@jwt_required()
+def update_session(session_id):
+    user_id = int(get_jwt_identity())
+    try:
+        session = ensure_session_access(session_id, user_id)
+    except PermissionError as e:
+        return jsonify({"message": str(e)}), 403
+
+    data = request.get_json() or {}
+    title = (data.get("title") or "").strip()
+    if not title:
+        return jsonify({"message": "수정할 제목을 입력해주세요."}), 400
+
+    session.title = title
+    session.updated_at = db.func.now()
+    db.session.commit()
+    return jsonify(session.to_dict())
 
 
 @chatbot_bp.delete("/sessions/<int:session_id>")

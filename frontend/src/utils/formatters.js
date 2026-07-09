@@ -10,7 +10,7 @@ export function formatDateTime(value) {
 }
 
 export function formatMeetingType(type) {
-  return type === "regular" ? "정기 모임" : "단발 모임";
+  return type === "regular" ? "정기 모임" : "일회성 모임";
 }
 
 export function formatExerciseLevel(level) {
