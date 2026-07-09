@@ -36,6 +36,16 @@ self.addEventListener("message", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  // 개발 환경(localhost, 127.0.0.1, 사설 IP 대역)인 경우 캐싱하지 않고 네트워크에서 직접 자원을 가져옵니다.
+  const hostname = self.location.hostname;
+  const isDev =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname.startsWith("192.168.") ||
+    hostname.startsWith("10.") ||
+    hostname.startsWith("172.");
+  if (isDev) return;
+
   const request = event.request;
 
   if (request.method !== "GET") return;

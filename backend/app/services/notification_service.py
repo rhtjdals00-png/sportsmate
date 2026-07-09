@@ -60,7 +60,8 @@ def send_web_push(user_id, title, body, url=None):
             sent += 1
         except WebPushException as error:
             status_code = getattr(getattr(error, "response", None), "status_code", None)
-            if status_code in {404, 410}:
+            response_text = getattr(getattr(error, "response", None), "text", "")
+            if status_code in {404, 410} or (status_code == 400 and "VapidPkHashMismatch" in response_text):
                 subscription.is_active = False
                 changed = True
             else:

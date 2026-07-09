@@ -3,7 +3,7 @@
   "adminEmail": "admin@sportsmate.co.kr",
   "maintenanceMode": false,
   "suspensionGracePeriod": 29,
-  "defaultMaxParticipants": 30,
+  "defaultMaxParticipants": 29,
   "mannerRatingDecrement": 1,
   "autoBanReportCount": 3,
   "sessionExpiryMinutes": 60,

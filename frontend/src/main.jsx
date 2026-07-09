@@ -58,11 +58,9 @@ function unregisterServiceWorkersInDev() {
 }
 
 const isMobile = /Mobi|Android|iPhone|iPad|iPod/.test(navigator.userAgent);
-if (import.meta.env.PROD && isMobile) {
-  registerServiceWorker();
-} else {
-  unregisterServiceWorkersInDev();
-}
+// Register service worker to support push notifications.
+// Caching is bypassed in sw.js for local development environments to avoid interfering with HMR.
+registerServiceWorker();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

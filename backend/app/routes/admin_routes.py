@@ -426,6 +426,17 @@ def update_user(user_id):
             commit=False,
             send_push=True
         )
+    elif was_suspended and not is_suspended:
+        from app.services.notification_service import create_notification
+        create_notification(
+            user_id=user.id,
+            type="account_unsuspension",
+            title="계정 정지 해제 안내",
+            message="귀하의 계정 정지가 해제되었습니다. 이제 서비스를 정상적으로 이용하실 수 있습니다.",
+            link_url="/notifications",
+            commit=False,
+            send_push=True
+        )
             
     db.session.commit()
 

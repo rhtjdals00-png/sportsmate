@@ -140,6 +140,9 @@ def send_message(room_id, user_id, data):
     db.session.commit()
     for participant in participants:
         if participant.user_id != user_id:
+            from app.utils.mute_store import is_muted
+            if is_muted(participant.user_id, "meeting", room.id):
+                continue
             try:
                 send_web_push(participant.user_id, f"{meeting_title} 새 채팅", f"{sender_name}: {preview}", f"/chats/{room.id}")
             except Exception as error:

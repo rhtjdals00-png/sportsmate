@@ -2050,26 +2050,71 @@
   background: #eef2ff;
 }
 
-.desktop-prototype .talk-room-leave-btn {
+.desktop-prototype .talk-room-item-hover-actions {
   position: absolute;
   top: 50%;
   right: 8px;
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border: 1px solid rgba(239, 68, 68, 0.16);
-  border-radius: 999px;
-  background: #ffffff;
-  color: #dc2626;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
   opacity: 0;
   transform: translateY(-50%);
   transition: opacity 150ms ease;
+  pointer-events: none;
 }
 
-.desktop-prototype .proto-talk-room-item:hover .talk-room-leave-btn,
-.desktop-prototype .talk-room-leave-btn:focus-visible {
+.desktop-prototype .proto-talk-room-item:hover .talk-room-item-hover-actions,
+.desktop-prototype .talk-room-item-hover-actions:focus-within {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.desktop-prototype .talk-room-mute-btn,
+.desktop-prototype .talk-room-leave-btn-new {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 150ms ease;
+  padding: 0;
+}
+
+.desktop-prototype .talk-room-mute-btn {
+  border: 1px solid #cbd5e1;
+  color: #64748b;
+}
+
+.desktop-prototype .talk-room-mute-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+  border-color: #94a3b8;
+}
+
+.desktop-prototype .talk-room-mute-btn.muted {
+  background: #eff6ff;
+  color: #3b82f6;
+  border-color: #bfdbfe;
+}
+
+.desktop-prototype .talk-room-mute-btn.muted:hover {
+  background: #dbeafe;
+  color: #2563eb;
+  border-color: #93c5fd;
+}
+
+.desktop-prototype .talk-room-leave-btn-new {
+  border: 1px solid rgba(239, 68, 68, 0.16);
+  color: #dc2626;
+}
+
+.desktop-prototype .talk-room-leave-btn-new:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #b91c1c;
 }
 
 .desktop-prototype .chat-vote-create__grid {
