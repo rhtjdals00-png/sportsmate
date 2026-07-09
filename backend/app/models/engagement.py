@@ -1,6 +1,5 @@
-from datetime import datetime
-
 from app.extensions import db
+from app.utils.timezone import kst_now
 from .common import TimestampMixin
 
 class Review(db.Model):
@@ -11,7 +10,7 @@ class Review(db.Model):
     reviewer_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     rating = db.Column(db.Integer, nullable=False)
     content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=kst_now, nullable=False)
 
     reviewer = db.relationship("User")
 
@@ -93,7 +92,7 @@ class Attendance(db.Model):
     meeting_id = db.Column(db.Integer, db.ForeignKey("meetings.id"), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     status = db.Column(db.String(30), default="present", nullable=False)
-    checked_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    checked_at = db.Column(db.DateTime, default=kst_now, nullable=False)
 
     user = db.relationship("User")
 

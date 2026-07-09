@@ -7,6 +7,7 @@ from sqlalchemy.orm import joinedload
 from app.extensions import db
 from app.models import ChatMessage, ChatMessageRead, ChatRoom, DirectChatMessage, DirectChatRoom, Meeting, Participant, Sport, User
 from app.services.notification_service import create_notification, send_web_push
+from app.utils.timezone import kst_now
 
 
 def _room_options(include_messages=False):
@@ -238,7 +239,7 @@ def send_direct_message(room_id, user_id, data):
         location_longitude=location_longitude,
         location_label=location_label,
     )
-    room.updated_at = datetime.utcnow()
+    room.updated_at = kst_now()
     db.session.add(message)
     db.session.commit()
     return message

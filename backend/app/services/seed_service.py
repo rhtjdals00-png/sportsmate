@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 
 from app.extensions import db
 from app.models import ChatMessage, ChatRoom, Meeting, Notice, Notification, Participant, Region, Sport, SportCategory, User, UserProfile, Vote, VoteOption
+from app.utils.timezone import kst_now
 
 
 def seed_database():
@@ -86,8 +87,8 @@ def seed_database():
             address=address,
             latitude=latitude,
             longitude=longitude,
-            start_at=datetime.utcnow() + timedelta(days=index, hours=10),
-            end_at=datetime.utcnow() + timedelta(days=index, hours=12),
+            start_at=kst_now() + timedelta(days=index, hours=10),
+            end_at=kst_now() + timedelta(days=index, hours=12),
             max_participants=max_count,
             current_participants=1,
             status="open",
@@ -95,7 +96,7 @@ def seed_database():
         )
         db.session.add(meeting)
         db.session.flush()
-        db.session.add(Participant(meeting_id=meeting.id, user_id=demo.id, role="host", status="approved", approved_at=datetime.utcnow()))
+        db.session.add(Participant(meeting_id=meeting.id, user_id=demo.id, role="host", status="approved", approved_at=kst_now()))
         room = ChatRoom(meeting_id=meeting.id)
         db.session.add(room)
         db.session.flush()

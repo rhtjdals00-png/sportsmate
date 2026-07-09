@@ -1,4 +1,4 @@
-from sqlalchemy import inspect, text
+﻿from sqlalchemy import inspect, text
 
 from app.extensions import db
 
@@ -81,3 +81,62 @@ def ensure_chat_schema(app):
 
 def ensure_chat_message_columns(app):
     ensure_chat_schema(app)
+    ensure_chatbot_schema(app)
+
+CHATBOT_MEMORY_COLUMNS = {
+    "preferred_sports": "TEXT NOT NULL DEFAULT ''",
+    "preferred_regions": "TEXT NOT NULL DEFAULT ''",
+    "preferred_times": "TEXT NOT NULL DEFAULT ''",
+    "interest_keywords": "TEXT NOT NULL DEFAULT ''",
+    "summary": "TEXT NOT NULL DEFAULT ''",
+    "last_extracted_at": "TIMESTAMP",
+    "created_at": "TIMESTAMP",
+    "updated_at": "TIMESTAMP",
+}
+
+
+def ensure_chatbot_schema(app):
+    try:
+        inspector = inspect(db.engine)
+        with db.engine.begin() as connection:
+            connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS chatbot_sessions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    title VARCHAR(255) NOT NULL DEFAULT '새로운 대화',
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP
+                )
+            """))
+            connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS chatbot_messages (
+                    id SERIAL PRIMARY KEY,
+                    session_id INTEGER NOT NULL REFERENCES chatbot_sessions(id) ON DELETE CASCADE,
+                    role VARCHAR(30) NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS chatbot_user_memories (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    preferred_sports TEXT NOT NULL DEFAULT '',
+                    preferred_regions TEXT NOT NULL DEFAULT '',
+                    preferred_times TEXT NOT NULL DEFAULT '',
+                    interest_keywords TEXT NOT NULL DEFAULT '',
+                    summary TEXT NOT NULL DEFAULT '',
+                    last_extracted_at TIMESTAMP,
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP,
+                    CONSTRAINT uq_chatbot_user_memories_user UNIQUE (user_id)
+                )
+            """))
+            if inspector.has_table("chatbot_user_memories"):
+                existing = {column["name"] for column in inspector.get_columns("chatbot_user_memories")}
+                for name, column_type in CHATBOT_MEMORY_COLUMNS.items():
+                    if name not in existing:
+                        connection.execute(text(f"ALTER TABLE chatbot_user_memories ADD COLUMN {name} {column_type}"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_chatbot_user_memories_user_id ON chatbot_user_memories(user_id)"))
+    except Exception as error:
+        app.logger.warning("Chatbot schema compatibility check failed: %s", error)

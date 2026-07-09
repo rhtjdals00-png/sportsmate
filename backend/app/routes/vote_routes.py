@@ -1,10 +1,9 @@
-from datetime import datetime
-
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
 from app.models import Participant, Vote, VoteOption, VoteResponse
+from app.utils.timezone import kst_now
 
 vote_bp = Blueprint("votes", __name__)
 
@@ -18,7 +17,7 @@ def participate(vote_id):
     if not participant:
         return jsonify({"message": "승인된 참여자만 투표할 수 있습니다."}), 403
 
-    if vote.ends_at and vote.ends_at < datetime.utcnow():
+    if vote.ends_at and vote.ends_at < kst_now():
         return jsonify({"message": "종료된 투표입니다."}), 400
 
     data = request.get_json() or {}

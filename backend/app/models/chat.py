@@ -1,18 +1,6 @@
-from datetime import datetime, timedelta, timezone
-
 from app.extensions import db
+from app.utils.timezone import kst_now, to_kst_iso
 from .common import TimestampMixin
-
-
-def get_kst_now():
-    kst = timezone(timedelta(hours=9))
-    return datetime.now(kst)
-
-
-def to_kst_iso(value):
-    if not value:
-        return ""
-    return (value + timedelta(hours=9)).isoformat()
 
 
 class ChatRoom(db.Model, TimestampMixin):
@@ -74,7 +62,7 @@ class ChatMessage(db.Model):
     reply_to_sender_name = db.Column(db.String(120), nullable=True)
     reply_to_content = db.Column(db.Text, nullable=True)
     reply_to_message_type = db.Column(db.String(30), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=kst_now, nullable=False)
 
     room = db.relationship("ChatRoom", back_populates="messages")
     sender = db.relationship("User", foreign_keys=[user_id])
@@ -125,7 +113,7 @@ class ChatMessageRead(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     chat_message_id = db.Column(db.Integer, db.ForeignKey("chat_messages.id"), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    read_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    read_at = db.Column(db.DateTime, default=kst_now, nullable=False)
 
     __table_args__ = (db.UniqueConstraint("chat_message_id", "user_id", name="uq_chat_message_read_user"),)
 
@@ -171,7 +159,7 @@ class DirectChatMessage(db.Model):
     location_latitude = db.Column(db.Float, nullable=True)
     location_longitude = db.Column(db.Float, nullable=True)
     location_label = db.Column(db.String(255), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=kst_now, nullable=False)
 
     room = db.relationship("DirectChatRoom", back_populates="messages")
     sender = db.relationship("User")

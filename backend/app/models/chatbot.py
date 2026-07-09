@@ -1,5 +1,6 @@
-from datetime import datetime
+﻿from datetime import datetime
 from app.extensions import db
+from app.utils.timezone import kst_now
 from .common import TimestampMixin
 
 
@@ -35,9 +36,9 @@ class ChatbotMessage(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     session_id = db.Column(db.Integer, db.ForeignKey("chatbot_sessions.id", ondelete="CASCADE"), nullable=False)
-    role = db.Column(db.String(30), nullable=False)  # 'user' or 'assistant'
+    role = db.Column(db.String(30), nullable=False)  # user, assistant, system, tool
     content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=kst_now, nullable=False)
 
     session = db.relationship("ChatbotSession", back_populates="messages")
 
@@ -48,4 +49,33 @@ class ChatbotMessage(db.Model):
             "role": self.role,
             "content": self.content,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class ChatbotUserMemory(db.Model, TimestampMixin):
+    __tablename__ = "chatbot_user_memories"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    preferred_sports = db.Column(db.Text, default="", nullable=False)
+    preferred_regions = db.Column(db.Text, default="", nullable=False)
+    preferred_times = db.Column(db.Text, default="", nullable=False)
+    interest_keywords = db.Column(db.Text, default="", nullable=False)
+    summary = db.Column(db.Text, default="", nullable=False)
+    last_extracted_at = db.Column(db.DateTime)
+
+    user = db.relationship("User", backref=db.backref("chatbot_memory", uselist=False, cascade="all, delete-orphan"))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "preferred_sports": self.preferred_sports,
+            "preferred_regions": self.preferred_regions,
+            "preferred_times": self.preferred_times,
+            "interest_keywords": self.interest_keywords,
+            "summary": self.summary,
+            "last_extracted_at": self.last_extracted_at.isoformat() if self.last_extracted_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

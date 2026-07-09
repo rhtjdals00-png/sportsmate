@@ -1,6 +1,5 @@
-from datetime import datetime, timedelta
-
 from app.extensions import db
+from app.utils.timezone import kst_now
 from .common import TimestampMixin
 
 class Notification(db.Model):
@@ -13,12 +12,11 @@ class Notification(db.Model):
     message = db.Column(db.String(255), nullable=False)
     link_url = db.Column(db.String(255))
     is_read = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=kst_now, nullable=False)
 
     user = db.relationship("User")
 
     def to_dict(self):
-        created_at = self.created_at + timedelta(hours=9) if self.created_at else None
         return {
             "id": self.id,
             "type": self.type,
@@ -26,7 +24,7 @@ class Notification(db.Model):
             "message": self.message,
             "link_url": self.link_url,
             "is_read": self.is_read,
-            "created_at": created_at.isoformat() if created_at else ""
+            "created_at": self.created_at.isoformat() if self.created_at else ""
         }
 
 class PushSubscription(db.Model, TimestampMixin):

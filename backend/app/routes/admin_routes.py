@@ -1,10 +1,10 @@
-from datetime import datetime
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models import Meeting, Report, User, Participant, Sport
+from app.utils.timezone import kst_now, parse_client_datetime
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -39,7 +39,7 @@ def users():
 def user_detail(user_id):
     user = User.query.options(joinedload(User.profile)).get_or_404(user_id)
     
-    now = datetime.utcnow()
+    now = kst_now()
     
     # Calculate meetings counts (only count completed ones)
     meetings_count = Meeting.query.filter(Meeting.host_id == user.id, Meeting.end_at < now).count()
@@ -198,13 +198,13 @@ def update_meeting(meeting_id):
             
     if "start_at" in data and data["start_at"]:
         try:
-            meeting.start_at = datetime.fromisoformat(data["start_at"].replace("Z", "+00:00")).replace(tzinfo=None)
+            meeting.start_at = parse_client_datetime(data["start_at"])
         except ValueError:
             pass
             
     if "end_at" in data and data["end_at"]:
         try:
-            meeting.end_at = datetime.fromisoformat(data["end_at"].replace("Z", "+00:00")).replace(tzinfo=None)
+            meeting.end_at = parse_client_datetime(data["end_at"])
         except ValueError:
             pass
             
@@ -233,10 +233,8 @@ def delete_meeting(meeting_id):
 
     meeting = Meeting.query.get_or_404(meeting_id)
     from app.extensions import db
-    from datetime import datetime
-    
     meeting.status = "suspended"
-    meeting.suspended_at = datetime.utcnow()
+    meeting.suspended_at = kst_now()
     
     db.session.commit()
 
@@ -583,11 +581,10 @@ def load_broadcast_logs():
 def add_broadcast_log(admin_name, title, message, link_url, target_type, target_value, target_count, send_push):
     import json
     import os
-    import datetime
     file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "system_broadcast_logs.json")
     logs = load_broadcast_logs()
     new_entry = {
-        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "timestamp": kst_now().strftime("%Y-%m-%d %H:%M:%S"),
         "admin": admin_name,
         "title": title,
         "message": message,

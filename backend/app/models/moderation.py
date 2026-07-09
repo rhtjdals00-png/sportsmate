@@ -1,6 +1,5 @@
-from datetime import datetime
-
 from app.extensions import db
+from app.utils.timezone import kst_now
 
 class Report(db.Model):
     __tablename__ = "reports"
@@ -10,4 +9,4 @@ class Report(db.Model):
     target_id = db.Column(db.Integer, nullable=False)
     reason = db.Column(db.String(255), nullable=False)
     status = db.Column(db.String(30), default="pending", nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=kst_now, nullable=False)

@@ -182,6 +182,7 @@
 .desktop-meeting-board__create-link,
 .desktop-meeting-board__view-toggle,
 .desktop-meeting-board__search button,
+.desktop-meeting-board__smart-search button,
 .desktop-meeting-board__quick-filters button {
   display: inline-flex;
   align-items: center;
@@ -214,13 +215,15 @@
 
 .desktop-meeting-board__create-link:hover,
 .desktop-meeting-board__view-toggle:hover,
-.desktop-meeting-board__search button:hover {
+.desktop-meeting-board__search button:hover,
+.desktop-meeting-board__smart-search button:hover {
   background: #1d4ed8;
   transform: translateY(-1px);
 }
 
 .desktop-meeting-board__create-link:hover,
-.desktop-meeting-board__search button:hover {
+.desktop-meeting-board__search button:hover,
+.desktop-meeting-board__smart-search button:hover {
   background: #4338ca;
 }
 
@@ -244,6 +247,145 @@
   display: grid;
   gap: 20px;
   padding: 24px;
+}
+
+.desktop-meeting-board__filters--simple {
+  gap: 14px;
+  padding: 20px 24px;
+}
+
+.desktop-meeting-board__smart-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px 112px 104px;
+  gap: 10px;
+}
+
+.desktop-meeting-board__smart-search label {
+  display: flex;
+  min-width: 0;
+  min-height: 48px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #94a3b8;
+  padding: 0 16px;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.desktop-meeting-board__smart-search label:focus-within {
+  border-color: rgba(37, 99, 235, 0.55);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+.desktop-meeting-board__smart-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.desktop-meeting-board__smart-search button {
+  min-height: 48px;
+  border: 0;
+  background: #2563eb;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.desktop-meeting-board__smart-search button.is-secondary {
+  border: 0;
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.desktop-meeting-board__smart-search button.is-secondary:hover {
+  background: #111827;
+}
+
+.desktop-meeting-board__smart-search button.is-ghost {
+  border: 1px solid #dbe3f0;
+  background: #ffffff;
+  color: #334155;
+}
+
+.desktop-meeting-board__smart-search button.is-ghost:hover {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.desktop-meeting-board__smart-search button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
+.desktop-meeting-board__filter-help {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: -2px;
+}
+
+.desktop-meeting-board__filter-help span {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #64748b;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.desktop-meeting-board__advanced {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+}
+
+.desktop-meeting-board__advanced summary {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 8px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 950;
+  list-style: none;
+  cursor: pointer;
+}
+
+.desktop-meeting-board__advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.desktop-meeting-board__advanced summary span,
+.desktop-meeting-board__advanced summary em {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.desktop-meeting-board__advanced summary em {
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.desktop-meeting-board__advanced .desktop-meeting-board__quick-filters {
+  margin-top: 10px;
 }
 
 .desktop-meeting-board__search {
@@ -285,6 +427,103 @@
   border: 0;
   background: #2563eb;
   color: #ffffff;
+}
+
+.desktop-meeting-board__radius-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px 104px;
+  gap: 10px;
+}
+
+.desktop-meeting-board__radius-search label {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #dbe3f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  padding: 0 14px;
+}
+
+.desktop-meeting-board__radius-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.desktop-meeting-board__radius-search button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #dbe3f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.desktop-meeting-board__radius-search button[type="submit"] {
+  border: 0;
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.desktop-meeting-board__radius-search button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.desktop-meeting-board__radius-error {
+  margin: -10px 0 0;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.desktop-meeting-board__active-radius {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  padding: 9px 12px;
+}
+
+.desktop-meeting-board__active-radius span,
+.desktop-meeting-board__active-radius button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.desktop-meeting-board__active-radius span {
+  color: #1d4ed8;
+}
+
+.desktop-meeting-board__active-radius button {
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1d4ed8;
+  padding: 7px 10px;
+  cursor: pointer;
 }
 
 .desktop-meeting-board__quick-filters {
@@ -433,6 +672,12 @@
   gap: 4px;
   background: #fef3c7;
   color: #92400e;
+}
+
+.desktop-meeting-row__badges .desktop-meeting-distance-badge {
+  max-width: 96px;
+  background: #e0f2fe;
+  color: #0369a1;
 }
 
 .desktop-meeting-owner-badge svg {
@@ -1135,5 +1380,3 @@
     position: static;
   }
 }
-
-

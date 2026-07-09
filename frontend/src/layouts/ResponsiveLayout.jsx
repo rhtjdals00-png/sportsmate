@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { BellRing, MapPin, ShieldCheck, X } from "lucide-react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useResponsive } from "../hooks/useResponsive";
 import { enablePushNotifications } from "../utils/pushNotifications";
@@ -19,6 +19,12 @@ function ResponsiveLayout() {
   const [pushPermissionGranted, setPushPermissionGranted] = useState(false);
   const [locationPermissionGranted, setLocationPermissionGranted] = useState(false);
   const permissionStorageKey = user?.id ? `sportsmate_permission_onboarding_${user.id}` : "";
+  const hideChatbotFloating = isMobile
+    || authLoading
+    || !user?.id
+    || AUTH_ROUTES.some((route) => location.pathname.startsWith(route))
+    || location.pathname.startsWith("/admin")
+    || location.pathname.startsWith("/chatbot");
 
   useEffect(() => {
     const message = sessionStorage.getItem("sportsmate_flash");
@@ -86,6 +92,13 @@ function ResponsiveLayout() {
     <>
       {content}
       {toast ? <div className="app-toast" role="status" aria-live="polite">{toast}</div> : null}
+      {!hideChatbotFloating ? (
+        <Link className="desktop-chatbot-floating" to="/chatbot" aria-label="AI 챗봇 열기">
+          <span className="desktop-chatbot-floating__logo"><img src="/images/logo.png" alt="" /></span>
+          <b>AI 비서</b>
+          <small>맞춤 모임 추천</small>
+        </Link>
+      ) : null}
       {permissionGuideOpen ? (
         <div className="mobile-permission-guide" role="dialog" aria-modal="true" aria-label="앱 권한 안내">
           <button className="mobile-permission-guide__backdrop" type="button" onClick={closePermissionGuide} aria-label="닫기" />

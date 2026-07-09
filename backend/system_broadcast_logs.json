@@ -64,5 +64,16 @@
     "target_value": "",
     "target_count": 13,
     "send_push": true
+  },
+  {
+    "timestamp": "2026-07-09 10:06:44",
+    "admin": "test01",
+    "title": "테스트",
+    "message": "끼얏호우",
+    "link_url": "/notifications",
+    "target_type": "role",
+    "target_value": "admin",
+    "target_count": 6,
+    "send_push": true
   }
 ]

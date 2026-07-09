@@ -1,5 +1,3 @@
-from datetime import datetime, timezone
-
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required, verify_jwt_in_request
 from sqlalchemy import func
@@ -8,6 +6,7 @@ from sqlalchemy.orm import joinedload
 from app.extensions import db
 from app.models import Attendance, ChatMessage, ChatRoom, Meeting, Notice, Participant, Review, Sport, User, Vote, VoteOption, VoteResponse
 from app.services.meeting_service import close_expired_one_time_meetings, create_meeting, create_review, join_meeting, list_meetings, update_application, update_meeting
+from app.utils.timezone import parse_client_datetime
 
 meeting_bp = Blueprint("meetings", __name__)
 
@@ -50,18 +49,6 @@ def add_meeting_system_message(meeting, user_id, content):
         content=content,
         message_type="system",
     ))
-
-
-def parse_client_datetime(value):
-    if not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        if parsed.tzinfo:
-            parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
-        return parsed
-    except ValueError:
-        return None
 
 
 def host_summary(host):

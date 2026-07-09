@@ -11,6 +11,7 @@ import {
   MessageCircle,
   Pencil,
   ShieldCheck,
+  Sparkles,
   Users,
   X
 } from "lucide-react";
@@ -227,7 +228,7 @@ function buildCalendarCells(monthDate, items) {
   });
 }
 
-function CalendarModal({ open, items, onClose, highlightMeetingId, highlightChatRoomId, autoOpenHighlightedDay }) {
+function CalendarModal({ open, items, onClose, highlightMeetingId, highlightChatRoomId, highlightSource, autoOpenHighlightedDay }) {
   const [monthDate, setMonthDate] = useState(() => calendarBaseDate(items));
   const [selectedDay, setSelectedDay] = useState(null);
   const cells = useMemo(() => buildCalendarCells(monthDate, items), [monthDate, items]);
@@ -246,6 +247,7 @@ function CalendarModal({ open, items, onClose, highlightMeetingId, highlightChat
     }),
     [highlightChatRoomId, highlightMeetingId, items]
   );
+  const isChatbotHighlight = highlightSource === "chatbot" && Boolean(highlightedItem);
 
   useEffect(() => {
     if (open) {
@@ -268,6 +270,15 @@ function CalendarModal({ open, items, onClose, highlightMeetingId, highlightChat
         <div className="schedule-modal-panel">
           <button className="schedule-modal-close" type="button" onClick={onClose}><X size={18} /></button>
           <h2 className="schedule-modal-title">다가오는 일정</h2>
+          {isChatbotHighlight && (
+            <div className="profile-calendar-ai-note">
+              <Sparkles size={17} />
+              <span>
+                <strong>AI 비서가 알려준 일정이에요.</strong>
+                달력에서 해당 날짜를 열어 바로 확인할 수 있게 표시해두었습니다.
+              </span>
+            </div>
+          )}
           <div className="schedule-modal-body">
             <div className="profile-calendar-expanded">
               <section className="page-card calendar-card">
@@ -294,6 +305,7 @@ function CalendarModal({ open, items, onClose, highlightMeetingId, highlightChat
                       onClick={() => cell.items.length && setSelectedDay(cell)}
                     >
                       <b>{cell.day}</b>
+                      {cell.items.some(isHighlightedItem) && isChatbotHighlight ? <i>AI 추천</i> : null}
                       {cell.items[0] && (
                         <>
                           <small>{cell.items[0].title}</small>
@@ -319,6 +331,12 @@ function CalendarModal({ open, items, onClose, highlightMeetingId, highlightChat
                 <article className={`schedule-modal-item ${isHighlightedItem(item) ? "is-highlighted-from-chat" : ""}`} key={`${item.state}-${item.id}`}>
                   <img src={item.img} alt={item.title} />
                   <div>
+                    {isHighlightedItem(item) && isChatbotHighlight && (
+                      <div className="schedule-modal-ai-badge">
+                        <Sparkles size={13} />
+                        AI 비서가 알려준 일정
+                      </div>
+                    )}
                     {item.state === "host" && <div className="schedule-modal-status"><span className="board-badge host"><Crown size={13} />내가 방장</span></div>}
                     <span>{calendarItemTime(item.rawTime)}</span>
                     <h3>{item.title}</h3>
@@ -354,7 +372,7 @@ function DesktopMyPage() {
   const [authChecking, setAuthChecking] = useState(false);
   const [savingIntro, setSavingIntro] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [calendarHighlight, setCalendarHighlight] = useState({ meetingId: "", chatRoomId: "", autoOpen: false });
+  const [calendarHighlight, setCalendarHighlight] = useState({ meetingId: "", chatRoomId: "", source: "", autoOpen: false });
 
   useEffect(() => {
     const panel = searchParams.get("panel");
@@ -366,6 +384,7 @@ function DesktopMyPage() {
       setCalendarHighlight({
         meetingId: searchParams.get("meeting") || "",
         chatRoomId: searchParams.get("chat") || "",
+        source: searchParams.get("from") || "",
         autoOpen: true
       });
       setCalendarOpen(true);
@@ -373,6 +392,7 @@ function DesktopMyPage() {
       nextParams.delete("calendar");
       nextParams.delete("meeting");
       nextParams.delete("chat");
+      nextParams.delete("from");
       setSearchParams(nextParams, { replace: true });
     }
   }, [searchParams, setSearchParams]);
@@ -584,7 +604,7 @@ function DesktopMyPage() {
             </div>
             <div className={`profile-schedule-actions ${activeActivity !== "schedule" ? "is-placeholder" : ""}`}>
               {activeActivity === "schedule" ? (
-                <button className="calendar-expand-btn" type="button" onClick={() => { setCalendarHighlight((current) => ({ ...current, autoOpen: false })); setCalendarOpen(true); }}><CalendarDays size={15} />달력으로 보기</button>
+                <button className="calendar-expand-btn" type="button" onClick={() => { setCalendarHighlight((current) => ({ ...current, source: "", autoOpen: false })); setCalendarOpen(true); }}><CalendarDays size={15} />달력으로 보기</button>
               ) : (
                 <span aria-hidden="true">달력으로 보기</span>
               )}
@@ -659,6 +679,7 @@ function DesktopMyPage() {
         onClose={() => { setCalendarOpen(false); setCalendarHighlight((current) => ({ ...current, autoOpen: false })); }}
         highlightMeetingId={calendarHighlight.meetingId}
         highlightChatRoomId={calendarHighlight.chatRoomId}
+        highlightSource={calendarHighlight.source}
         autoOpenHighlightedDay={calendarHighlight.autoOpen}
       />
     </div>

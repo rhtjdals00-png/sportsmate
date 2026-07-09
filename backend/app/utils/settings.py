@@ -1,6 +1,8 @@
 import os
 import json
 
+from app.utils.timezone import kst_now
+
 SETTINGS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "system_settings.json")
 
 def load_system_settings():
@@ -47,10 +49,9 @@ def load_settings_logs():
     return []
 
 def add_settings_log(admin_name, changes):
-    import datetime
     logs = load_settings_logs()
     new_entry = {
-        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "timestamp": kst_now().strftime("%Y-%m-%d %H:%M:%S"),
         "admin": admin_name,
         "changes": changes if changes else ["변경 사항 없음"]
     }

@@ -11,9 +11,11 @@
   MapPin,
   Megaphone,
   MessageCircle,
+  Navigation,
   Pin,
   Plus,
   Reply,
+  Route,
   Search,
   Send,
   Settings,
@@ -32,6 +34,9 @@ import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { voteApi } from "../../../api/voteApi";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { useAsync } from "../../../hooks/useAsync";
+
+const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
+let naverMapClientIdPromise;
 
 function formatMessageTime(value) {
   if (!value) return "";
@@ -132,7 +137,48 @@ function mapUrl(message) {
   const lat = message.location_latitude;
   const lng = message.location_longitude;
   if (lat == null || lng == null) return "";
-  return `https://www.google.com/maps?q=${encodeURIComponent(`${lat},${lng}`)}`;
+  const label = encodeURIComponent(message.location_label || "공유한 위치");
+  return `https://map.naver.com/p/search/${label}?c=${lng},${lat},16,0,0,0,dh`;
+}
+
+function naverDirectionsUrl(origin, destination) {
+  const originPart = `s:${origin.longitude},${origin.latitude},${encodeURIComponent(origin.label || "현재 위치")}`;
+  const destinationPart = `e:${destination.longitude},${destination.latitude},${encodeURIComponent(destination.label || "공유한 위치")}`;
+  return `https://map.naver.com/p/directions/${originPart}/${destinationPart}/-/transit`;
+}
+
+function getNaverMapClientId() {
+  if (!naverMapClientIdPromise) {
+    naverMapClientIdPromise = locationApi.mapConfig()
+      .then((data) => data.naver_dynamic_map_client_id || "")
+      .catch(() => "");
+  }
+  return naverMapClientIdPromise;
+}
+
+function loadNaverMapScript(clientId) {
+  if (!clientId) return Promise.reject(new Error("missing naver map client id"));
+  if (window.naver?.maps) return Promise.resolve(window.naver.maps);
+  if (window.__sportsmateNaverMapPromise) return window.__sportsmateNaverMapPromise;
+
+  window.__sportsmateNaverMapPromise = new Promise((resolve, reject) => {
+    const existing = document.getElementById(NAVER_MAP_SCRIPT_ID);
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.naver.maps), { once: true });
+      existing.addEventListener("error", reject, { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = NAVER_MAP_SCRIPT_ID;
+    script.async = true;
+    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(clientId)}`;
+    script.onload = () => resolve(window.naver.maps);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+
+  return window.__sportsmateNaverMapPromise;
 }
 
 function readImageAsDataUrl(file) {
@@ -142,6 +188,117 @@ function readImageAsDataUrl(file) {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
+}
+
+function ChatLocationMessage({ message }) {
+  const mapElementRef = useRef(null);
+  const mapRef = useRef(null);
+  const markerRef = useRef(null);
+  const [mapStatus, setMapStatus] = useState("idle");
+  const [directionStatus, setDirectionStatus] = useState("");
+
+  const latitude = Number(message.location_latitude);
+  const longitude = Number(message.location_longitude);
+  const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude);
+  const label = message.location_label || "공유한 위치";
+  const naverUrl = mapUrl(message);
+
+  useEffect(() => {
+    if (!hasCoordinates) return;
+    let disposed = false;
+    setMapStatus("loading");
+
+    getNaverMapClientId()
+      .then((clientId) => loadNaverMapScript(clientId))
+      .then((maps) => {
+        if (disposed || !mapElementRef.current) return;
+        const position = new maps.LatLng(latitude, longitude);
+        mapRef.current = new maps.Map(mapElementRef.current, {
+          center: position,
+          zoom: 16,
+          draggable: false,
+          scrollWheel: false,
+          disableDoubleClickZoom: true,
+          mapDataControl: false,
+          scaleControl: false,
+          zoomControl: false
+        });
+        markerRef.current = new maps.Marker({ map: mapRef.current, position });
+        setMapStatus("ready");
+      })
+      .catch(() => setMapStatus("fallback"));
+
+    return () => {
+      disposed = true;
+      if (markerRef.current) markerRef.current.setMap(null);
+      markerRef.current = null;
+      mapRef.current = null;
+    };
+  }, [hasCoordinates, latitude, longitude]);
+
+  const openDirections = () => {
+    if (!hasCoordinates) return;
+    if (!navigator.geolocation) {
+      window.open(naverUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    setDirectionStatus("현재 위치 확인 중");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setDirectionStatus("");
+        window.open(
+          naverDirectionsUrl(
+            {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              label: "현재 위치"
+            },
+            { latitude, longitude, label }
+          ),
+          "_blank",
+          "noopener,noreferrer"
+        );
+      },
+      () => {
+        setDirectionStatus("위치 권한 필요");
+        window.open(naverUrl, "_blank", "noopener,noreferrer");
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+    );
+  };
+
+  return (
+    <article className="talk-location-message">
+      <a className="talk-location-message__map" href={naverUrl} target="_blank" rel="noreferrer" onPointerDown={(event) => event.stopPropagation()}>
+        <div className="talk-location-message__canvas" ref={mapElementRef}>
+          {mapStatus !== "ready" ? (
+            <span>
+              <MapPin size={24} />
+              {mapStatus === "loading" ? "네이버 지도 불러오는 중" : "네이버 지도에서 보기"}
+            </span>
+          ) : null}
+        </div>
+      </a>
+      <div className="talk-location-message__body">
+        <MapPin size={18} />
+        <span>
+          <strong>{label}</strong>
+          <small>{hasCoordinates ? "네이버 지도에서 위치 확인" : "위치 정보 없음"}</small>
+        </span>
+      </div>
+      <div className="talk-location-message__actions">
+        <a href={naverUrl} target="_blank" rel="noreferrer" onPointerDown={(event) => event.stopPropagation()}>
+          <Navigation size={14} />
+          네이버 지도
+        </a>
+        <button type="button" onClick={openDirections} onPointerDown={(event) => event.stopPropagation()} disabled={!hasCoordinates}>
+          <Route size={14} />
+          {directionStatus || "길찾기"}
+        </button>
+      </div>
+    </article>
+  );
 }
 
 function padNumber(value) {
@@ -1340,14 +1497,8 @@ function DesktopChatRoom() {
                               {message.attachment_name ? <figcaption>{message.attachment_name}</figcaption> : null}
                             </figure>
                           ) : message.message_type === "location" ? (
-                            <a className="talk-location-message" href={mapUrl(message)} target="_blank" rel="noreferrer">
-                              <MapPin size={18} />
-                              <span>
-                                <strong>{message.location_label || "공유한 위치"}</strong>
-                                <small>{[message.location_latitude, message.location_longitude].filter((value) => value != null).join(", ")}</small>
-                              </span>
-                            </a>
-                        ) : (
+                            <ChatLocationMessage message={message} />
+                          ) : (
                             <p>{isSystemMessage(message) ? systemMessageText(message) : message.content}</p>
                           )}
                         </div>

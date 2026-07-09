@@ -1,5 +1,4 @@
 import math
-from datetime import datetime
 
 from flask import current_app
 from sqlalchemy import and_, or_
@@ -8,16 +7,15 @@ from sqlalchemy.orm import joinedload
 from app.extensions import db
 from app.models import ChatMessage, ChatRoom, Meeting, Participant, Review, Sport, User
 from app.services.notification_service import create_notification, send_web_push
+from app.utils.timezone import kst_now, parse_client_datetime
 
 
 def parse_datetime(value):
-    if not value:
-        return None
-    return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+    return parse_client_datetime(value)
 
 
 def close_expired_one_time_meetings(now=None):
-    now = now or datetime.now()
+    now = now or kst_now()
     expired_updated = (
         Meeting.query
         .filter(
@@ -47,7 +45,7 @@ def close_expired_one_time_meetings(now=None):
 def delete_expired_suspended_meetings(now=None):
     from datetime import timedelta
     from app.models import Review, Notice, Vote, VoteOption, VoteResponse, Attendance
-    now = now or datetime.utcnow()
+    now = now or kst_now()
     limit_time = now - timedelta(days=30)
     
     expired_meetings = (
@@ -90,6 +88,36 @@ def _distance_km(lat1, lng1, lat2, lng2):
     delta_lambda = math.radians(lng2 - lng1)
     a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
     return round(radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)), 1)
+
+
+def _region_search_terms(value):
+    region = str(value or "").strip()
+    if not region:
+        return []
+    terms = [region]
+    suffixes = [
+        "특별자치시",
+        "특별자치도",
+        "특별시",
+        "광역시",
+        "자치도",
+        "도",
+    ]
+    for suffix in suffixes:
+        if region.endswith(suffix):
+            terms.append(region[:-len(suffix)])
+            break
+    return [term for index, term in enumerate(terms) if term and term not in terms[:index]]
+
+
+def _region_filter(column, value):
+    terms = _region_search_terms(value)
+    conditions = [column == value]
+    for term in terms:
+        like_term = f"%{term}%"
+        conditions.append(Meeting.address.ilike(like_term))
+        conditions.append(Meeting.location_name.ilike(like_term))
+    return or_(*conditions)
 
 
 def _display_name(user):
@@ -138,9 +166,9 @@ def list_meetings(params, current_user_id=None):
 #            query = query.join(Sport, Meeting.sport_id == Sport.id).filter(Sport.name == sport_value)
 
     if params.get("sido"):
-        query = query.filter(Meeting.region_sido_code == params["sido"])
+        query = query.filter(_region_filter(Meeting.region_sido_code, params["sido"]))
     if params.get("sigungu"):
-        query = query.filter(Meeting.region_sigungu_code == params["sigungu"])
+        query = query.filter(_region_filter(Meeting.region_sigungu_code, params["sigungu"]))
     if params.get("keyword"):
       keyword = f"%{params['keyword']}%"
       query = query.filter(Meeting.title.ilike(keyword) | Meeting.location_name.ilike(keyword) | Meeting.address.ilike(keyword))
@@ -156,9 +184,15 @@ def list_meetings(params, current_user_id=None):
     latitude = _float_param(params, "lat") or _float_param(params, "latitude")
     longitude = _float_param(params, "lng") or _float_param(params, "longitude")
     if latitude is not None and longitude is not None:
-        candidates = query.order_by(Meeting.start_at.is_(None), Meeting.start_at.asc()).limit(50).all()
+        radius_km = _float_param(params, "radius_km") or _float_param(params, "radius")
+        candidates = query.order_by(Meeting.start_at.is_(None), Meeting.start_at.asc()).limit(80).all()
         for meeting in candidates:
             meeting._distance_km = _distance_km(latitude, longitude, meeting.latitude, meeting.longitude)
+        if radius_km is not None:
+            candidates = [
+                meeting for meeting in candidates
+                if meeting._distance_km is not None and meeting._distance_km <= radius_km
+            ]
         candidates.sort(key=lambda meeting: meeting._distance_km if meeting._distance_km is not None else 999999)
         return candidates[:limit]
     return query.order_by(Meeting.start_at.is_(None), Meeting.start_at.asc()).limit(limit).all()
@@ -237,7 +271,7 @@ def create_meeting(data, host_id):
     )
     db.session.add(meeting)
     db.session.flush()
-    db.session.add(Participant(meeting_id=meeting.id, user_id=host_id, role="host", status="approved", approved_at=datetime.utcnow()))
+    db.session.add(Participant(meeting_id=meeting.id, user_id=host_id, role="host", status="approved", approved_at=kst_now()))
     db.session.add(ChatRoom(meeting_id=meeting.id))
     db.session.commit()
     return meeting
@@ -279,7 +313,7 @@ def update_application(meeting_id, applicant_user_id, host_id, status):
         if meeting.current_participants >= meeting.max_participants:
             raise ValueError("모집 정원이 마감되었습니다.")
         participant.status = "approved"
-        participant.approved_at = datetime.utcnow()
+        participant.approved_at = kst_now()
         meeting.current_participants += 1
         if not meeting.chat_room:
             meeting.chat_room = ChatRoom(meeting_id=meeting.id)
@@ -292,7 +326,7 @@ def update_application(meeting_id, applicant_user_id, host_id, status):
         link_url = f"/chats/{meeting.chat_room.id}"
     else:
         participant.status = "rejected"
-        participant.rejected_at = datetime.utcnow()
+        participant.rejected_at = kst_now()
         title = "참여 신청 거절"
         message = f"{meeting.title} 참여 신청이 거절되었습니다."
         link_url = f"/meetings/{meeting.id}"

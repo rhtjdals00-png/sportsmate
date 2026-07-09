@@ -1,6 +1,7 @@
 import os
 import json
-import datetime
+
+from app.utils.timezone import kst_now
 
 def load_audit_logs():
     file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "system_audit_logs.json")
@@ -16,7 +17,7 @@ def log_admin_action(admin_name, action_type, description, target_id=None):
     file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "system_audit_logs.json")
     logs = load_audit_logs()
     new_entry = {
-        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "timestamp": kst_now().strftime("%Y-%m-%d %H:%M:%S"),
         "admin": admin_name,
         "action_type": action_type,
         "description": description,

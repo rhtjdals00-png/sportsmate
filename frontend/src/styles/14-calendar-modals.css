@@ -98,6 +98,43 @@
   font-weight: 950;
 }
 
+.profile-calendar-ai-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: -4px 42px 16px 0;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 11px 12px;
+}
+
+.profile-calendar-ai-note svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: #4f46e5;
+}
+
+.profile-calendar-ai-note span,
+.profile-calendar-ai-note strong {
+  display: block;
+}
+
+.profile-calendar-ai-note span {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.profile-calendar-ai-note strong {
+  margin-bottom: 2px;
+  color: #1e3a8a;
+  font-size: 13px;
+  font-weight: 950;
+}
+
 .schedule-modal-item {
   display: grid;
   grid-template-columns: 96px minmax(0, 1fr);
@@ -133,6 +170,25 @@
   display: flex;
   align-items: center;
   margin-bottom: 8px;
+}
+
+.schedule-modal-ai-badge {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 26px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.schedule-modal-ai-badge + .schedule-modal-status,
+.schedule-modal-ai-badge + span {
+  margin-top: 8px;
 }
 
 .schedule-modal-status .board-badge {

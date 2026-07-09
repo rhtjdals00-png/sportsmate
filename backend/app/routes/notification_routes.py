@@ -9,6 +9,7 @@ from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models import ChatMessage, ChatMessageRead, ChatRoom, Meeting, Notice, Notification, Participant, PushSubscription, Vote, VoteResponse
+from app.utils.timezone import kst_now, to_kst_iso
 
 notification_bp = Blueprint("notifications", __name__)
 
@@ -57,7 +58,7 @@ def _enrich_notification(item, user_id):
 
 
 def _to_kst_iso(value):
-    return (value + timedelta(hours=9)).isoformat() if value else ""
+    return to_kst_iso(value)
 
 
 def _notification_item(item):
@@ -127,7 +128,7 @@ def _chat_summary_items(user_id):
 
 
 def _notice_summary_items(user_id):
-    since = datetime.utcnow() - timedelta(days=7)
+    since = kst_now() - timedelta(days=7)
     notices = (
         Notice.query
         .join(Meeting, Notice.meeting_id == Meeting.id)
@@ -163,7 +164,7 @@ def _notice_summary_items(user_id):
 
 
 def _vote_summary_items(user_id):
-    now = datetime.utcnow()
+    now = kst_now()
     deadline = now + timedelta(hours=24)
     votes = (
         Vote.query

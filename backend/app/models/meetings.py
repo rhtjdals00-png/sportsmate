@@ -1,6 +1,5 @@
-from datetime import datetime
-
 from app.extensions import db
+from app.utils.timezone import kst_now
 from .common import TimestampMixin
 
 class Meeting(db.Model, TimestampMixin):
@@ -58,7 +57,7 @@ class Meeting(db.Model, TimestampMixin):
     def to_dict(self, current_user_id=None):
         remaining_days = None
         if self.status == "suspended" and self.suspended_at:
-            elapsed = datetime.utcnow() - self.suspended_at
+            elapsed = kst_now() - self.suspended_at
             remaining_days = max(0, 30 - elapsed.days)
             
         data = {
@@ -107,7 +106,7 @@ class Meeting(db.Model, TimestampMixin):
             
         remaining_days = None
         if self.status == "suspended" and self.suspended_at:
-            elapsed = datetime.utcnow() - self.suspended_at
+            elapsed = kst_now() - self.suspended_at
             remaining_days = max(0, 30 - elapsed.days)
             
         return {
@@ -150,7 +149,7 @@ class Participant(db.Model):
     role = db.Column(db.String(30), default="member", nullable=False)
     status = db.Column(db.String(30), default="pending", nullable=False)
     join_message = db.Column(db.String(255))
-    requested_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    requested_at = db.Column(db.DateTime, default=kst_now, nullable=False)
     approved_at = db.Column(db.DateTime)
     rejected_at = db.Column(db.DateTime)
 
