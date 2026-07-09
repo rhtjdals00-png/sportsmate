@@ -139,7 +139,10 @@ function HostMeetingManagePage() {
             {!notices.loading && !noticeItems.length && <p>등록된 공지가 없습니다.</p>}
           </div>
         </section>
-        <Button variant="secondary" onClick={cancelMeeting}>모집종료</Button>
+        <div className="host-manage-bottom-buttons">
+          <Button variant="outline" onClick={() => navigate(`/meetings/${meeting.id}`)}>수정 취소</Button>
+          <Button variant="danger" onClick={cancelMeeting}>모집종료</Button>
+        </div>
       </div>
     </>
   );
