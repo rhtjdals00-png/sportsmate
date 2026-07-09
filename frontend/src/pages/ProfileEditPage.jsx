@@ -64,6 +64,13 @@ const fallbackSportGroups = [
   { category: { id: "fallback-etc", name: "기타" }, sports: ["볼링", "당구", "골프", "수영"] }
 ];
 
+const splitRegions = (value) => {
+  return (value || "")
+    .split(",")
+    .map((r) => r.trim())
+    .filter(Boolean);
+};
+
 
 // API 응답이 비어 있거나 깨졌을 때 사용할 기본 종목 목록입니다.
 const fallbackCategories = fallbackSportGroups.map((group) => group.category);
@@ -173,13 +180,25 @@ function MobileProfileEditPage() {
   const [categories, setCategories] = useState([]);
   const [sports, setSports] = useState([]);
   const [openCategoryId, setOpenCategoryId] = useState(null);
-  const [regionKeyword, setRegionKeyword] = useState(user?.profile?.region || "");
+  const [regionKeyword, setRegionKeyword] = useState("");
   const [regionResults, setRegionResults] = useState([]);
   const [regionLoading, setRegionLoading] = useState(false);
   const [regionMessage, setRegionMessage] = useState("");
+  const [selectedRegions, setSelectedRegions] = useState(
+    splitRegions(user?.profile?.region)
+  );
+
+  useEffect(() => {
+    setForm((prev) => ({
+      ...prev,
+      region: selectedRegions.join(", ")
+    }));
+  }, [selectedRegions]);
+
   const [useSportLevels, setUseSportLevels] = useState(
     initialSports.some((sportName) => Boolean(initialLevels[sportName]))
   );
+  const [levelModalSport, setLevelModalSport] = useState(null);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" });
   const [passwordStatus, setPasswordStatus] = useState("idle");
@@ -238,23 +257,53 @@ function MobileProfileEditPage() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const updateRegion = (sidoName, areaName = "") => {
+  const addRegion = (regionName) => {
+    const trimmed = (regionName || "").trim();
+    if (!trimmed) return;
+    setSelectedRegions((prev) => {
+      if (prev.includes(trimmed)) return prev;
+      if (prev.length >= 2) {
+        alert("활동 지역은 최대 2개까지만 지정할 수 있습니다.");
+        return prev;
+      }
+      return [...prev, trimmed];
+    });
+  };
+
+  const removeRegion = (targetRegion) => {
+    setSelectedRegions((prev) => prev.filter((r) => r !== targetRegion));
+  };
+
+  const handleSidoChange = (sidoName) => {
     setForm((prev) => ({
       ...prev,
       region_sido: sidoName,
-      region_area: areaName,
-      region: sidoName ? (areaName ? `${sidoName} ${areaName}` : sidoName) : ""
+      region_area: ""
+    }));
+  };
+
+  const handleAreaChange = (areaName) => {
+    setForm((prev) => ({
+      ...prev,
+      region_area: areaName
+    }));
+  };
+
+  const handleAddSelectedRegion = () => {
+    if (!form.region_sido) return;
+    const fullRegion = form.region_area 
+      ? `${form.region_sido} ${form.region_area}` 
+      : form.region_sido;
+    addRegion(fullRegion);
+    setForm((prev) => ({
+      ...prev,
+      region_sido: "",
+      region_area: ""
     }));
   };
 
   const updateRegionText = (value) => {
     setRegionKeyword(value);
-    setForm((prev) => ({
-      ...prev,
-      region: value,
-      region_sido: "",
-      region_area: ""
-    }));
   };
 
   const searchRegion = async () => {
@@ -282,7 +331,8 @@ function MobileProfileEditPage() {
 
   const selectRegionResult = (item) => {
     const value = item.address || item.title || "";
-    updateRegionText(value);
+    addRegion(value);
+    setRegionKeyword("");
     setRegionResults([]);
     setRegionMessage("");
   };
@@ -301,19 +351,32 @@ function MobileProfileEditPage() {
   const toggleSport = (sportName) => {
     setForm((prev) => {
       const exists = prev.preferred_sports.includes(sportName);
-      const nextLevels = { ...prev.preferred_sport_levels };
       if (exists) {
+        const nextLevels = { ...prev.preferred_sport_levels };
         delete nextLevels[sportName];
+        return {
+          ...prev,
+          preferred_sports: prev.preferred_sports.filter((name) => name !== sportName),
+          preferred_sport_levels: nextLevels
+        };
       } else {
-        nextLevels[sportName] = nextLevels[sportName] || prev.exercise_level;
+        if (prev.preferred_sports.length >= 6) {
+          alert("선호 종목은 최대 6개까지만 선택할 수 있습니다.");
+          return prev;
+        }
+        if (useSportLevels) {
+          setTimeout(() => setLevelModalSport(sportName), 0);
+          return prev;
+        } else {
+          const nextLevels = { ...prev.preferred_sport_levels };
+          nextLevels[sportName] = prev.exercise_level;
+          return {
+            ...prev,
+            preferred_sports: [...prev.preferred_sports, sportName],
+            preferred_sport_levels: nextLevels
+          };
+        }
       }
-      return {
-        ...prev,
-        preferred_sports: exists
-          ? prev.preferred_sports.filter((name) => name !== sportName)
-          : [...prev.preferred_sports, sportName],
-        preferred_sport_levels: nextLevels
-      };
     });
   };
 
@@ -327,6 +390,19 @@ function MobileProfileEditPage() {
         preferred_sport_levels: nextLevels
       };
     });
+  };
+
+  const selectSportLevelAndAdd = (sportName, levelValue) => {
+    setForm((prev) => {
+      const nextLevels = { ...prev.preferred_sport_levels };
+      nextLevels[sportName] = levelValue;
+      return {
+        ...prev,
+        preferred_sports: [...prev.preferred_sports, sportName],
+        preferred_sport_levels: nextLevels
+      };
+    });
+    setLevelModalSport(null);
   };
 
   const updateSportLevel = (sportName, level) => {
@@ -642,10 +718,6 @@ function MobileProfileEditPage() {
               <h1>{T.heading}</h1>
               <p>{T.description}</p>
             </div>
-            <div className="profile-setup__status profile-setup__status--edit">
-              <CheckCircle2 size={18} />
-              <span>{StatusMessages.connected}</span>
-            </div>
           </section>
 
           {!isMobile ? (
@@ -670,9 +742,12 @@ function MobileProfileEditPage() {
                 <span>{T.name}</span>
                 <input value={form.name} onChange={(event) => updateField("name", event.target.value)} placeholder={T.namePlaceholder} />
               </label>
-              <label>
+              <label className="profile-setup__nickname-label">
                 <span>{T.nickname}</span>
-                <input maxLength={12} value={form.nickname} onChange={(event) => updateField("nickname", event.target.value.slice(0, 12))} placeholder={T.nicknamePlaceholder} required />
+                <div className="profile-setup__nickname-input-group">
+                  <input maxLength={12} value={form.nickname} onChange={(event) => updateField("nickname", event.target.value.slice(0, 12))} placeholder={T.nicknamePlaceholder} required />
+                  {user?.user_tag && <span className="profile-setup__user-tag-readonly">#{user.user_tag}</span>}
+                </div>
               </label>
               <label>
                 <span>{T.phone}</span>
@@ -717,23 +792,59 @@ function MobileProfileEditPage() {
                     ))}
                   </div>
                 ) : null}
-                <div className="profile-setup__region-result">{form.region || T.noRegion}</div>
+                <div className="profile-setup__region-badges">
+                  {selectedRegions.length > 0 ? (
+                    selectedRegions.map((regionItem) => (
+                      <span key={regionItem} className="profile-setup__region-badge">
+                        {regionItem}
+                        <button type="button" onClick={() => removeRegion(regionItem)} aria-label="지역 삭제">
+                          <X size={13} />
+                        </button>
+                      </span>
+                    ))
+                  ) : (
+                    <span className="profile-setup__region-empty">{T.noRegion}</span>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="profile-setup__region-selects">
-                <select value={form.region_sido} onChange={(event) => updateRegion(event.target.value, "")}>
-                  <option value="">{T.sido}</option>
-                  {koreaRegions.map((region) => (
-                    <option key={region.name} value={region.name}>{region.name}</option>
-                  ))}
-                </select>
-                <select value={form.region_area} onChange={(event) => updateRegion(form.region_sido, event.target.value)} disabled={!form.region_sido}>
-                  <option value="">{T.all}</option>
-                  {(selectedRegion?.areas || []).map((area) => (
-                    <option key={area} value={area}>{area}</option>
-                  ))}
-                </select>
-                <div className="profile-setup__region-result">{form.region || T.noRegion}</div>
+                <div className="profile-setup__region-select-row">
+                  <select value={form.region_sido} onChange={(event) => handleSidoChange(event.target.value)}>
+                    <option value="">{T.sido}</option>
+                    {koreaRegions.map((region) => (
+                      <option key={region.name} value={region.name}>{region.name}</option>
+                    ))}
+                  </select>
+                  <select value={form.region_area} onChange={(event) => handleAreaChange(event.target.value)} disabled={!form.region_sido}>
+                    <option value="">{T.all}</option>
+                    {(selectedRegion?.areas || []).map((area) => (
+                      <option key={area} value={area}>{area}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="profile-setup__region-add-btn"
+                    onClick={handleAddSelectedRegion}
+                    disabled={!form.region_sido}
+                  >
+                    추가
+                  </button>
+                </div>
+                <div className="profile-setup__region-badges">
+                  {selectedRegions.length > 0 ? (
+                    selectedRegions.map((regionItem) => (
+                      <span key={regionItem} className="profile-setup__region-badge">
+                        {regionItem}
+                        <button type="button" onClick={() => removeRegion(regionItem)} aria-label="지역 삭제">
+                          <X size={13} />
+                        </button>
+                      </span>
+                    ))
+                  ) : (
+                    <span className="profile-setup__region-empty">{T.noRegion}</span>
+                  )}
+                </div>
               </div>
             )}
           </section>
@@ -758,13 +869,21 @@ function MobileProfileEditPage() {
           </section>
 
           <section className="profile-setup__panel profile-setup__sports">
-            <div className="profile-setup__section-head">
-              <div>
+            <div className="profile-setup__section-head profile-setup__section-head--sports">
+              <div className="profile-setup__title-row">
                 <h2>{T.preferredSports}</h2>
-                <p>{T.preferredSportsDesc}</p>
-                {!isMobile && usingFallbackSports ? <small className="profile-setup__sport-note">기본 종목 목록을 표시하고 있습니다.</small> : null}
+                <label className="profile-setup__level-toggle">
+                  <input
+                    type="checkbox"
+                    checked={useSportLevels}
+                    onChange={(event) => setUseSportLevels(event.target.checked)}
+                  />
+                  <span>수준 선택하기</span>
+                </label>
               </div>
-              <span>{form.preferred_sports.length}{T.selectedUnit}</span>
+              <p>{T.preferredSportsDesc}</p>
+              {!isMobile && usingFallbackSports ? <small className="profile-setup__sport-note">기본 종목 목록을 표시하고 있습니다.</small> : null}
+              <span className="profile-setup__sports-count">{form.preferred_sports.length}{T.selectedUnit} (최대 6개)</span>
             </div>
             <div className={`profile-setup__sport-body ${selectedCategory ? "is-open" : ""}`}>
               <nav className="profile-setup__categories" aria-label={T.categoryLabel}>
@@ -799,31 +918,6 @@ function MobileProfileEditPage() {
                 </div>
               </div>
             </div>
-            <label className="profile-setup__level-toggle">
-              <input
-                type="checkbox"
-                checked={useSportLevels}
-                onChange={(event) => setUseSportLevels(event.target.checked)}
-              />
-              <span>종목별 수준 선택하기</span>
-            </label>
-            {useSportLevels && form.preferred_sports.length > 0 ? (
-              <div className="profile-setup__sport-levels">
-                {form.preferred_sports.map((sportName) => (
-                  <label key={sportName}>
-                    <span>{sportName}</span>
-                    <select
-                      value={form.preferred_sport_levels[sportName] || form.exercise_level}
-                      onChange={(event) => updateSportLevel(sportName, event.target.value)}
-                    >
-                      {levelOptions.map((level) => (
-                        <option key={level.value} value={level.value}>{level.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                ))}
-              </div>
-            ) : null}
             {form.preferred_sports.length > 0 && (
               <div className="profile-setup__selected">
                 {form.preferred_sports.map((sportName) => {
@@ -857,6 +951,33 @@ function MobileProfileEditPage() {
           </div>
         </form>
       </main>
+      {levelModalSport && (
+        <div className="mobile-level-modal-overlay" onClick={() => setLevelModalSport(null)}>
+          <div className="mobile-level-modal" onClick={(event) => event.stopPropagation()}>
+            <h3>{levelModalSport} 수준 선택</h3>
+            <p>이 종목에 대한 본인의 실력을 선택해주세요.</p>
+            <div className="mobile-level-modal-options">
+              {levelOptions.map((level) => (
+                <button
+                  type="button"
+                  key={level.value}
+                  className="mobile-level-modal-option-btn"
+                  onClick={() => selectSportLevelAndAdd(levelModalSport, level.value)}
+                >
+                  {level.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="mobile-level-modal-close-btn"
+              onClick={() => setLevelModalSport(null)}
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
       {passwordModalOpen && (
         <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closePasswordModal()}>
           <section className="profile-auth-modal password-change-modal" style={{ width: '95%', maxWidth: '360px', padding: '24px 20px', borderRadius: '16px', boxSizing: 'border-box' }}>

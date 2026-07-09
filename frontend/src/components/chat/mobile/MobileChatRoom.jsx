@@ -364,16 +364,27 @@ function MobileChatRoom() {
     setActionNotice("");
     setError("");
     readImageAsDataUrl(file)
-      .then((dataUrl) => chatApi.send(chatRoomId, {
-        content: file.name || "사진",
-        message_type: "image",
-        attachment_url: dataUrl,
-        attachment_name: file.name,
-        reply_to_message_id: replyTarget?.id || null
-      }))
+      .then((dataUrl) => {
+        const payload = {
+          content: file.name || "사진",
+          message_type: "image",
+          attachment_url: dataUrl,
+          attachment_name: file.name,
+          reply_to_message_id: replyTarget?.id || null
+        };
+        if (isDirectChat) {
+          return chatApi.sendDirect(directRoomId, payload);
+        } else {
+          return chatApi.send(chatRoomId, payload);
+        }
+      })
       .then(() => {
         setReplyTarget(null);
-        setRefreshKey((value) => value + 1);
+        if (isDirectChat) {
+          setDirectRefreshKey((value) => value + 1);
+        } else {
+          setRefreshKey((value) => value + 1);
+        }
       })
       .catch((photoError) => {
         setError(photoError.response?.data?.message || "사진 전송에 실패했습니다.");
@@ -400,7 +411,7 @@ function MobileChatRoom() {
         setSending(true);
         try {
           const { latitude, longitude } = position.coords;
-          await chatApi.send(chatRoomId, {
+          const payload = {
             content: "현재 위치를 공유했습니다.",
             message_type: "location",
             location: {
@@ -409,9 +420,15 @@ function MobileChatRoom() {
               label: "현재 위치"
             },
             reply_to_message_id: replyTarget?.id || null
-          });
+          };
+          if (isDirectChat) {
+            await chatApi.sendDirect(directRoomId, payload);
+            setDirectRefreshKey((value) => value + 1);
+          } else {
+            await chatApi.send(chatRoomId, payload);
+            setRefreshKey((value) => value + 1);
+          }
           setReplyTarget(null);
-          setRefreshKey((value) => value + 1);
         } catch (locationError) {
           const errMsg = locationError.response?.data?.message || "위치 공유에 실패했습니다.";
           setError(errMsg);
@@ -495,7 +512,7 @@ function MobileChatRoom() {
     setSending(true);
     setError("");
     try {
-      await chatApi.send(chatRoomId, {
+      const payload = {
         content: item.title || "위치를 공유했습니다.",
         message_type: "location",
         location: {
@@ -504,12 +521,18 @@ function MobileChatRoom() {
           label: item.title || "공유한 위치"
         },
         reply_to_message_id: replyTarget?.id || null
-      });
+      };
+      if (isDirectChat) {
+        await chatApi.sendDirect(directRoomId, payload);
+        setDirectRefreshKey((value) => value + 1);
+      } else {
+        await chatApi.send(chatRoomId, payload);
+        setRefreshKey((value) => value + 1);
+      }
       setReplyTarget(null);
       setPlaceSearchOpen(false);
       setPlaceSearchKeyword("");
       setPlaceSearchResults([]);
-      setRefreshKey((value) => value + 1);
     } catch (err) {
       setError(err.response?.data?.message || "위치 공유에 실패했습니다.");
     } finally {
@@ -762,7 +785,7 @@ function MobileChatRoom() {
           <div className="message-list">
             {renderedMessages.length ? (
               renderedMessages.map((message, index) => {
-                const mine = message.user_id === user?.id;
+                const mine = (message.user_id ?? message.sender_id) === user?.id;
                 const prevMessage = renderedMessages[index - 1];
                 const showDivider = !prevMessage || messageDateKey(prevMessage.created_at) !== messageDateKey(message.created_at);
                 const hasReply = Boolean(message.reply_to_message_id || message.reply_to_content);
