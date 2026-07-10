@@ -10,6 +10,7 @@ import { meetingApi } from "../../../api/meetingApi";
 import { useAsync } from "../../../hooks/useAsync";
 import { formatDateTime, formatMeetingType } from "../../../utils/formatters";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
+import { getMeetingCoverImage, isUsingSportThumbnail } from "../../../utils/sportThumbnails";
 import { reportApi } from "../../../api/reportApi";
 import { voteApi } from "../../../api/voteApi";
 
@@ -175,7 +176,7 @@ function MobileMeetingDetail() {
     <>
       <MobileHeader title="모임 상세" />
       <article className="detail-page">
-        <div className="detail-cover" style={meeting.cover_image_url ? { backgroundImage: `linear-gradient(180deg, rgba(15, 23, 42, 0.14), rgba(15, 23, 42, 0.76)), url(${meeting.cover_image_url})` } : undefined}>
+        <div className={`detail-cover ${isUsingSportThumbnail(meeting) ? "is-sport-thumbnail" : ""}`} style={getMeetingCoverImage(meeting) ? { backgroundImage: `linear-gradient(180deg, rgba(15, 23, 42, 0.14), rgba(15, 23, 42, 0.76)), url(${getMeetingCoverImage(meeting)})` } : undefined}>
           <div>
             <span>{meeting.sport?.name}</span>
             <strong>{meeting.title}</strong>

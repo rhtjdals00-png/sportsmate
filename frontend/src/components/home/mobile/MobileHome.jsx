@@ -10,6 +10,9 @@ import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { getSportIcon } from "../../../utils/sportIcons.jsx";
 
 function splitPreferredSports(value) {
+  if (Array.isArray(value)) {
+    return value.map((sport) => String(sport || "").trim()).filter(Boolean);
+  }
   return (value || "")
     .split(",")
     .map((sport) => sport.trim())

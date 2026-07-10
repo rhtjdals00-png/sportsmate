@@ -8,6 +8,7 @@ import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { userApi } from "../../../api/userApi";
 import { useAsync } from "../../../hooks/useAsync";
 
+
 const levelLabels = {
   beginner: "입문",
   intermediate: "중급",
@@ -21,6 +22,9 @@ function getSportTagLabel(sport, preferredSportLevels) {
 }
 
 function splitPreferredSports(value) {
+  if (Array.isArray(value)) {
+    return value.map((sport) => String(sport || "").trim()).filter(Boolean);
+  }
   return (value || "")
     .split(",")
     .map((sport) => sport.trim())
@@ -213,12 +217,14 @@ function MobileMyPage() {
         <div className="profile-card__divider" />
 
         <div className="profile-card__sports-grid" aria-label="선호 종목">
-          {preferredSports.length ? preferredSports.slice(0, 6).map((sport) => (
-            <div key={sport} className="profile-card__sport-grid-item">
-              <Dumbbell size={14} />
-              <span>{getSportTagLabel(sport, profile.preferred_sport_levels)}</span>
-            </div>
-          )) : (
+          {preferredSports.length ? preferredSports.slice(0, 6).map((sport) => {
+            return (
+              <div key={sport} className="profile-card__sport-grid-item">
+                <Dumbbell size={14} />
+                <span>{getSportTagLabel(sport, profile.preferred_sport_levels)}</span>
+              </div>
+            );
+          }) : (
             <div className="profile-card__sport-grid-empty">
               <Footprints size={14} />
               <span>선호 종목 설정 전</span>
