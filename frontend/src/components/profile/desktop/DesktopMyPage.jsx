@@ -74,6 +74,16 @@ function getDday(value) {
   return diff > 0 ? `D-${diff}` : `D+${Math.abs(diff)}`;
 }
 
+function isUpcomingSchedule(value) {
+  if (!value) return true;
+  const target = new Date(value);
+  if (Number.isNaN(target.getTime())) return true;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  return target >= today;
+}
+
 function meetingImage(meeting) {
   return meeting.cover_image_url || meeting.image_url || meeting.thumbnail_url || FALLBACK_PROFILE_IMAGE;
 }
@@ -421,7 +431,9 @@ function DesktopMyPage() {
   const hostedMeetings = (meetingsState.data?.hosted || []).map((meeting) => normalizeMeeting(meeting, "host"));
   const joinedMeetings = (meetingsState.data?.joined || []).map((meeting) => normalizeMeeting(meeting, "joined"));
   const scheduled = useMemo(
-    () => uniqueMeetingsById([...hostedMeetings, ...joinedMeetings]).sort((a, b) => new Date(a.rawTime || 0) - new Date(b.rawTime || 0)),
+    () => uniqueMeetingsById([...hostedMeetings, ...joinedMeetings])
+      .filter((item) => isUpcomingSchedule(item.rawTime))
+      .sort((a, b) => new Date(a.rawTime || 0) - new Date(b.rawTime || 0)),
     [hostedMeetings, joinedMeetings]
   );
   const reviewItems = reviewsState.data?.items || [];
