@@ -302,6 +302,57 @@ def delete_review(review_id):
     return jsonify({"message": "후기가 삭제되었습니다."})
 
 
+@user_bp.get("/me/reviews/written")
+@jwt_required()
+def my_written_reviews():
+    user_id = int(get_jwt_identity())
+    from app.services.meeting_service import list_written_reviews
+    reviews = list_written_reviews(user_id)
+    return jsonify({"items": [review.to_dict() for review in reviews]})
+
+
+@user_bp.get("/me/reviews/received")
+@jwt_required()
+def my_received_reviews():
+    user_id = int(get_jwt_identity())
+    from app.services.meeting_service import list_received_reviews
+    reviews = list_received_reviews(user_id)
+    return jsonify({"items": [review.to_dict() for review in reviews]})
+
+
+@user_bp.get("/me/reviews/pending")
+@jwt_required()
+def my_pending_reviews():
+    user_id = int(get_jwt_identity())
+    from app.services.meeting_service import list_pending_reviews
+    items = list_pending_reviews(user_id)
+    return jsonify({"items": items})
+
+
+@user_bp.put("/me/reviews/<int:review_id>")
+@jwt_required()
+def update_my_review(review_id):
+    user_id = int(get_jwt_identity())
+    from app.services.meeting_service import update_review
+    try:
+        review = update_review(review_id, user_id, request.get_json() or {})
+        return jsonify({"review": review.to_dict()})
+    except (ValueError, PermissionError) as e:
+        return jsonify({"message": str(e)}), 400
+
+
+@user_bp.delete("/me/reviews/<int:review_id>")
+@jwt_required()
+def delete_my_review(review_id):
+    user_id = int(get_jwt_identity())
+    from app.services.meeting_service import delete_review
+    try:
+        delete_review(review_id, user_id)
+        return jsonify({"message": "후기가 삭제되었습니다."})
+    except (ValueError, PermissionError) as e:
+        return jsonify({"message": str(e)}), 400
+
+
 @user_bp.get("/<int:user_id>")
 def get_user(user_id):
     user = user_query().get_or_404(user_id)

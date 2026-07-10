@@ -33,8 +33,31 @@ function MeetingEditPage() {
 
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
+  const isTimeInvalid = Boolean(form && form.start_at && form.end_at && new Date(form.end_at) <= new Date(form.start_at));
+
+  const handleStartAtChange = (startVal) => {
+    if (!startVal) {
+      setForm((prev) => ({ ...prev, start_at: startVal }));
+      return;
+    }
+    const startDate = new Date(startVal);
+    startDate.setHours(startDate.getHours() + 1);
+    const year = startDate.getFullYear();
+    const month = String(startDate.getMonth() + 1).padStart(2, "0");
+    const day = String(startDate.getDate()).padStart(2, "0");
+    const hours = String(startDate.getHours()).padStart(2, "0");
+    const minutes = String(startDate.getMinutes()).padStart(2, "0");
+    const newEndAt = `${year}-${month}-${day}T${hours}:${minutes}`;
+    setForm((prev) => ({
+      ...prev,
+      start_at: startVal,
+      end_at: newEndAt
+    }));
+  };
+
   const submit = async (event) => {
     event.preventDefault();
+    if (isTimeInvalid) return;
     const data = await meetingApi.update(meetingId, {
       ...form,
       sport_id: Number(form.sport_id),
@@ -62,10 +85,14 @@ function MeetingEditPage() {
         <label>모집 목적<input value={form.purpose} onChange={(event) => update("purpose", event.target.value)} /></label>
         <label>장소명<input required value={form.location_name} onChange={(event) => update("location_name", event.target.value)} /></label>
         <label>주소<input required value={form.address} onChange={(event) => update("address", event.target.value)} /></label>
-        <label>시작 시간<input required type="datetime-local" value={form.start_at} onChange={(event) => update("start_at", event.target.value)} /></label>
-        <label>종료 시간<input type="datetime-local" value={form.end_at} onChange={(event) => update("end_at", event.target.value)} /></label>
+        <label>시작 시간<input required type="datetime-local" value={form.start_at} onChange={(event) => handleStartAtChange(event.target.value)} /></label>
+        <label>
+          종료 시간
+          <input type="datetime-local" value={form.end_at} onChange={(event) => update("end_at", event.target.value)} />
+          {isTimeInvalid && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>종료 시간은 시작 시간 이후여야 합니다.</span>}
+        </label>
         <label>정원<input type="number" min="2" max="50" value={form.max_participants} onChange={(event) => update("max_participants", event.target.value)} /></label>
-        <Button type="submit">수정 저장</Button>
+        <Button type="submit" disabled={isTimeInvalid}>수정 저장</Button>
       </form>
     </>
   );

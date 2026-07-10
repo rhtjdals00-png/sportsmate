@@ -5,7 +5,7 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import ChatMessage, ChatRoom, Meeting, Participant, Review, Sport, User
+from app.models import ChatMessage, ChatRoom, Meeting, Participant, Review, Sport, User, Attendance
 from app.services.notification_service import create_notification, send_web_push
 from app.utils.timezone import kst_now, parse_client_datetime
 
@@ -341,27 +341,187 @@ def update_application(meeting_id, applicant_user_id, host_id, status):
 
 def create_review(meeting_id, user_id, data):
     meeting = Meeting.query.get(meeting_id)
-    if meeting and meeting.status == "suspended":
+    if not meeting:
+        raise ValueError("존재하지 않는 모임입니다.")
+    if meeting.status == "suspended":
         raise PermissionError("폐쇄(비활성화) 처리된 모임입니다.")
     participant = Participant.query.filter_by(meeting_id=meeting_id, user_id=user_id, status="approved").first()
     if not participant:
         raise PermissionError("참여 확정된 사용자만 후기를 작성할 수 있습니다.")
-        
+
     reviewee_id = data.get("reviewee_id")
     if not reviewee_id:
-        reviewee_id = meeting.host_id
-        
+        raise ValueError("후기를 남길 대상을 선택해 주세요.")
+
+    reviewee_id = int(reviewee_id)
+    if reviewee_id == user_id:
+        raise ValueError("자기 자신에게는 후기를 작성할 수 없습니다.")
+
+    reviewee_part = Participant.query.filter_by(meeting_id=meeting_id, user_id=reviewee_id, status="approved").first()
+    if not reviewee_part:
+        raise ValueError("참여 확정된 사용자에게만 후기를 작성할 수 있습니다.")
+
+    if meeting.status != "closed":
+        raise ValueError("종료된 모임에 대해서만 후기를 작성할 수 있습니다.")
+
+    # Check attendance check constraint
+    if user_id != meeting.host_id:
+        reviewer_att = Attendance.query.filter_by(meeting_id=meeting_id, user_id=user_id, status="present").first()
+        if not reviewer_att:
+            raise PermissionError("출석 체크를 완료한 사용자만 후기를 작성할 수 있습니다.")
+
+    if reviewee_id != meeting.host_id:
+        reviewee_att = Attendance.query.filter_by(meeting_id=meeting_id, user_id=reviewee_id, status="present").first()
+        if not reviewee_att:
+            raise ValueError("출석 체크를 완료한 대상에게만 후기를 작성할 수 있습니다.")
+
+    existing = Review.query.filter_by(meeting_id=meeting_id, reviewer_id=user_id, reviewee_id=reviewee_id).first()
+    if existing:
+        raise ValueError("이미 이 참가자에게 후기를 작성했습니다.")
+
     review = Review(
-        meeting_id=meeting_id, 
-        reviewer_id=user_id, 
-        reviewee_id=reviewee_id, 
-        rating=data["rating"], 
+        meeting_id=meeting_id,
+        reviewer_id=user_id,
+        reviewee_id=reviewee_id,
+        rating=int(data["rating"]),
         content=data["content"]
     )
     db.session.add(review)
     db.session.commit()
+
+    # Recalculate average rating for reviewee
+    from app.models.users import UserProfile
+    avg_rating = db.session.query(db.func.avg(Review.rating)).filter_by(reviewee_id=reviewee_id).scalar() or 0.0
+    profile = UserProfile.query.filter_by(user_id=reviewee_id).first()
+    if profile:
+        profile.rating_average = round(float(avg_rating), 1)
+        db.session.commit()
+
     return review
 
 
 def list_user_reviews(user_id):
     return Review.query.filter_by(reviewer_id=user_id).order_by(Review.created_at.desc()).all()
+
+
+def list_written_reviews(user_id):
+    return (
+        Review.query
+        .options(joinedload(Review.reviewee).joinedload(User.profile), joinedload(Review.meeting))
+        .filter_by(reviewer_id=user_id)
+        .order_by(Review.created_at.desc())
+        .all()
+    )
+
+
+def list_received_reviews(user_id):
+    return (
+        Review.query
+        .options(joinedload(Review.reviewer).joinedload(User.profile), joinedload(Review.meeting))
+        .filter_by(reviewee_id=user_id)
+        .order_by(Review.created_at.desc())
+        .all()
+    )
+
+
+def list_pending_reviews(user_id):
+    my_closed_meetings = (
+        Meeting.query
+        .join(Participant, Meeting.id == Participant.meeting_id)
+        .filter(
+            Meeting.status == "closed",
+            Participant.user_id == user_id,
+            Participant.status == "approved"
+        )
+        .all()
+    )
+
+    pending_items = []
+
+    for meeting in my_closed_meetings:
+        # Check if reviewer checked attendance (hosts are always considered present)
+        if meeting.host_id != user_id:
+            my_attendance = Attendance.query.filter_by(meeting_id=meeting.id, user_id=user_id, status="present").first()
+            if not my_attendance:
+                continue
+
+        peers = (
+            Participant.query
+            .options(joinedload(Participant.user).joinedload(User.profile))
+            .filter(
+                Participant.meeting_id == meeting.id,
+                Participant.status == "approved",
+                Participant.user_id != user_id
+            )
+            .all()
+        )
+
+        for p in peers:
+            # Check if peer checked attendance (hosts are always considered present)
+            if meeting.host_id != p.user_id:
+                peer_attendance = Attendance.query.filter_by(meeting_id=meeting.id, user_id=p.user_id, status="present").first()
+                if not peer_attendance:
+                    continue
+
+            exists = Review.query.filter_by(
+                meeting_id=meeting.id,
+                reviewer_id=user_id,
+                reviewee_id=p.user_id
+            ).first()
+
+            if not exists:
+                pending_items.append({
+                    "meeting": {
+                        "id": meeting.id,
+                        "title": meeting.title,
+                        "start_time": meeting.start_at.isoformat() if meeting.start_at else None
+                    },
+                    "peer": p.user.to_dict()
+                })
+
+    return pending_items
+
+
+def update_review(review_id, user_id, data):
+    review = Review.query.get(review_id)
+    if not review:
+        raise ValueError("존재하지 않는 후기입니다.")
+    if review.reviewer_id != user_id:
+        raise PermissionError("본인이 작성한 후기만 수정할 수 있습니다.")
+    
+    if "rating" in data:
+        review.rating = int(data["rating"])
+    if "content" in data:
+        review.content = data["content"]
+        
+    db.session.commit()
+    
+    # Recalculate average rating for reviewee
+    from app.models.users import UserProfile
+    avg_rating = db.session.query(db.func.avg(Review.rating)).filter_by(reviewee_id=review.reviewee_id).scalar() or 0.0
+    profile = UserProfile.query.filter_by(user_id=review.reviewee_id).first()
+    if profile:
+        profile.rating_average = round(float(avg_rating), 1)
+        db.session.commit()
+        
+    return review
+
+
+def delete_review(review_id, user_id):
+    review = Review.query.get(review_id)
+    if not review:
+        raise ValueError("존재하지 않는 후기입니다.")
+    if review.reviewer_id != user_id:
+        raise PermissionError("본인이 작성한 후기만 삭제할 수 있습니다.")
+        
+    reviewee_id = review.reviewee_id
+    db.session.delete(review)
+    db.session.commit()
+    
+    # Recalculate average rating for reviewee
+    from app.models.users import UserProfile
+    avg_rating = db.session.query(db.func.avg(Review.rating)).filter_by(reviewee_id=reviewee_id).scalar() or 0.0
+    profile = UserProfile.query.filter_by(user_id=reviewee_id).first()
+    if profile:
+        profile.rating_average = round(float(avg_rating), 1)
+        db.session.commit()

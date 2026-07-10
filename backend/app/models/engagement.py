@@ -13,14 +13,15 @@ class Review(db.Model):
     content = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=kst_now, nullable=False)
 
-    reviewer = db.relationship("User", foreign_keys=[reviewer_id])
-    reviewee = db.relationship("User", foreign_keys=[reviewee_id])
+    reviewer = db.relationship("User", foreign_keys=[reviewer_id], backref="written_reviews")
+    reviewee = db.relationship("User", foreign_keys=[reviewee_id], backref="received_reviews")
     meeting = db.relationship("Meeting")
 
     def to_dict(self):
         return {
             "id": self.id,
             "meeting_id": self.meeting_id,
+            "meeting": {"id": self.meeting.id, "title": self.meeting.title} if self.meeting else None,
             "meeting_title": self.meeting.title if self.meeting else "삭제된 모임",
             "meeting_host_nickname": self.meeting.host.nickname if (self.meeting and self.meeting.host) else "방장 없음",
             "reviewer": self.reviewer.to_dict() if self.reviewer else None,
