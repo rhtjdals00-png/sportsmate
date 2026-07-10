@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { LogOut, MessageCircle, UsersRound } from "lucide-react";
+import { LogOut, MessageCircle, UsersRound, Bell, BellOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import EmptyState from "../../common/EmptyState.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
@@ -20,24 +20,51 @@ function DesktopChatList() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [directRefreshKey, setDirectRefreshKey] = useState(0);
   const [chatListMode, setChatListMode] = useState("meeting");
-  const [leavingRoomId, setLeavingRoomId] = useState(null);
+  const [mutedRooms, setMutedRooms] = useState([]);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  const [leaveTargetRoom, setLeaveTargetRoom] = useState(null);
+  const [leavingRoom, setLeavingRoom] = useState(false);
+
   const rooms = useAsync(() => chatApi.rooms(), [refreshKey]);
   const directRooms = useAsync(() => chatApi.directRooms(), [directRefreshKey]);
   const items = rooms.data?.items || [];
   const directItems = directRooms.data?.items || [];
 
-  const handleLeaveRoom = async (room) => {
-    const title = room.meeting?.title || "채팅방";
-    if (!window.confirm(`${title}에서 나가시겠어요? 채팅방을 나가면 해당 모임에서도 나가게 됩니다.`)) return;
+  useEffect(() => {
+    chatApi.mutedRooms()
+      .then((res) => setMutedRooms(res.muted_rooms || []))
+      .catch((err) => console.error("Failed to load muted rooms", err));
+  }, []);
 
+  const toggleMute = async (roomId, roomType) => {
+    const isCurrentlyMuted = mutedRooms.some(r => String(r.room_id) === String(roomId) && r.room_type === roomType);
     try {
-      setLeavingRoomId(room.id);
-      await chatApi.leave(room.id);
+      if (isCurrentlyMuted) {
+        await chatApi.unmute(roomId, roomType);
+      } else {
+        await chatApi.mute(roomId, roomType);
+      }
+      const res = await chatApi.mutedRooms();
+      setMutedRooms(res.muted_rooms || []);
+    } catch (err) {
+      console.error("Failed to toggle mute", err);
+    }
+  };
+
+  const leaveRoom = async () => {
+    const targetRoomId = leaveTargetRoom?.id;
+    if (!targetRoomId || leavingRoom) return;
+    setLeavingRoom(true);
+    try {
+      await chatApi.leave(targetRoomId);
+      setLeaveConfirmOpen(false);
+      setLeaveTargetRoom(null);
       setRefreshKey((value) => value + 1);
-    } catch (error) {
-      window.alert(error.response?.data?.message || "채팅방 나가기에 실패했습니다.");
+    } catch (leaveError) {
+      window.alert(leaveError.response?.data?.message || "채팅방 나가기에 실패했습니다.");
+      setLeaveConfirmOpen(false);
     } finally {
-      setLeavingRoomId(null);
+      setLeavingRoom(false);
     }
   };
 
@@ -108,10 +135,10 @@ function DesktopChatList() {
           </div>
           <div className="talk-list-tabs" role="tablist" aria-label="채팅방 종류">
             <button className={chatListMode === "meeting" ? "is-active" : ""} type="button" onClick={() => setChatListMode("meeting")}>
-              참여중인 모임
+              모임 채팅
             </button>
             <button className={chatListMode === "direct" ? "is-active" : ""} type="button" onClick={() => setChatListMode("direct")}>
-              1대1톡
+              1:1 채팅
             </button>
           </div>
           {chatListMode === "meeting" && rooms.loading && !rooms.data ? (
@@ -126,6 +153,7 @@ function DesktopChatList() {
             <div className="talk-list-items">
               {items.map((room) => {
                 const meeting = room.meeting || {};
+                const isMuted = mutedRooms.some(r => String(r.room_id) === String(room.id) && r.room_type === "meeting");
                 return (
                   <div key={room.id} className="proto-talk-room-item">
                     <Link to={`/chats/${room.id}`}>
@@ -134,18 +162,34 @@ function DesktopChatList() {
                         <b>{meeting.title || "모임 채팅방"}</b>
                         <small>{meeting.location_name || "장소 미정"} · {meeting.current_participants || 0}/{meeting.max_participants || 0}명</small>
                       </span>
-                      <em>{formatChatTime(room.last_message?.created_at)}</em>
+                      <em>
+                        {isMuted ? <BellOff size={11} style={{ marginRight: '3px', color: '#94a3b8', verticalAlign: 'middle' }} /> : null}
+                        {formatChatTime(room.last_message?.created_at)}
+                      </em>
                       {Number(room.unread_count || 0) > 0 ? <i>{room.unread_count}</i> : null}
                     </Link>
-                    <button
-                      className="talk-room-leave-btn"
-                      type="button"
-                      onClick={() => handleLeaveRoom(room)}
-                      disabled={String(leavingRoomId) === String(room.id)}
-                      aria-label="채팅방 나가기"
-                    >
-                      <LogOut size={14} />
-                    </button>
+                    <div className="talk-room-item-hover-actions">
+                      <button
+                        className={`talk-room-mute-btn ${isMuted ? "muted" : ""}`}
+                        type="button"
+                        onClick={() => toggleMute(room.id, "meeting")}
+                        title={isMuted ? "알림 켜기" : "알림 끄기"}
+                      >
+                        {isMuted ? <BellOff size={13} /> : <Bell size={13} />}
+                      </button>
+                      <button
+                        className="talk-room-leave-btn-new"
+                        type="button"
+                        onClick={() => {
+                          setLeaveTargetRoom(room);
+                          setLeaveConfirmOpen(true);
+                        }}
+                        aria-label="채팅방 나가기"
+                        title="채팅방 나가기"
+                      >
+                        <LogOut size={13} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -154,6 +198,7 @@ function DesktopChatList() {
             <div className="talk-list-items">
               {directItems.map((room) => {
                 const otherUser = room.other_user || {};
+                const isMuted = mutedRooms.some(r => String(r.room_id) === String(room.id) && r.room_type === "direct");
                 return (
                   <div key={room.id} className="proto-talk-room-item">
                     <Link to={`/chats/direct/${room.id}`}>
@@ -162,8 +207,21 @@ function DesktopChatList() {
                         <b>{otherUser.nickname || otherUser.name || "참여자"}</b>
                         <small>{room.last_message?.content || "아직 대화가 없습니다."}</small>
                       </span>
-                      <em>{formatChatTime(room.last_message?.created_at || room.updated_at || room.created_at)}</em>
+                      <em>
+                        {isMuted ? <BellOff size={11} style={{ marginRight: '3px', color: '#94a3b8', verticalAlign: 'middle' }} /> : null}
+                        {formatChatTime(room.last_message?.created_at || room.updated_at || room.created_at)}
+                      </em>
                     </Link>
+                    <div className="talk-room-item-hover-actions">
+                      <button
+                        className={`talk-room-mute-btn ${isMuted ? "muted" : ""}`}
+                        type="button"
+                        onClick={() => toggleMute(room.id, "direct")}
+                        title={isMuted ? "알림 켜기" : "알림 끄기"}
+                      >
+                        {isMuted ? <BellOff size={13} /> : <Bell size={13} />}
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -181,6 +239,22 @@ function DesktopChatList() {
           </div>
         </section>
       </div>
+
+      {leaveConfirmOpen ? (
+        <div className="chat-vote-confirm" role="dialog" aria-modal="true" aria-label="채팅방 나가기">
+          <button className="chat-vote-modal__backdrop" type="button" onClick={() => setLeaveConfirmOpen(false)} aria-label="닫기" />
+          <section>
+            <strong>채팅방을 나갈까요?</strong>
+            <p>{leaveTargetRoom?.meeting?.title || "이 채팅방"}에서 나가면 모임 참여도 함께 취소됩니다.</p>
+            <div className="chat-vote-confirm__actions">
+              <button type="button" onClick={() => setLeaveConfirmOpen(false)}>취소</button>
+              <button type="button" className="is-danger" onClick={leaveRoom} disabled={leavingRoom}>
+                {leavingRoom ? "나가는 중" : "나가기"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }

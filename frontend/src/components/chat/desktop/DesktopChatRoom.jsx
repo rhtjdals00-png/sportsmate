@@ -1288,10 +1288,10 @@ function DesktopChatRoom() {
           </div>
           <div className="talk-list-tabs" role="tablist" aria-label="채팅방 종류">
             <button className={chatListMode === "meeting" ? "is-active" : ""} type="button" onClick={() => setChatListMode("meeting")}>
-              참여중인 모임
+              모임 채팅
             </button>
             <button className={chatListMode === "direct" ? "is-active" : ""} type="button" onClick={() => setChatListMode("direct")}>
-              1대1톡
+              1:1 채팅
             </button>
           </div>
           {chatListMode === "meeting" && rooms.loading && !rooms.data ? (

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { BellRing, MapPin, ShieldCheck, X } from "lucide-react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext.jsx";
@@ -38,6 +38,16 @@ function ResponsiveLayout() {
     const timer = window.setTimeout(() => setToast(""), 2600);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    if (!authLoading && user?.id) {
+      if ("Notification" in window && Notification.permission === "granted") {
+        enablePushNotifications()
+          .then(() => console.log("Push subscription verified & synced successfully."))
+          .catch((err) => console.warn("Failed to sync push subscription:", err));
+      }
+    }
+  }, [authLoading, user?.id]);
 
   useEffect(() => {
     if (!isMobile || authLoading || !user?.id || !permissionStorageKey) return;

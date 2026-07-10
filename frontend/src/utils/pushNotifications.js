@@ -35,7 +35,7 @@ export async function enablePushNotifications() {
   const permission = await Notification.requestPermission();
   if (permission !== "granted") throw new Error("알림 권한이 허용되지 않았습니다.");
 
-  const registration = await navigator.serviceWorker.ready;
+  let registration = await navigator.serviceWorker.ready;
   const { publicKey } = await notificationApi.pushPublicKey();
   if (!publicKey) throw new Error("푸시 알림 키가 아직 서버에 설정되지 않았습니다.");
 
@@ -55,7 +55,23 @@ export async function enablePushNotifications() {
     }
 
     if (keyMismatch) {
-      await subscription.unsubscribe();
+      try {
+        await subscription.unsubscribe();
+      } catch (e) {
+        console.warn("Failed to unsubscribe subscription:", e);
+      }
+
+      // Force unregister and re-register service worker to clear browser VAPID key cache (important for Safari/iOS)
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const reg of registrations) {
+          await reg.unregister();
+        }
+        await navigator.serviceWorker.register("/sw.js");
+        registration = await navigator.serviceWorker.ready;
+      } catch (err) {
+        console.error("Failed to reset service worker for VAPID:", err);
+      }
       subscription = null;
     }
   }
