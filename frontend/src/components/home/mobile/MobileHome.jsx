@@ -74,14 +74,14 @@ function MobileHome() {
             const Icon = item.icon;
             return (
               <Link key={item.label} to={`/meetings?keyword=${encodeURIComponent(item.label)}`}>
-                <Icon size={22} />
+                <Icon size={22} style={{ color: 'var(--mobile-primary, #4f46e5)' }} />
                 <span>{item.label}</span>
               </Link>
             );
           })
         ) : (
           <Link className="home-sport-shortcuts__empty" to="/mypage/profile">
-            <Dumbbell size={22} />
+            <Dumbbell size={22} style={{ color: 'var(--mobile-primary, #4f46e5)' }} />
             <span>선호 종목 설정</span>
           </Link>
         )}

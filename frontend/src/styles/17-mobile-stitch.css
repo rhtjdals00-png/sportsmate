@@ -7052,3 +7052,232 @@
   object-fit: cover;
   border: 1px solid rgba(15, 23, 42, 0.06);
 }
+
+/* 모바일 내 후기 페이지 스타일 */
+.mobile-shell .mobile-reviews-tabs {
+  display: flex;
+  border-bottom: 1px solid #e2e8f0;
+  background: #ffffff;
+  position: sticky;
+  top: 48px;
+  z-index: 10;
+}
+
+.mobile-shell .mobile-reviews-tab-btn {
+  flex: 1;
+  text-align: center;
+  padding: 14px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748b;
+  border: none;
+  background: none;
+  position: relative;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.mobile-shell .mobile-reviews-tab-btn.is-active {
+  color: var(--mobile-primary);
+}
+
+.mobile-shell .mobile-reviews-tab-btn.is-active::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 15%;
+  right: 15%;
+  height: 3px;
+  background: var(--mobile-primary);
+  border-radius: 99px;
+}
+
+.mobile-shell .mobile-reviews-list {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-shell .mobile-review-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-shell .mobile-review-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mobile-shell .mobile-review-card__user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-shell .mobile-review-card__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #f1f5f9;
+}
+
+.mobile-shell .mobile-review-card__user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-shell .mobile-review-card__nickname {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.mobile-shell .mobile-review-card__role-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.mobile-shell .mobile-review-card__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.mobile-shell .mobile-review-card__rating {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.mobile-shell .mobile-review-card__rating svg {
+  color: #fbbf24;
+  fill: #fbbf24;
+}
+
+.mobile-shell .mobile-review-card__rating-text {
+  font-size: 12px;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.mobile-shell .mobile-review-card__date {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.mobile-shell .mobile-review-card__content {
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+/* 후기 카드 하단 액션 버튼 스타일 */
+.mobile-shell .mobile-review-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 1px dashed #e2e8f0;
+  padding-top: 10px;
+  margin-top: 4px;
+}
+
+.mobile-shell .mobile-review-card__action-btn {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.mobile-shell .mobile-review-card__action-btn:hover {
+  background: #f1f5f9;
+}
+
+.mobile-shell .mobile-review-card__action-btn.is-delete {
+  color: #ef4444;
+}
+
+.mobile-shell .mobile-review-card__action-btn.is-delete:hover {
+  background: #fef2f2;
+}
+
+/* 수정 모드 인라인 폼 스타일 */
+.mobile-shell .mobile-review-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mobile-shell .mobile-review-edit-form textarea {
+  width: 100%;
+  min-height: 80px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 12px;
+  color: #334155;
+  outline: none;
+  resize: none;
+}
+
+.mobile-shell .mobile-review-edit-form textarea:focus {
+  border-color: var(--mobile-primary);
+}
+
+.mobile-shell .mobile-review-edit-form__rating-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.mobile-shell .mobile-review-edit-form__stars {
+  display: flex;
+  gap: 4px;
+}
+
+.mobile-shell .mobile-review-edit-form__stars button {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.mobile-shell .mobile-review-edit-form__stars button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.mobile-shell .mobile-review-card__info-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: #64748b;
+  border-left: 3px solid var(--mobile-primary);
+}
+
+.mobile-shell .mobile-review-card__info-item strong {
+  color: #334155;
+}

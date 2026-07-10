@@ -2,35 +2,35 @@
 const SPORT_THUMBNAIL_DIR = "/images/sports/thumbnails";
 
 const SPORT_THUMBNAIL_FILES = {
-  "\ucd95\uad6c": "soccer",
-  "\ud48b\uc0b4": "futsal",
-  "\ub18d\uad6c": "basketball",
-  "\ubc30\uad6c": "volleyball",
-  "\uc57c\uad6c": "baseball",
-  "\uc871\uad6c": "jokgu",
-  "\ubc30\ub4dc\ubbfc\ud134": "badminton",
-  "\ud0c1\uad6c": "table-tennis",
-  "\ud14c\ub2c8\uc2a4": "tennis",
-  "\uc2a4\ucffc\uc2dc": "squash",
-  "\ub7ec\ub2dd": "running",
-  "\ub4f1\uc0b0": "hiking",
-  "\ud2b8\ub808\ud0b9": "trekking",
-  "\ud2b8\ub798\ud0b9": "trekking",
-  "\uc790\uc804\uac70": "cycling",
-  "\ub77c\uc774\ub529": "cycling",
-  "\uc0b0\ucc45": "walking",
-  "\uc6cc\ud0b9": "walking",
-  "\uac77\uae30": "walking",
-  "\ud5ec\uc2a4": "fitness",
-  "\ud53c\ud2b8\ub2c8\uc2a4": "fitness",
-  "\ud06c\ub85c\uc2a4\ud54f": "crossfit",
-  "\ud074\ub77c\uc774\ubc0d": "climbing",
-  "\uc694\uac00": "yoga",
-  "\ud544\ub77c\ud14c\uc2a4": "pilates",
-  "\ubcfc\ub9c1": "bowling",
-  "\ub2f9\uad6c": "billiards",
-  "\uace8\ud504": "golf",
-  "\uc218\uc601": "swimming",
+  "축구": "soccer",
+  "풋살": "futsal",
+  "농구": "basketball",
+  "배구": "volleyball",
+  "야구": "baseball",
+  "족구": "jokgu",
+  "배드민턴": "badminton",
+  "탁구": "table-tennis",
+  "테니스": "tennis",
+  "스쿼시": "squash",
+  "러닝": "running",
+  "등산": "hiking",
+  "트레킹": "trekking",
+  "트래킹": "trekking",
+  "자전거": "cycling",
+  "라이딩": "cycling",
+  "산책": "walking",
+  "워킹": "walking",
+  "걷기": "walking",
+  "헬스": "fitness",
+  "피트니스": "fitness",
+  "크로스핏": "crossfit",
+  "클라이밍": "climbing",
+  "요가": "yoga",
+  "필라테스": "pilates",
+  "볼링": "bowling",
+  "당구": "billiards",
+  "골프": "golf",
+  "수영": "swimming",
 };
 
 export function getSportNameFromMeeting(meeting) {
@@ -49,6 +49,26 @@ export function getSportThumbnailUrl(sportName) {
   );
 
   return matchedEntry ? `${SPORT_THUMBNAIL_DIR}/${matchedEntry[1]}.png` : "";
+}
+
+export function getSportIconUrl(sportName) {
+  const normalizedName = String(sportName || "").trim();
+  if (!normalizedName) return "";
+
+  const exactFileName = SPORT_THUMBNAIL_FILES[normalizedName];
+  if (exactFileName) {
+    return new URL(`../../public/images/sports/icons/${exactFileName}.svg`, import.meta.url).href;
+  }
+
+  const matchedEntry = Object.entries(SPORT_THUMBNAIL_FILES).find(([name]) =>
+    normalizedName.includes(name)
+  );
+
+  if (matchedEntry) {
+    return new URL(`../../public/images/sports/icons/${matchedEntry[1]}.svg`, import.meta.url).href;
+  }
+
+  return "";
 }
 
 export function getMeetingCustomCoverImage(meeting) {

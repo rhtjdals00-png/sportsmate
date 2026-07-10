@@ -187,7 +187,9 @@ def my_meetings():
 @jwt_required()
 def my_reviews():
     user_id = int(get_jwt_identity())
-    reviews = (
+    
+    # 내가 작성한 후기 (내가 남긴 후기)
+    written = (
         Review.query
         .options(joinedload(Review.reviewer).joinedload(User.profile))
         .filter_by(reviewer_id=user_id)
@@ -195,7 +197,109 @@ def my_reviews():
         .limit(bounded_limit())
         .all()
     )
-    return jsonify({"items": [review.to_dict() for review in reviews]})
+    
+    # 나를 대상으로 남겨진 후기 (받은 후기)
+    received = (
+        Review.query
+        .options(joinedload(Review.reviewer).joinedload(User.profile))
+        .filter(Review.reviewee_id == user_id)
+        .filter(Review.reviewer_id != user_id)
+        .order_by(Review.created_at.desc())
+        .limit(bounded_limit())
+        .all()
+    )
+    
+    written_dicts = [review.to_dict() for review in written]
+    received_dicts = [review.to_dict() for review in received]
+    
+    # 전체 후기 (최신순 정렬)
+    items = written_dicts + received_dicts
+    items.sort(key=lambda x: x["created_at"], reverse=True)
+    
+    return jsonify({
+        "items": items,
+        "written": written_dicts,
+        "received": received_dicts
+    })
+
+
+@user_bp.patch("/me/reviews/<int:review_id>")
+@jwt_required()
+def update_review(review_id):
+    user_id = int(get_jwt_identity())
+    review = Review.query.get_or_404(review_id)
+    
+    # 본인 확인
+    if review.reviewer_id != user_id:
+        return jsonify({"message": "수정 권한이 없습니다."}), 403
+        
+    from flask import request
+    data = request.get_json() or {}
+    if "rating" in data:
+        try:
+            review.rating = int(data["rating"])
+        except ValueError:
+            return jsonify({"message": "평점은 정수값이어야 합니다."}), 400
+    if "content" in data:
+        review.content = str(data["content"]).strip()
+        
+    db.session.commit()
+    
+    # 평점 평균 갱신 로직 추가
+    # 대상 유저(reviewee)가 평점의 주인이므로, 대상 유저의 프로필 평점을 다시 연산하여 반영합니다!
+    reviewee = review.reviewee
+    if reviewee and reviewee.profile:
+        all_reviews = (
+            Review.query
+            .filter(Review.reviewee_id == reviewee.id)
+            .filter(Review.reviewer_id != reviewee.id)
+            .all()
+        )
+        
+        if all_reviews:
+            avg_rating = sum(r.rating for r in all_reviews) / len(all_reviews)
+            reviewee.profile.rating_average = round(avg_rating, 2)
+        else:
+            reviewee.profile.rating_average = 0.0
+            
+        db.session.commit()
+            
+    return jsonify({"review": review.to_dict()})
+
+
+@user_bp.delete("/me/reviews/<int:review_id>")
+@jwt_required()
+def delete_review(review_id):
+    user_id = int(get_jwt_identity())
+    review = Review.query.get_or_404(review_id)
+    
+    # 본인 확인
+    if review.reviewer_id != user_id:
+        return jsonify({"message": "삭제 권한이 없습니다."}), 403
+        
+    meeting = review.meeting
+    db.session.delete(review)
+    db.session.commit()
+    
+    # 삭제 후 평점 평균 갱신
+    reviewee = review.reviewee
+    if reviewee and reviewee.profile:
+        all_reviews = (
+            Review.query
+            .filter(Review.reviewee_id == reviewee.id)
+            .filter(Review.reviewer_id != reviewee.id)
+            .all()
+        )
+        
+        if all_reviews:
+            avg_rating = sum(r.rating for r in all_reviews) / len(all_reviews)
+            reviewee.profile.rating_average = round(avg_rating, 2)
+        else:
+            reviewee.profile.rating_average = 0.0
+            
+        db.session.commit()
+            
+    return jsonify({"message": "후기가 삭제되었습니다."})
 
 
 @user_bp.get("/me/reviews/written")
