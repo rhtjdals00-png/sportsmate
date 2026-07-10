@@ -281,8 +281,32 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
     max_participants: meeting.max_participants || 2
   });
 
+  const isTimeInvalid = Boolean(editForm.start_at && editForm.end_at && new Date(editForm.end_at) <= new Date(editForm.start_at));
+
+  const handleStartAtChange = (e) => {
+    const startVal = e.target.value;
+    if (!startVal) {
+      setEditForm((prev) => ({ ...prev, start_at: startVal }));
+      return;
+    }
+    const startDate = new Date(startVal);
+    startDate.setHours(startDate.getHours() + 1);
+    const year = startDate.getFullYear();
+    const month = String(startDate.getMonth() + 1).padStart(2, "0");
+    const day = String(startDate.getDate()).padStart(2, "0");
+    const hours = String(startDate.getHours()).padStart(2, "0");
+    const minutes = String(startDate.getMinutes()).padStart(2, "0");
+    const newEndAt = `${year}-${month}-${day}T${hours}:${minutes}`;
+    setEditForm((prev) => ({
+      ...prev,
+      start_at: startVal,
+      end_at: newEndAt
+    }));
+  };
+
   const submitEdit = async (e) => {
     e.preventDefault();
+    if (isTimeInvalid) return;
     const maxPartCount = Number(editForm.max_participants);
     if (maxPartCount > maxLimit) {
       return alert(`최대 정원은 ${maxLimit}명 이하로만 설정 가능합니다.`);
@@ -531,11 +555,12 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
                 <div className="form-grid-2">
                   <div className="form-group">
                     <label htmlFor="start_at">시작 시간</label>
-                    <input id="start_at" required type="datetime-local" value={editForm.start_at} onChange={(e) => setEditForm({ ...editForm, start_at: e.target.value })} />
+                    <input id="start_at" required type="datetime-local" value={editForm.start_at} onChange={handleStartAtChange} />
                   </div>
                   <div className="form-group">
                     <label htmlFor="end_at">종료 시간</label>
                     <input id="end_at" type="datetime-local" value={editForm.end_at} onChange={(e) => setEditForm({ ...editForm, end_at: e.target.value })} />
+                    {isTimeInvalid && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>종료 시간은 시작 시간 이후여야 합니다.</span>}
                   </div>
                 </div>
 
@@ -572,7 +597,7 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
                 >
                   취소
                 </button>
-                <button className="submit-btn" type="submit">수정 완료</button>
+                <button className="submit-btn" type="submit" disabled={isTimeInvalid}>수정 완료</button>
               </div>
             </form>
           </section>

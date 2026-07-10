@@ -18,6 +18,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { userApi } from "../../../api/userApi";
+import { meetingApi } from "../../../api/meetingApi";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { useAsync } from "../../../hooks/useAsync";
 import { markProfileEditVerified } from "../../../utils/profileEditAccess";
@@ -374,6 +375,11 @@ function DesktopMyPage() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarHighlight, setCalendarHighlight] = useState({ meetingId: "", chatRoomId: "", source: "", autoOpen: false });
 
+  const [reviewSubTab, setReviewSubTab] = useState("written"); // "written" | "received"
+  const [writingReview, setWritingReview] = useState(null); // { meetingId, peerId, peerNickname, meetingTitle }
+  const [rating, setRating] = useState(5);
+  const [reviewContent, setReviewContent] = useState("");
+
   useEffect(() => {
     const panel = searchParams.get("panel");
     if (panel && ["schedule", "hosted", "joined", "favorite", "reviews"].includes(panel)) {
@@ -408,10 +414,19 @@ function DesktopMyPage() {
     () => (canUseProtectedUserApi ? userApi.myMeetings() : Promise.resolve({ hosted: [], joined: [], pending: [] })),
     [canUseProtectedUserApi, authUser?.id, refreshKey]
   );
-  const reviewsState = useAsync(
-    () => (canUseProtectedUserApi ? userApi.myReviews() : Promise.resolve({ items: [] })),
+  const writtenReviewsState = useAsync(
+    () => (canUseProtectedUserApi ? userApi.myWrittenReviews() : Promise.resolve({ items: [] })),
     [canUseProtectedUserApi, authUser?.id, refreshKey]
   );
+  const receivedReviewsState = useAsync(
+    () => (canUseProtectedUserApi ? userApi.myReceivedReviews() : Promise.resolve({ items: [] })),
+    [canUseProtectedUserApi, authUser?.id, refreshKey]
+  );
+  const pendingReviewsState = useAsync(
+    () => (canUseProtectedUserApi ? userApi.myPendingReviews() : Promise.resolve({ items: [] })),
+    [canUseProtectedUserApi, authUser?.id, refreshKey]
+  );
+  const reviewsLoading = writtenReviewsState.loading || receivedReviewsState.loading || pendingReviewsState.loading;
 
   const user = profileState.data?.user || authUser;
   const profile = user?.profile || {};
@@ -424,14 +439,35 @@ function DesktopMyPage() {
     () => uniqueMeetingsById([...hostedMeetings, ...joinedMeetings]).sort((a, b) => new Date(a.rawTime || 0) - new Date(b.rawTime || 0)),
     [hostedMeetings, joinedMeetings]
   );
-  const reviewItems = reviewsState.data?.items || [];
+  const writtenReviews = writtenReviewsState.data?.items || [];
+  const receivedReviews = receivedReviewsState.data?.items || [];
+  const pendingReviews = pendingReviewsState.data?.items || [];
+
+  const pendingReviewsByMeeting = useMemo(() => {
+    const grouped = {};
+    for (const item of pendingReviews) {
+      const mId = item.meeting.id;
+      if (!grouped[mId]) {
+        grouped[mId] = {
+          meeting: item.meeting,
+          peers: []
+        };
+      }
+      grouped[mId].peers.push(item.peer);
+    }
+    return Object.values(grouped).sort((a, b) => {
+      const timeA = new Date(a.meeting.start_time || 0);
+      const timeB = new Date(b.meeting.start_time || 0);
+      return timeB - timeA;
+    });
+  }, [pendingReviews]);
 
   const activityPanels = {
     schedule: { label: "다가오는 일정", count: scheduled.length, items: scheduled },
     hosted: { label: "내가 만든 모임", count: hostedMeetings.length, items: hostedMeetings },
     joined: { label: "참여 중인 모임", count: joinedMeetings.length, items: joinedMeetings },
     favorite: { label: "관심 모임", count: 0, items: [] },
-    reviews: { label: "후기 관리", count: reviewItems.length, items: reviewItems }
+    reviews: { label: "후기 관리", count: writtenReviews.length + receivedReviews.length, items: [] }
   };
   const activityMenu = [
     { key: "schedule", label: "다가오는 일정", icon: CalendarDays },
@@ -461,6 +497,55 @@ function DesktopMyPage() {
       setIntroEdit(false);
     } finally {
       setSavingIntro(false);
+    }
+  };
+
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+    if (!writingReview) return;
+    try {
+      if (writingReview.isEdit) {
+        await userApi.updateReview(writingReview.id, {
+          rating,
+          content: reviewContent
+        });
+        alert("후기가 수정되었습니다.");
+      } else {
+        await meetingApi.createReview(writingReview.meetingId, {
+          reviewee_id: writingReview.peerId,
+          rating,
+          content: reviewContent
+        });
+        alert("후기가 등록되었습니다.");
+      }
+      setWritingReview(null);
+      setReviewContent("");
+      setRating(5);
+      setRefreshKey((prev) => prev + 1);
+    } catch (err) {
+      alert(err.response?.data?.message || "후기 처리 중 오류가 발생했습니다.");
+    }
+  };
+
+  const handleEditReviewOpen = (review) => {
+    setRating(review.rating);
+    setReviewContent(review.content);
+    setWritingReview({
+      id: review.id,
+      peerNickname: review.reviewee?.nickname || review.reviewee?.name || "사용자",
+      meetingTitle: review.meeting?.title || "모임",
+      isEdit: true
+    });
+  };
+
+  const handleDeleteReview = async (reviewId) => {
+    if (!window.confirm("후기를 삭제하시겠습니까? 삭제 후 복구할 수 없습니다.")) return;
+    try {
+      await userApi.deleteReview(reviewId);
+      alert("후기가 삭제되었습니다.");
+      setRefreshKey((prev) => prev + 1);
+    } catch (err) {
+      alert(err.response?.data?.message || "후기 삭제에 실패했습니다.");
     }
   };
 
@@ -611,22 +696,148 @@ function DesktopMyPage() {
             </div>
           </div>
           <div className="profile-schedule-body">
-            {(meetingsState.loading || reviewsState.loading) && <p className="empty-schedule">내 활동 정보를 불러오는 중입니다.</p>}
-            {!meetingsState.loading && !reviewsState.loading && activeActivity === "reviews" && (
-              reviewItems.length ? reviewItems.map((review) => (
-                <article className="profile-review-item" key={review.id}>
-                  <div>
-                    <b>{review.content || "작성한 후기"}</b>
-                    <span>평점 {review.rating || 0}점</span>
+            {(meetingsState.loading || reviewsLoading) && <p className="empty-schedule">내 활동 정보를 불러오는 중입니다.</p>}
+            {!meetingsState.loading && !reviewsLoading && activeActivity === "reviews" && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
+                {/* Sub tabs */}
+                <div style={{ display: 'flex', gap: '10px', borderBottom: '1px solid #e5e7eb', paddingBottom: '10px', marginBottom: '10px' }}>
+                  <button
+                    type="button"
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      border: 'none',
+                      backgroundColor: reviewSubTab === "written" ? '#3b82f6' : 'transparent',
+                      color: reviewSubTab === "written" ? '#ffffff' : '#4b5563',
+                      transition: 'all 0.2s'
+                    }}
+                    onClick={() => setReviewSubTab("written")}
+                  >
+                    내가 작성한 후기
+                  </button>
+                  <button
+                    type="button"
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      border: 'none',
+                      backgroundColor: reviewSubTab === "received" ? '#3b82f6' : 'transparent',
+                      color: reviewSubTab === "received" ? '#ffffff' : '#4b5563',
+                      transition: 'all 0.2s'
+                    }}
+                    onClick={() => setReviewSubTab("received")}
+                  >
+                    내가 받은 후기
+                  </button>
+                </div>
+
+                {/* Sub tab contents */}
+                {reviewSubTab === "written" && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    {/* 1. Pending reviews (Writeable Reviews) */}
+                    {pendingReviewsByMeeting.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '10px' }}>
+                        <h4 style={{ fontSize: '14px', fontWeight: 'bold', margin: '0 0 4px 0', color: '#111827' }}>작성 가능한 후기</h4>
+                        {pendingReviewsByMeeting.map((group) => (
+                          <div key={group.meeting.id} style={{ backgroundColor: '#f9fafb', borderRadius: '12px', padding: '16px', border: '1px solid #e5e7eb' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid #e5e7eb', paddingBottom: '10px', marginBottom: '12px' }}>
+                              <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#0369a1', backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>모임</span>
+                              <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937' }}>{group.meeting.title}</span>
+                              {group.meeting.start_time && (
+                                <span style={{ fontSize: '13px', fontWeight: '500', color: '#4b5563', marginLeft: 'auto' }}>
+                                  {new Date(group.meeting.start_time).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {group.peers.map((peer) => (
+                                <div key={peer.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff', padding: '10px 14px', borderRadius: '8px', border: '1px solid #f3f4f6', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
+                                  <span style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>{peer.nickname || peer.name || "사용자"}님</span>
+                                  <button
+                                    type="button"
+                                    className="ghost-btn"
+                                    style={{ backgroundColor: '#3b82f6', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}
+                                    onClick={() => setWritingReview({
+                                      meetingId: group.meeting.id,
+                                      peerId: peer.id,
+                                      peerNickname: peer.nickname || peer.name || "사용자",
+                                      meetingTitle: group.meeting.title
+                                    })}
+                                  >
+                                    후기 작성
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* 2. Written reviews list */}
+                    {writtenReviews.length ? writtenReviews.map((review) => (
+                      <article className="profile-review-item" key={review.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f3f4f6', paddingBottom: '12px' }}>
+                        <div>
+                          <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block' }}>{review.meeting?.title || "모임"}</span>
+                          <b style={{ fontSize: '14px', color: '#1f2937' }}>{review.reviewee?.nickname || review.reviewee?.name || "사용자"}님에게 남긴 후기</b>
+                          <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: '#4b5563' }}>{review.content}</p>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#eab308' }}>★ {review.rating || 0}점</span>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              type="button"
+                              className="ghost-btn"
+                              style={{ fontSize: '12px', padding: '2px 6px', border: 'none', background: 'none', cursor: 'pointer', color: '#3b82f6' }}
+                              onClick={() => handleEditReviewOpen(review)}
+                            >
+                              수정
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost-btn"
+                              style={{ fontSize: '12px', padding: '2px 6px', border: 'none', background: 'none', cursor: 'pointer', color: '#ef4444' }}
+                              onClick={() => handleDeleteReview(review.id)}
+                            >
+                              삭제
+                            </button>
+                          </div>
+                          <Link className="ghost-btn" to={`/meetings/${review.meeting_id}`} style={{ fontSize: '12px' }}>모임 보기</Link>
+                        </div>
+                      </article>
+                    )) : <p className="empty-schedule">작성한 후기가 없습니다.</p>}
                   </div>
-                  <Link className="ghost-btn" to={`/meetings/${review.meeting_id}`}>모임 보기</Link>
-                </article>
-              )) : <p className="empty-schedule">작성한 후기가 없습니다.</p>
+                )}
+
+                {reviewSubTab === "received" && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                    {receivedReviews.length ? receivedReviews.map((review) => (
+                      <article className="profile-review-item" key={review.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f3f4f6', paddingBottom: '12px' }}>
+                        <div>
+                          <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block' }}>{review.meeting?.title || "모임"}</span>
+                          <b style={{ fontSize: '14px', color: '#1f2937' }}>익명의 메이트로부터 받은 후기</b>
+                          <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: '#4b5563' }}>{review.content}</p>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#eab308' }}>★ {review.rating || 0}점</span>
+                          <Link className="ghost-btn" to={`/meetings/${review.meeting_id}`} style={{ fontSize: '12px' }}>모임 보기</Link>
+                        </div>
+                      </article>
+                    )) : <p className="empty-schedule">받은 후기가 없습니다.</p>}
+                  </div>
+                )}
+              </div>
             )}
-            {!meetingsState.loading && !reviewsState.loading && activeActivity === "favorite" && (
+            {!meetingsState.loading && !reviewsLoading && activeActivity === "favorite" && (
               <p className="empty-schedule">관심 모임 기능은 아직 준비 중입니다.</p>
             )}
-            {!meetingsState.loading && !reviewsState.loading && !["reviews", "favorite"].includes(activeActivity) && (
+            {!meetingsState.loading && !reviewsLoading && !["reviews", "favorite"].includes(activeActivity) && (
               activePanel.items.length
                 ? activePanel.items.map((item) => <ScheduleItem key={`${item.state}-${item.id}`} item={item} />)
                 : <p className="empty-schedule">표시할 항목이 없습니다.</p>
@@ -671,6 +882,53 @@ function DesktopMyPage() {
               <button className="primary-small" type="button" onClick={() => navigate("/mypage/account-link")}>연동하기</button>
             </div>
           </section>
+        </div>
+      )}
+      {writingReview && (
+        <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setWritingReview(null)}>
+          <form
+            className="profile-auth-modal"
+            onSubmit={handleReviewSubmit}
+            style={{ maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '15px' }}
+          >
+            <button className="schedule-modal-close" type="button" onClick={() => setWritingReview(null)}><X size={18} /></button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <span style={{ fontSize: '12px', color: '#6b7280' }}>{writingReview.meetingTitle}</span>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>{writingReview.peerNickname}님 후기 작성</h2>
+            </div>
+            <p style={{ margin: 0, fontSize: '13px', color: '#4b5563' }}>이 메이트와의 운동 경험은 어떠셨나요? 솔직한 후기를 남겨주세요.</p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontSize: '12px', fontWeight: '600', color: '#374151' }}>평점 선택</label>
+              <select 
+                value={rating} 
+                onChange={(e) => setRating(Number(e.target.value))}
+                style={{ padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '14px' }}
+              >
+                <option value={5}>★ 5점 (최고예요)</option>
+                <option value={4}>★ 4점 (좋아요)</option>
+                <option value={3}>★ 3점 (보통이에요)</option>
+                <option value={2}>★ 2점 (별로예요)</option>
+                <option value={1}>★ 1점 (최악이에요)</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontSize: '12px', fontWeight: '600', color: '#374151' }}>후기 내용</label>
+              <textarea
+                required
+                value={reviewContent}
+                onChange={(e) => setReviewContent(e.target.value)}
+                placeholder="운동 매너, 소통, 참여도 등에 대해 남겨주세요."
+                style={{ padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '14px', minHeight: '100px', resize: 'vertical' }}
+              />
+            </div>
+
+            <div className="profile-auth-actions" style={{ marginTop: '10px' }}>
+              <button className="ghost-btn" type="button" onClick={() => setWritingReview(null)}>취소</button>
+              <button className="primary-small" type="submit" style={{ backgroundColor: '#3b82f6', color: '#ffffff' }}>작성 완료</button>
+            </div>
+          </form>
         </div>
       )}
       <CalendarModal

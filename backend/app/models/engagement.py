@@ -8,17 +8,22 @@ class Review(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     meeting_id = db.Column(db.Integer, db.ForeignKey("meetings.id"), nullable=False)
     reviewer_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    reviewee_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     rating = db.Column(db.Integer, nullable=False)
     content = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=kst_now, nullable=False)
 
-    reviewer = db.relationship("User")
+    reviewer = db.relationship("User", foreign_keys=[reviewer_id], backref="written_reviews")
+    reviewee = db.relationship("User", foreign_keys=[reviewee_id], backref="received_reviews")
+    meeting = db.relationship("Meeting")
 
     def to_dict(self):
         return {
             "id": self.id,
             "meeting_id": self.meeting_id,
+            "meeting": {"id": self.meeting.id, "title": self.meeting.title} if self.meeting else None,
             "reviewer": self.reviewer.to_dict(),
+            "reviewee": self.reviewee.to_dict() if self.reviewee else None,
             "rating": self.rating,
             "content": self.content,
             "created_at": self.created_at.isoformat()
