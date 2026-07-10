@@ -70,6 +70,30 @@
   object-fit: cover;
 }
 
+/* 2026-07-10: 홈 화면을 DesktopPrototype에서 분리하며 기존 PC 홈 배치만 홈 전용 래퍼로 유지. */
+.desktop-home-page .home-banner {
+  width: 100%;
+  min-height: 405px;
+  margin: 0 auto 78px;
+  border-radius: 18px;
+  padding: 50px;
+}
+
+.desktop-home-page .home-banner .home-banner-copy {
+  padding-left: 0;
+}
+
+.desktop-home-page .home-banner .home-banner-copy h1 {
+  font-size: 42px;
+  line-height: 1.14;
+}
+
+.desktop-home-page .home-banner .home-banner-image {
+  width: min(100%, 520px);
+  justify-self: end;
+  border-radius: 10px;
+}
+
 .home-categories-wrap {
   padding: 26px 0 6px;
 }
@@ -272,6 +296,41 @@
 
 .home-recommend {
   margin-top: 28px;
+}
+
+.desktop-home-page .home-categories-wrap {
+  padding: 0;
+  margin-bottom: 58px;
+}
+
+.desktop-home-page .home-categories {
+  max-width: 1180px;
+  gap: 22px;
+  margin: 0 auto;
+}
+
+.desktop-home-page .home-categories a {
+  min-height: 170px;
+}
+
+.desktop-home-page .home-recommend {
+  margin-top: 0;
+}
+
+.desktop-home-page .home-recommend .section-head {
+  margin-bottom: 26px;
+}
+
+.desktop-home-page .home-card-grid {
+  gap: 24px;
+}
+
+.desktop-home-page .home-card-carousel {
+  gap: 24px;
+}
+
+.desktop-home-page .home-card-carousel .meeting-card {
+  flex-basis: calc((100% - 72px) / 4);
 }
 
 .home-card-grid {

@@ -1198,12 +1198,14 @@ function MobileChatRoom() {
               ))}
               {!splitCommaText(profilePreviewUser.profile?.preferred_sports).length ? <span>선호 종목 미설정</span> : null}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '14px', width: '100%', boxSizing: 'border-box', padding: '0 16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '14px', width: '100%', boxSizing: 'border-box', padding: '0 16px' }}>
               {String(profilePreviewUser.id) !== String(user?.id) && !isDirectChat && (
                 <button
                   type="button"
                   onClick={() => requestPrivateChat(profilePreviewUser)}
                   style={{
+                    flex: 1,
+                    maxWidth: '140px',
                     minHeight: '38px',
                     borderRadius: '10px',
                     background: 'var(--mobile-primary)',
@@ -1222,6 +1224,8 @@ function MobileChatRoom() {
                   type="button"
                   onClick={() => blockAndLeave(profilePreviewUser)}
                   style={{
+                    flex: 1,
+                    maxWidth: '140px',
                     minHeight: '38px',
                     borderRadius: '10px',
                     background: '#ef4444',
@@ -1240,6 +1244,8 @@ function MobileChatRoom() {
                   type="button"
                   onClick={() => kickParticipant(profilePreviewUser.id, profilePreviewUser.nickname)}
                   style={{
+                    flex: 1,
+                    maxWidth: '140px',
                     minHeight: '38px',
                     borderRadius: '10px',
                     background: '#ef4444',

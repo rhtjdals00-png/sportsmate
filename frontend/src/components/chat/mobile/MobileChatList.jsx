@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { MapPin, UsersRound, MessageCircle, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import { MapPin, UsersRound, MessageCircle, Users, Pin } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import EmptyState from "../../common/EmptyState.jsx";
@@ -9,7 +9,7 @@ import { chatApi } from "../../../api/chatApi";
 import { useAsync } from "../../../hooks/useAsync";
 import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
-import { getMeetingCoverImage, isUsingSportThumbnail } from "../../../utils/sportThumbnails";
+import { getMeetingCoverImage, isUsingSportThumbnail, getSportIconUrl, getMeetingCustomCoverImage, getSportNameFromMeeting } from "../../../utils/sportThumbnails";
 
 function formatChatTime(value) {
   if (!value) return "방금";
@@ -45,25 +45,72 @@ function MobileChatList() {
   const [meetingFilter, setMeetingFilter] = useState("all");
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [imgErrors, setImgErrors] = useState({});
+  const [pinnedRooms, setPinnedRooms] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("sportsmate_pinned_rooms")) || [];
+    } catch {
+      return [];
+    }
+  });
 
   const handleImgError = (id) =>
     setImgErrors((prev) => ({ ...prev, [id]: true }));
 
+  const togglePin = (e, roomId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const pinKey = `${chatTab}-${roomId}`;
+    setPinnedRooms((prev) => {
+      const next = prev.includes(pinKey)
+        ? prev.filter((k) => k !== pinKey)
+        : [...prev, pinKey];
+      localStorage.setItem("sportsmate_pinned_rooms", JSON.stringify(next));
+      return next;
+    });
+  };
+
   const rooms = useAsync(() => chatApi.rooms(), [refreshKey]);
   const directRooms = useAsync(() => chatApi.directRooms(), [directRefreshKey]);
 
-  const meetingItems = rooms.data?.items || [];
-  const directItems = directRooms.data?.items || [];
+  const rawMeetingItems = rooms.data?.items || [];
+  const rawDirectItems = directRooms.data?.items || [];
 
-  const totalMeetingUnread = meetingItems.reduce((acc, room) => acc + (room.unread_count || 0), 0);
-  const totalDirectUnread = directItems.reduce((acc, room) => acc + (room.unread_count || 0), 0);
+  // Pinned & 최신 메시지 순 정렬 적용
+  const sortedMeetingItems = useMemo(() => {
+    return [...rawMeetingItems].sort((a, b) => {
+      const pinA = pinnedRooms.includes(`meeting-${a.id}`) ? 1 : 0;
+      const pinB = pinnedRooms.includes(`meeting-${b.id}`) ? 1 : 0;
+      if (pinA !== pinB) return pinB - pinA;
 
-  const filteredMeetingItems = meetingItems.filter((room) => {
-    const isHost = String(room.meeting?.host?.id || room.meeting?.host_id) === String(user?.id);
-    if (meetingFilter === "host") return isHost;
-    if (meetingFilter === "guest") return !isHost;
-    return true;
-  });
+      const timeA = new Date(a.last_message?.created_at || a.updated_at || a.created_at).getTime();
+      const timeB = new Date(b.last_message?.created_at || b.updated_at || b.created_at).getTime();
+      return timeB - timeA;
+    });
+  }, [rawMeetingItems, pinnedRooms]);
+
+  const sortedDirectItems = useMemo(() => {
+    return [...rawDirectItems].sort((a, b) => {
+      const pinA = pinnedRooms.includes(`direct-${a.id}`) ? 1 : 0;
+      const pinB = pinnedRooms.includes(`direct-${b.id}`) ? 1 : 0;
+      if (pinA !== pinB) return pinB - pinA;
+
+      const timeA = new Date(a.last_message?.created_at || a.updated_at || a.created_at).getTime();
+      const timeB = new Date(b.last_message?.created_at || b.updated_at || b.created_at).getTime();
+      return timeB - timeA;
+    });
+  }, [rawDirectItems, pinnedRooms]);
+
+  const totalMeetingUnread = sortedMeetingItems.reduce((acc, room) => acc + (room.unread_count || 0), 0);
+  const totalDirectUnread = sortedDirectItems.reduce((acc, room) => acc + (room.unread_count || 0), 0);
+
+  const filteredMeetingItems = useMemo(() => {
+    return sortedMeetingItems.filter((room) => {
+      const isHost = String(room.meeting?.host?.id || room.meeting?.host_id) === String(user?.id);
+      if (meetingFilter === "host") return isHost;
+      if (meetingFilter === "guest") return !isHost;
+      return true;
+    });
+  }, [sortedMeetingItems, meetingFilter, user]);
 
   // 폴링 (리얼타임 미연결 시)
   useEffect(() => {
@@ -155,12 +202,12 @@ function MobileChatList() {
       </div>
 
       {/* 모임 채팅 탭일 때의 서브 필터 */}
-      {chatTab === "meeting" && meetingItems.length > 0 && (
+      {chatTab === "meeting" && sortedMeetingItems.length > 0 && (
         <div className="mobile-chat-subfilters" style={{ display: 'flex', gap: '8px', padding: '8px 16px 12px', background: 'transparent', overflowX: 'auto' }}>
           {[
-            { id: "all", label: `전체 (${meetingItems.length})` },
-            { id: "host", label: `내가 방장 (${meetingItems.filter(r => String(r.meeting?.host?.id || r.meeting?.host_id) === String(user?.id)).length})` },
-            { id: "guest", label: `참여중 (${meetingItems.filter(r => String(r.meeting?.host?.id || r.meeting?.host_id) !== String(user?.id)).length})` }
+            { id: "all", label: `전체 (${sortedMeetingItems.length})` },
+            { id: "host", label: `내가 방장 (${sortedMeetingItems.filter(r => String(r.meeting?.host?.id || r.meeting?.host_id) === String(user?.id)).length})` },
+            { id: "guest", label: `참여중 (${sortedMeetingItems.filter(r => String(r.meeting?.host?.id || r.meeting?.host_id) !== String(user?.id)).length})` }
           ].map((filter) => {
             const isActive = meetingFilter === filter.id;
             return (
@@ -198,21 +245,33 @@ function MobileChatList() {
             {filteredMeetingItems.map((room) => {
               const meeting = room.meeting || {};
               const isHost = String(meeting.host?.id || meeting.host_id) === String(user?.id);
-              const coverImage = getMeetingCoverImage(meeting);
-              const isSportThumb = isUsingSportThumbnail(meeting);
+              const customCover = getMeetingCustomCoverImage(meeting);
+              const sportIconUrl = getSportIconUrl(getSportNameFromMeeting(meeting));
+              const isPinned = pinnedRooms.includes(`meeting-${room.id}`);
               return (
-                <Link key={room.id} to={`/chats/${room.id}`} className="chat-room-card">
+                <Link
+                  key={room.id}
+                  to={`/chats/${room.id}`}
+                  className="chat-room-card"
+                  style={isPinned ? { backgroundColor: 'rgba(79, 70, 229, 0.04)' } : undefined}
+                >
                   <div
-                    className={`chat-room-card__thumb ${isSportThumb ? "is-sport-thumbnail" : ""}`}
+                    className="chat-room-card__thumb"
                     style={
-                      coverImage
-                        ? { backgroundImage: `url(${coverImage})` }
-                        : undefined
+                      customCover
+                        ? { backgroundImage: `url(${customCover})`, backgroundPosition: 'center', backgroundSize: 'cover' }
+                        : { background: 'rgba(79, 70, 229, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }
                     }
                   >
-                    {!coverImage && (
+                    {!customCover && sportIconUrl ? (
+                      <img
+                        src={sportIconUrl}
+                        alt={meeting.sport?.name || "운동"}
+                        style={{ width: '28px', height: '28px', objectFit: 'contain' }}
+                      />
+                    ) : !customCover ? (
                       <span>{meeting.sport?.name || "운동"}</span>
-                    )}
+                    ) : null}
                   </div>
                   <div className="chat-room-card__content">
                     <div className="chat-room-card__topline" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
@@ -220,11 +279,38 @@ function MobileChatList() {
                         <Badge tone={isHost ? "warning" : "sky"} style={{ flexShrink: 0, fontSize: '10px', padding: '2px 5px' }}>
                           {isHost ? "방장" : "참여"}
                         </Badge>
+                        {sportIconUrl && (
+                          <img
+                            src={sportIconUrl}
+                            alt=""
+                            style={{ width: '16px', height: '16px', flexShrink: 0, objectFit: 'contain' }}
+                          />
+                        )}
                         <strong style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{meeting.title}</strong>
                       </div>
-                      <time style={{ flexShrink: 0 }}>{formatChatTime(room.last_message?.created_at)}</time>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          onClick={(e) => togglePin(e, room.id)}
+                          style={{
+                            background: 'none',
+                            border: 0,
+                            padding: '2px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: isPinned ? 'var(--mobile-primary, #4f46e5)' : '#cbd5e1',
+                            transition: 'all 0.2s'
+                          }}
+                          aria-label={isPinned ? "고정 해제" : "상단 고정"}
+                        >
+                          <Pin size={13} fill={isPinned ? "var(--mobile-primary, #4f46e5)" : "none"} style={{ transform: 'rotate(45deg)' }} />
+                        </button>
+                        <time style={{ flexShrink: 0 }}>{formatChatTime(room.last_message?.created_at)}</time>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px', paddingLeft: '6px' }}>
                       {room.last_message ? (
                         <>
                           <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--mobile-primary, #4f46e5)' }}>
@@ -240,7 +326,7 @@ function MobileChatList() {
                         </p>
                       )}
                     </div>
-                    <div className="chat-room-card__meta">
+                    <div className="chat-room-card__meta" style={{ paddingLeft: '6px' }}>
                       <span>
                         <MapPin size={13} />
                         {meeting.location_name || "장소 미정"}
@@ -276,15 +362,17 @@ function MobileChatList() {
             actionTo="/meetings"
           />
         )
-      ) : directItems.length ? (
+      ) : sortedDirectItems.length ? (
         <div className="chat-list chat-list--direct">
-          {directItems.map((room) => {
+          {sortedDirectItems.map((room) => {
             const other = room.other_user || {};
+            const isPinned = pinnedRooms.includes(`direct-${room.id}`);
             return (
               <Link
                 key={room.id}
                 to={`/chats/direct/${room.id}`}
                 className="chat-room-card chat-room-card--direct"
+                style={isPinned ? { backgroundColor: 'rgba(79, 70, 229, 0.04)' } : undefined}
               >
                 <div className="chat-room-card__thumb chat-room-card__thumb--avatar">
                   {other.profile_image_url && !imgErrors[room.id] ? (
@@ -300,13 +388,33 @@ function MobileChatList() {
                   )}
                 </div>
                 <div className="chat-room-card__content">
-                  <div className="chat-room-card__topline">
+                  <div className="chat-room-card__topline" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                     <strong>{other.nickname || other.name || "참여자"}</strong>
-                    <time>
-                      {formatChatTime(
-                        room.last_message?.created_at || room.updated_at || room.created_at
-                      )}
-                    </time>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        onClick={(e) => togglePin(e, room.id)}
+                        style={{
+                          background: 'none',
+                          border: 0,
+                          padding: '2px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: isPinned ? 'var(--mobile-primary, #4f46e5)' : '#cbd5e1',
+                          transition: 'all 0.2s'
+                        }}
+                        aria-label={isPinned ? "고정 해제" : "상단 고정"}
+                      >
+                        <Pin size={13} fill={isPinned ? "var(--mobile-primary, #4f46e5)" : "none"} style={{ transform: 'rotate(45deg)' }} />
+                      </button>
+                      <time>
+                        {formatChatTime(
+                          room.last_message?.created_at || room.updated_at || room.created_at
+                        )}
+                      </time>
+                    </div>
                   </div>
                   <p>{room.last_message?.content || "아직 대화가 없습니다."}</p>
                 </div>

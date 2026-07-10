@@ -7,6 +7,7 @@ import EmptyState from "../../common/EmptyState.jsx";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { userApi } from "../../../api/userApi";
 import { useAsync } from "../../../hooks/useAsync";
+import { getSportIcon } from "../../../utils/sportIcons.jsx";
 
 
 const levelLabels = {
@@ -99,6 +100,16 @@ function MobileMyPage() {
   const joinedCount = meetings.data?.joined?.length || 0;
   const pendingCount = meetings.data?.pending?.length || 0;
   const reviewCount = reviews.data?.items?.length || 0;
+  const receivedReviewsCount = reviews.data?.received?.length || 0;
+  const writtenReviewsCount = reviews.data?.written?.length || 0;
+
+  // 새 후기 여부 검증 (로컬스토리지에 저장된 값과 현재 받은 후기 개수 비교)
+  const hasNewReviews = useMemo(() => {
+    if (!user || !reviews.data) return false;
+    const lastCount = Number(localStorage.getItem(`sportsmate_viewed_reviews_count_${user.id}`) || "0");
+    return receivedReviewsCount > lastCount;
+  }, [user, reviews.data, receivedReviewsCount]);
+
   const exerciseLevel = levelLabels[profile.exercise_level] || "입문";
   const showAdminEntry = isAdminUser(user);
   const introStorageKey = user?.id ? `sportsmate_profile_extra_${user.id}` : "sportsmate_profile_extra_guest";
@@ -220,7 +231,10 @@ function MobileMyPage() {
           {preferredSports.length ? preferredSports.slice(0, 6).map((sport) => {
             return (
               <div key={sport} className="profile-card__sport-grid-item">
-                <Dumbbell size={14} />
+                {(() => {
+                  const SportIcon = getSportIcon(sport);
+                  return <SportIcon size={14} />;
+                })()}
                 <span>{getSportTagLabel(sport, profile.preferred_sport_levels)}</span>
               </div>
             );
@@ -243,11 +257,25 @@ function MobileMyPage() {
           <span>활동 지역</span>
           <strong>{profile.region || "지역 미설정"}</strong>
         </div>
-        <div>
+        <Link to="/mypage/reviews" style={{ position: 'relative' }}>
           <MessageCircle size={18} />
           <span>후기</span>
-          <strong>{reviews.loading ? "확인 중" : `${reviewCount}개`}</strong>
-        </div>
+          <strong>{reviews.loading ? "확인 중" : `남김 ${writtenReviewsCount} · 받음 ${receivedReviewsCount}`}</strong>
+          {hasNewReviews && (
+            <span
+              style={{
+                position: 'absolute',
+                top: '12px',
+                right: '28px',
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: '#ef4444'
+              }}
+              aria-label="새로운 후기 알림"
+            />
+          )}
+        </Link>
         <Link to="/mypage/meetings?tab=pending">
           <CalendarCheck size={18} />
           <span>승인 대기</span>
@@ -303,7 +331,6 @@ function MobileMyPage() {
         <Link to="/mypage/meetings?tab=hosted">내가 만든 모임 <span>{hostedCount}</span></Link>
         <Link to="/mypage/meetings?tab=joined">참여 중인 모임 <span>{joinedCount}</span></Link>
         <Link to="/meetings">관심 모임</Link>
-        <Link to="/mypage/reviews">내 후기 <span>{reviewCount}</span></Link>
       </div>
       <div className="mobile-mypage-logout-wrapper">
         <Button variant="danger" className="mobile-mypage-logout-btn" onClick={handleLogout}>로그아웃</Button>
