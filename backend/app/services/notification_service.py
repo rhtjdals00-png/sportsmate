@@ -61,9 +61,18 @@ def send_web_push(user_id, title, body, url=None):
         except WebPushException as error:
             status_code = getattr(getattr(error, "response", None), "status_code", None)
             response_text = getattr(getattr(error, "response", None), "text", "")
-            if status_code in {404, 410} or (status_code == 400 and "VapidPkHashMismatch" in response_text):
+            
+            # Deactivate subscription if expired (404/410) or VAPID credentials mismatch (400/403)
+            is_invalid = (
+                status_code in {404, 410} or
+                (status_code == 400 and "VapidPkHashMismatch" in response_text) or
+                (status_code == 403 and ("VAPID" in response_text or "credentials" in response_text or "unauthorized" in response_text.lower()))
+            )
+            
+            if is_invalid:
                 subscription.is_active = False
                 changed = True
+                current_app.logger.info("Deactivating invalid push subscription %s for user %s (status %s)", subscription.id, user_id, status_code)
             else:
                 current_app.logger.warning("Web push failed for user %s: %s", user_id, error)
         except Exception as error:
