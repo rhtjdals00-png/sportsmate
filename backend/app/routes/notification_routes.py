@@ -39,7 +39,11 @@ def _enrich_notification(item, user_id):
             meeting_title = room.meeting.title if room and room.meeting else "모임"
             if message:
                 data["title"] = f"{meeting_title} 새 채팅"
-                data["message"] = f"{_display_name(message.sender)}님이 메시지를 보냈습니다. {message.content[:60]}"
+                content_preview = message.content[:60] if message.content else ""
+                if content_preview == "위치를 공유했습니다":
+                    data["message"] = f"{_display_name(message.sender)}님이 위치를 공유했습니다."
+                else:
+                    data["message"] = f"{_display_name(message.sender)}님이 메시지를 보냈습니다. {content_preview}"
     if item.type == "join_request" and item.link_url:
         match = re.search(r"/host/meetings/(\d+)/applicants", item.link_url)
         if match:

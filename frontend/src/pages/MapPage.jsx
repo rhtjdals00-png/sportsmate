@@ -6,6 +6,7 @@ import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
 import { meetingApi } from "../api/meetingApi";
 import { useAsync } from "../hooks/useAsync";
 import { useResponsive } from "../hooks/useResponsive";
+import { getMeetingCoverImage, isUsingSportThumbnail } from "../utils/sportThumbnails";
 
 function MapPage() {
   const { isMobile } = useResponsive();
@@ -76,7 +77,7 @@ function MapPage() {
               </div>
               {items.slice(0, 5).map((meeting) => (
                 <Link key={meeting.id} to={`/meetings/${meeting.id}`} className="map-result">
-                  <img src={meeting.cover_image_url || "/img/test3.png"} alt="" />
+                  <img src={getMeetingCoverImage(meeting) || "/img/test3.png"} alt="" className={isUsingSportThumbnail(meeting) ? "is-sport-thumbnail" : ""} />
                   <span>
                     <b>{meeting.title}</b>
                     <small>{meeting.distance_km != null ? `${meeting.distance_km}km · ` : ""}{meeting.location_name || meeting.address} · {meeting.current_participants}/{meeting.max_participants}명</small>

@@ -1,6 +1,6 @@
-import { Camera, MapPin, Plus, Send, UsersRound, Vote, Reply, MoreVertical, X, Pin } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Camera, MapPin, Plus, Send, UsersRound, Vote, Reply, MoreVertical, X, Pin, Menu, Bell, BellOff, LogOut, Trash2 } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import EmptyState from "../../common/EmptyState.jsx";
@@ -104,6 +104,7 @@ function replyContent(message) {
 }
 
 function MobileChatRoom() {
+  const navigate = useNavigate();
   const { chatRoomId, directRoomId } = useParams();
   const isDirectChat = Boolean(directRoomId);
   const { user } = useAuth();
@@ -154,6 +155,16 @@ function MobileChatRoom() {
   const [noticeError, setNoticeError] = useState("");
   const [noticeRefreshKey, setNoticeRefreshKey] = useState(0);
 
+  /* PC Feature Parity State */
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [mutedRooms, setMutedRooms] = useState([]);
+  const [roomRefreshKey, setRoomRefreshKey] = useState(0);
+  const [directRoomRefreshKey, setDirectRoomRefreshKey] = useState(0);
+  const [voteSelections, setVoteSelections] = useState({});
+  const [voteConfirm, setVoteConfirm] = useState(null);
+  const [privateChatNotice, setPrivateChatNotice] = useState("");
+  const [leavingRoom, setLeavingRoom] = useState(false);
+
   const fileInputRef = useRef(null);
   const messageInputRef = useRef(null);
   const messageRefs = useRef({});
@@ -161,12 +172,12 @@ function MobileChatRoom() {
   // 모임 채팅 메시지
   const messages = useAsync(
     () => chatRoomId ? chatApi.messages(chatRoomId) : Promise.resolve(null),
-    [chatRoomId, refreshKey]
+    [chatRoomId, refreshKey, roomRefreshKey]
   );
   // 1:1 채팅 메시지
   const directMessages = useAsync(
     () => directRoomId ? chatApi.directMessages(directRoomId) : Promise.resolve(null),
-    [directRoomId, directRefreshKey]
+    [directRoomId, directRefreshKey, directRoomRefreshKey]
   );
 
   const activeMessages = isDirectChat ? directMessages : messages;
@@ -297,6 +308,28 @@ function MobileChatRoom() {
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [meeting?.id]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    chatApi.mutedRooms()
+      .then((res) => setMutedRooms(res.muted_rooms || []))
+      .catch((err) => console.error("Failed to load muted rooms", err));
+  }, []);
+
+  const toggleMute = async (roomId, roomType) => {
+    const isCurrentlyMuted = mutedRooms.some(r => String(r.room_id) === String(roomId) && r.room_type === roomType);
+    try {
+      if (isCurrentlyMuted) {
+        await chatApi.unmute(roomId, roomType);
+        setMutedRooms((prev) => prev.filter(r => !(String(r.room_id) === String(roomId) && r.room_type === roomType)));
+      } else {
+        await chatApi.mute(roomId, roomType);
+        setMutedRooms((prev) => [...prev, { room_id: roomId, room_type: roomType }]);
+      }
+    } catch (err) {
+      console.error("Mute toggle failed", err);
+    }
+  };
 
   /* Close options menu on outside click */
   useEffect(() => {
@@ -653,6 +686,138 @@ function MobileChatRoom() {
     }
   };
 
+  const requestPrivateChat = async (targetUser) => {
+    if (!targetUser?.id || String(targetUser.id) === String(user?.id)) {
+      setProfileNotice("자기 자신에게는 개인톡을 보낼 수 없습니다.");
+      return;
+    }
+    try {
+      const data = await chatApi.createDirectRoom(targetUser.id);
+      const roomId = data.room?.id;
+      if (roomId) {
+        setProfilePreviewUser(null);
+        setProfileNotice("");
+        setDirectRoomRefreshKey((value) => value + 1);
+        navigate(`/chats/direct/${roomId}`);
+        return;
+      }
+      setProfileNotice("1:1 톡방을 만들었지만 방 정보를 확인하지 못했습니다.");
+    } catch (directError) {
+      setProfileNotice(directError.response?.data?.message || "1:1 톡방을 만들지 못했습니다.");
+    }
+  };
+
+  const leaveRoom = async () => {
+    const targetRoomId = chatRoomId || directRoomId;
+    if (!targetRoomId || leavingRoom) return;
+    if (!window.confirm("이 채팅방에서 나가시겠습니까?")) return;
+    setLeavingRoom(true);
+    setError("");
+    try {
+      await chatApi.leave(targetRoomId);
+      setDrawerOpen(false);
+      setRefreshKey((value) => value + 1);
+      setRoomRefreshKey((value) => value + 1);
+      navigate("/chats", { replace: true });
+    } catch (leaveError) {
+      setError(leaveError.response?.data?.message || "채팅방 나가기에 실패했습니다.");
+    } finally {
+      setLeavingRoom(false);
+    }
+  };
+
+  const blockAndLeave = async (targetUser) => {
+    const targetRoomId = chatRoomId || directRoomId;
+    if (!targetRoomId || leavingRoom) return;
+    if (!window.confirm(`${targetUser?.nickname || "상대방"}님을 차단하고 이 대화방을 나갈까요?`)) return;
+    setLeavingRoom(true);
+    setError("");
+    try {
+      await chatApi.leave(targetRoomId);
+      setProfilePreviewUser(null);
+      setRefreshKey((value) => value + 1);
+      setRoomRefreshKey((value) => value + 1);
+      navigate("/chats", { replace: true });
+    } catch (blockError) {
+      setError(blockError.response?.data?.message || "사용자 차단에 실패했습니다.");
+    } finally {
+      setLeavingRoom(false);
+    }
+  };
+
+  const closeMeetingRoom = async () => {
+    if (!meeting?.id) return;
+    if (!window.confirm("이 모임 채팅방을 종료할까요? 모임도 취소 상태로 변경됩니다.")) return;
+    setError("");
+    try {
+      await meetingApi.cancel(meeting.id);
+      setRefreshKey((value) => value + 1);
+      setRoomRefreshKey((value) => value + 1);
+      navigate("/chats", { replace: true });
+    } catch (closeError) {
+      setError(closeError.response?.data?.message || "채팅방 종료에 실패했습니다.");
+    }
+  };
+
+  const kickParticipant = async (targetUserId, nickname) => {
+    if (!meeting?.id || !targetUserId) return;
+    if (!window.confirm(`${nickname || "참여자"}님을 이 채팅방에서 내보낼까요? 모임 참여도 함께 취소됩니다.`)) return;
+    setError("");
+    try {
+      await meetingApi.kickMember(meeting.id, targetUserId);
+      setProfilePreviewUser(null);
+      setRefreshKey((value) => value + 1);
+      setRoomRefreshKey((value) => value + 1);
+    } catch (kickError) {
+      setError(kickError.response?.data?.message || "멤버 추방에 실패했습니다.");
+    }
+  };
+
+  const selectedIdsOf = (vote) => {
+    if (Array.isArray(vote.selected_option_ids)) return vote.selected_option_ids.map(Number);
+    return vote.selected_option_id ? [Number(vote.selected_option_id)] : [];
+  };
+
+  const toggleVoteSelection = (vote, optionId) => {
+    if (!vote.allow_multiple) {
+      participateVote(vote.id, optionId);
+      return;
+    }
+    setVoteSelections((current) => {
+      const base = current[vote.id] || selectedIdsOf(vote);
+      const exists = base.some((id) => Number(id) === Number(optionId));
+      return {
+        ...current,
+        [vote.id]: exists ? base.filter((id) => Number(id) !== Number(optionId)) : [...base, optionId]
+      };
+    });
+  };
+
+  const confirmMultipleVote = async (vote) => {
+    const optionIds = voteSelections[vote.id] || selectedIdsOf(vote);
+    if (!optionIds.length) {
+      setVoteError("투표 선택지를 선택해주세요.");
+      return;
+    }
+    setVoteSubmitting(true);
+    setVoteError("");
+    setVoteNotice("");
+    try {
+      await voteApi.participate(vote.id, { option_ids: optionIds });
+      setVoteSelections((current) => {
+        const next = { ...current };
+        delete next[vote.id];
+        return next;
+      });
+      setVoteNotice("투표 선택이 반영되었습니다.");
+      setVoteRefreshKey((value) => value + 1);
+    } catch (participateError) {
+      setVoteError(participateError.response?.data?.message || "투표 참여에 실패했습니다.");
+    } finally {
+      setVoteSubmitting(false);
+    }
+  };
+
   const openUserProfile = async (sender) => {
     if (!sender) return;
     setProfilePreviewUser(sender);
@@ -743,16 +908,22 @@ function MobileChatRoom() {
   return (
     <>
       <MobileHeader
-        title={meeting?.title || "채팅방"}
+        title={isDirectChat ? (room?.other_user?.nickname || "1:1 대화") : (meeting?.title || "채팅방")}
         actions={
-          <div className="mobile-header__actions mobile-chat-header-actions">
-            {meeting?.id ? (
-              <Link className="mobile-chat-detail-link" to={`/meetings/${meeting.id}`}>
-                <span>상세</span>
+          <div className="mobile-header__actions mobile-chat-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {!isDirectChat && meeting?.id && (
+              <Link className="mobile-chat-detail-link" to={`/meetings/${meeting.id}`} style={{ fontSize: '13px', fontWeight: '800', color: '#475569' }}>
+                상세
               </Link>
-            ) : null}
-            <button className="mobile-chat-vote-link" type="button" onClick={openVoteList}>
-              투표
+            )}
+            <button 
+              className="mobile-chat-drawer-trigger" 
+              type="button" 
+              onClick={() => setDrawerOpen(true)}
+              aria-label="채팅방 메뉴 열기"
+              style={{ background: 'none', border: 0, padding: '4px', color: '#1e293b', display: 'flex', alignItems: 'center' }}
+            >
+              <Menu size={22} />
             </button>
           </div>
         }
@@ -906,7 +1077,7 @@ function MobileChatRoom() {
                             )}
                           </div>
                           <div className="message-meta">
-                            {message.message_type !== "notice" && (
+                            {message.message_type !== "notice" && Number(message.read_count || 0) > 0 && (
                               <span className="read-count">{Number(message.read_count || 0)} 읽음</span>
                             )}
                             <time>{formatMessageTime(message.created_at)}</time>
@@ -1014,7 +1185,7 @@ function MobileChatRoom() {
             <strong>{profilePreviewUser.nickname || profilePreviewUser.name || "참여자"}</strong>
             <p>{profilePreviewUser.nickname_with_tag || profilePreviewUser.user_tag_display || "SportsMate 참여자"}</p>
             {profileLoading ? <p className="chat-profile-sheet__notice">프로필을 불러오는 중입니다.</p> : null}
-            {profileNotice ? <p className="chat-profile-sheet__notice">{profileNotice}</p> : null}
+            {profileNotice ? <p className="chat-profile-sheet__notice" style={{ color: '#ef4444' }}>{profileNotice}</p> : null}
             <div className="chat-profile-sheet__facts">
               <span><b>활동 지역</b>{profilePreviewUser.profile?.region || "미설정"}</span>
               <span><b>운동 수준</b>{profilePreviewUser.profile?.exercise_level || "미설정"}</span>
@@ -1022,10 +1193,66 @@ function MobileChatRoom() {
               <span><b>참여율</b>{Math.round(profilePreviewUser.profile?.attendance_rate || 0)}%</span>
             </div>
             <div className="chat-profile-sheet__sports">
-              {(splitCommaText(profilePreviewUser.profile?.preferred_sports).slice(0, 5)).map((sport) => (
+              {(splitCommaText(profilePreviewUser.profile?.preferred_sports).slice(0, 6)).map((sport) => (
                 <span key={sport}>{sport}</span>
               ))}
               {!splitCommaText(profilePreviewUser.profile?.preferred_sports).length ? <span>선호 종목 미설정</span> : null}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '14px', width: '100%', boxSizing: 'border-box', padding: '0 16px' }}>
+              {String(profilePreviewUser.id) !== String(user?.id) && !isDirectChat && (
+                <button
+                  type="button"
+                  onClick={() => requestPrivateChat(profilePreviewUser)}
+                  style={{
+                    minHeight: '38px',
+                    borderRadius: '10px',
+                    background: 'var(--mobile-primary)',
+                    color: '#fff',
+                    border: 0,
+                    fontWeight: '800',
+                    fontSize: '12px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  1:1 톡
+                </button>
+              )}
+              {isDirectChat && String(profilePreviewUser.id) !== String(user?.id) && (
+                <button
+                  type="button"
+                  onClick={() => blockAndLeave(profilePreviewUser)}
+                  style={{
+                    minHeight: '38px',
+                    borderRadius: '10px',
+                    background: '#ef4444',
+                    color: '#fff',
+                    border: 0,
+                    fontWeight: '800',
+                    fontSize: '12px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  차단
+                </button>
+              )}
+              {isRoomHost && String(profilePreviewUser.id) !== String(user?.id) && (
+                <button
+                  type="button"
+                  onClick={() => kickParticipant(profilePreviewUser.id, profilePreviewUser.nickname)}
+                  style={{
+                    minHeight: '38px',
+                    borderRadius: '10px',
+                    background: '#ef4444',
+                    color: '#fff',
+                    border: 0,
+                    fontWeight: '800',
+                    fontSize: '12px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  강퇴
+                </button>
+              )}
             </div>
             <button className="chat-profile-sheet__close" type="button" onClick={() => setProfilePreviewUser(null)}>닫기</button>
           </section>
@@ -1187,13 +1414,57 @@ function MobileChatRoom() {
                     <small style={{ display: 'block', fontSize: '11px', color: '#64748b', marginTop: '3px', marginBottom: '8px' }}>
                       총 {vote.options.reduce((sum, option) => sum + Number(option.response_count || 0), 0)}표 · {vote.allow_multiple ? "복수 선택" : "단일 선택"} · {vote.is_anonymous ? "비공개" : "공개"} · {formatVoteDeadline(vote.ends_at)}
                     </small>
-                    <div>
-                      {vote.options.map((option) => (
-                        <button type="button" key={option.id} className={Number(vote.selected_option_id) === Number(option.id) ? "selected" : ""} onClick={() => participateVote(vote.id, option.id)}>
-                          <span>{option.text}</span>
-                          <em>{Number(vote.selected_option_id) === Number(option.id) ? "내 선택 · " : ""}{option.response_count}명</em>
+                    <div style={{ display: 'grid', gap: '6px' }}>
+                      {vote.options.map((option) => {
+                        const isSelected = vote.allow_multiple
+                          ? (voteSelections[vote.id] || selectedIdsOf(vote)).map(Number).includes(Number(option.id))
+                          : Number(vote.selected_option_id) === Number(option.id);
+                        return (
+                          <button 
+                            type="button" 
+                            key={option.id} 
+                            className={isSelected ? "selected" : ""} 
+                            onClick={() => toggleVoteSelection(vote, option.id)}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '10px 14px',
+                              borderRadius: '10px',
+                              border: '1px solid',
+                              borderColor: isSelected ? 'var(--mobile-primary)' : '#e2e8f0',
+                              background: isSelected ? 'rgba(79, 70, 229, 0.05)' : '#fff',
+                              color: isSelected ? 'var(--mobile-primary)' : '#1e293b',
+                              fontSize: '13px',
+                              fontWeight: isSelected ? '800' : '500',
+                              textAlign: 'left'
+                            }}
+                          >
+                            <span>{option.text}</span>
+                            <em>{isSelected ? "선택됨 · " : ""}{option.response_count}명</em>
+                          </button>
+                        );
+                      })}
+                      {vote.allow_multiple ? (
+                        <button
+                          className="chat-vote-submit-selection"
+                          type="button"
+                          onClick={() => confirmMultipleVote(vote)}
+                          style={{
+                            marginTop: '8px',
+                            minHeight: '38px',
+                            borderRadius: '10px',
+                            background: 'var(--mobile-primary)',
+                            color: '#fff',
+                            border: 0,
+                            fontWeight: '800',
+                            fontSize: '12px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          선택 반영
                         </button>
-                      ))}
+                      ) : null}
                     </div>
                   </article>
                 ))}
@@ -1291,6 +1562,300 @@ function MobileChatRoom() {
               <X size={24} />
             </button>
           </div>
+        </div>
+      ) : null}
+
+      {/* Mobile Chat Drawer */}
+      {drawerOpen ? (
+        <div className="mobile-chat-drawer-container" style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', justifyContent: 'flex-end' }}>
+          <button 
+            className="mobile-chat-drawer-backdrop" 
+            type="button" 
+            onClick={() => setDrawerOpen(false)} 
+            aria-label="메뉴 닫기" 
+            style={{ position: 'absolute', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(3px)', border: 0, width: '100%', height: '100%' }}
+          />
+          <section 
+            className="mobile-chat-drawer-content" 
+            style={{ 
+              position: 'relative', 
+              width: '80%', 
+              maxWidth: '320px', 
+              height: '100%', 
+              background: '#fff', 
+              boxShadow: '-4px 0 24px rgba(0,0,0,0.15)', 
+              display: 'flex', 
+              flexDirection: 'column',
+              boxSizing: 'border-box'
+            }}
+          >
+            {/* Drawer Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
+              <span style={{ fontSize: '15px', fontWeight: '800', color: '#1e293b' }}>채팅방 메뉴</span>
+              <button 
+                type="button" 
+                onClick={() => setDrawerOpen(false)} 
+                style={{ background: 'none', border: 0, color: '#64748b', display: 'flex', alignItems: 'center', padding: '4px' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Drawer Scrollable Body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Notification / Mute Settings */}
+              <div>
+                <span style={{ fontSize: '12px', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '8px' }}>알림 설정</span>
+                {(() => {
+                  const rId = isDirectChat ? directRoomId : chatRoomId;
+                  const rType = isDirectChat ? "direct" : "meeting";
+                  const isMuted = mutedRooms.some(r => String(r.room_id) === String(rId) && r.room_type === rType);
+                  return (
+                    <button 
+                      type="button" 
+                      onClick={() => toggleMute(rId, rType)}
+                      style={{
+                        width: '100%',
+                        minHeight: '44px',
+                        borderRadius: '12px',
+                        border: '1px solid #e2e8f0',
+                        background: isMuted ? '#f8fafc' : '#fff',
+                        color: isMuted ? '#64748b' : 'var(--mobile-primary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        fontSize: '13px',
+                        fontWeight: '800',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {isMuted ? (
+                        <>
+                          <BellOff size={16} />
+                          <span>채팅방 알림 켜기</span>
+                        </>
+                      ) : (
+                        <>
+                          <Bell size={16} />
+                          <span>채팅방 알림 끄기 (음소거)</span>
+                        </>
+                      )}
+                    </button>
+                  );
+                })()}
+              </div>
+
+              {/* Quick Actions (only for meeting chats) */}
+              {!isDirectChat && (
+                <div>
+                  <span style={{ fontSize: '12px', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '8px' }}>모임 도구</span>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <button 
+                      type="button" 
+                      onClick={() => { setDrawerOpen(false); openVoteList(); }}
+                      style={{
+                        minHeight: '40px',
+                        borderRadius: '10px',
+                        border: '1px solid #e2e8f0',
+                        background: '#fff',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        color: '#334155',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <Vote size={15} />
+                      투표함
+                    </button>
+                    {canManageRoom && (
+                      <button 
+                        type="button" 
+                        onClick={() => { setDrawerOpen(false); setNoticeFormOpen(true); }}
+                        style={{
+                          minHeight: '40px',
+                          borderRadius: '10px',
+                          border: '1px solid #e2e8f0',
+                          background: '#fff',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          color: '#334155',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <Pin size={15} />
+                        공지 등록
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Participant List */}
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: '800', color: '#94a3b8' }}>
+                    {isDirectChat ? "대화 상대" : `대화 멤버 (${room?.participants?.length || 0}명)`}
+                  </span>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', overflowY: 'auto', flex: 1, maxHeight: '280px' }}>
+                  {isDirectChat ? (
+                    room?.other_user && (
+                      <button
+                        type="button"
+                        onClick={() => { setDrawerOpen(false); openUserProfile(room.other_user); }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          width: '100%',
+                          padding: '8px 10px',
+                          border: 0,
+                          background: 'none',
+                          borderRadius: '10px',
+                          textAlign: 'left',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {room.other_user.profile_image_url ? (
+                            <img src={room.other_user.profile_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <UsersRound size={16} style={{ color: '#94a3b8' }} />
+                          )}
+                        </div>
+                        <b style={{ fontSize: '13px', color: '#1e293b', fontWeight: '700' }}>{room.other_user.nickname || "상대방"}</b>
+                      </button>
+                    )
+                  ) : (
+                    (room?.participants || []).map((participant) => {
+                      const pUser = participant.user || {};
+                      const isMe = String(pUser.id || participant.user_id) === String(user?.id);
+                      return (
+                        <button
+                          key={participant.id || participant.user_id}
+                          type="button"
+                          onClick={() => { setDrawerOpen(false); openUserProfile(pUser); }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            width: '100%',
+                            padding: '8px 10px',
+                            border: 0,
+                            background: 'none',
+                            borderRadius: '10px',
+                            textAlign: 'left',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {pUser.profile_image_url ? (
+                                <img src={pUser.profile_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                <UsersRound size={16} style={{ color: '#94a3b8' }} />
+                              )}
+                            </div>
+                            <span style={{ fontSize: '13px', color: '#1e293b', fontWeight: isMe ? '800' : '600' }}>
+                              {pUser.nickname || "참여자"}{isMe ? " (나)" : ""}
+                            </span>
+                          </div>
+                          <small style={{ fontSize: '11px', fontWeight: '800', color: participant.role === "host" ? '#f59e0b' : '#94a3b8', background: participant.role === "host" ? '#fef3c7' : '#f1f5f9', padding: '2px 6px', borderRadius: '6px' }}>
+                            {participant.role === "host" ? "방장" : participant.role || "멤버"}
+                          </small>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Drawer Footer Actions */}
+            <div style={{ padding: '16px', borderTop: '1px solid #f1f5f9', background: '#f8fafc', display: 'grid', gap: '8px' }}>
+              {isDirectChat ? (
+                <button
+                  type="button"
+                  onClick={leaveRoom}
+                  style={{
+                    width: '100%',
+                    minHeight: '42px',
+                    borderRadius: '10px',
+                    border: '1px solid #e2e8f0',
+                    background: '#fff',
+                    color: '#ef4444',
+                    fontSize: '13px',
+                    fontWeight: '800',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <LogOut size={16} />
+                  <span>대화방 나가기</span>
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={leaveRoom}
+                    style={{
+                      width: '100%',
+                      minHeight: '42px',
+                      borderRadius: '10px',
+                      border: '1px solid #e2e8f0',
+                      background: '#fff',
+                      color: '#ef4444',
+                      fontSize: '13px',
+                      fontWeight: '800',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <LogOut size={16} />
+                    <span>채팅방 나가기</span>
+                  </button>
+                  {isRoomHost && (
+                    <button
+                      type="button"
+                      onClick={closeMeetingRoom}
+                      style={{
+                        width: '100%',
+                        minHeight: '42px',
+                        borderRadius: '10px',
+                        border: 0,
+                        background: '#ef4444',
+                        color: '#fff',
+                        fontSize: '13px',
+                        fontWeight: '800',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Trash2 size={16} />
+                      <span>모임 채팅방 종료</span>
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </section>
         </div>
       ) : null}
     </>

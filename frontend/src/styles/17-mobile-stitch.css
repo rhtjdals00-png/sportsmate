@@ -7033,3 +7033,22 @@
   object-fit: cover;
   border-radius: inherit;
 }
+
+/* 스포츠 디폴트 썸네일 모바일 연동 스타일 */
+.mobile-shell .meeting-card__thumb.is-sport-thumbnail {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.mobile-shell .detail-cover.is-sport-thumbnail {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.mobile-shell .map-result img.is-sport-thumbnail {
+  object-fit: cover;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
