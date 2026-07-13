@@ -33,6 +33,12 @@ class Meeting(db.Model, TimestampMixin):
     sport = db.relationship("Sport")
     participants = db.relationship("Participant", back_populates="meeting", cascade="all, delete-orphan")
     chat_room = db.relationship("ChatRoom", back_populates="meeting", uselist=False, cascade="all, delete-orphan")
+    sessions = db.relationship(
+        "MeetingSession",
+        back_populates="meeting",
+        cascade="all, delete-orphan",
+        order_by="MeetingSession.start_at.asc()",
+    )
 
     def status_label(self):
         if self.status == "open":
@@ -138,6 +144,39 @@ class Meeting(db.Model, TimestampMixin):
                 "role": participant.role,
                 "status": participant.status
             } if participant else None
+        }
+
+class MeetingSession(db.Model, TimestampMixin):
+    __tablename__ = "meeting_sessions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    meeting_id = db.Column(db.Integer, db.ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, index=True)
+    session_number = db.Column(db.Integer, nullable=False)
+    start_at = db.Column(db.DateTime, nullable=False, index=True)
+    end_at = db.Column(db.DateTime)
+    status = db.Column(db.String(20), default="scheduled", nullable=False)
+    cancellation_reason = db.Column(db.String(255))
+
+    meeting = db.relationship("Meeting", back_populates="sessions")
+
+    __table_args__ = (
+        db.UniqueConstraint("meeting_id", "session_number", name="uq_meeting_session_number"),
+        db.UniqueConstraint("meeting_id", "start_at", name="uq_meeting_session_start_at"),
+        db.CheckConstraint("status in ('scheduled', 'completed', 'cancelled')", name="ck_meeting_sessions_status"),
+        db.CheckConstraint("end_at is null or end_at > start_at", name="ck_meeting_sessions_time_range"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "meeting_id": self.meeting_id,
+            "session_number": self.session_number,
+            "start_at": self.start_at.isoformat() if self.start_at else None,
+            "end_at": self.end_at.isoformat() if self.end_at else None,
+            "status": self.status,
+            "cancellation_reason": self.cancellation_reason,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
 
 class Participant(db.Model):

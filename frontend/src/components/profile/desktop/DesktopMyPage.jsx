@@ -22,10 +22,20 @@ import { meetingApi } from "../../../api/meetingApi";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { useAsync } from "../../../hooks/useAsync";
 import { markProfileEditVerified } from "../../../utils/profileEditAccess";
+import { getMeetingCoverImage } from "../../../utils/sportThumbnails";
 
 const PROFILE_INTRO_MAX_LENGTH = 30;
 const PROFILE_INTRO_EMPTY_TEXT = "아직 한 줄 소개가 없습니다.";
 const FALLBACK_PROFILE_IMAGE = "/images/logo.png";
+const REPEAT_DAY_LABELS = {
+  MO: "월",
+  TU: "화",
+  WE: "수",
+  TH: "목",
+  FR: "금",
+  SA: "토",
+  SU: "일"
+};
 
 const levelLabels = {
   // 2026-07-01: 모바일 프로필 기준과 동일하게 운동 수준 명칭을 통일.
@@ -63,6 +73,32 @@ function formatDateTime(value) {
   return `${month}.${day}(${weekday}) ${hours}:${minutes}`;
 }
 
+function validDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatTime(value) {
+  const date = validDate(value);
+  if (!date) return "";
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function formatRepeatRule(repeatRule, startAt, endAt) {
+  const byDay = String(repeatRule || "").match(/BYDAY=([^;]+)/)?.[1];
+  if (!byDay) return "";
+  const days = byDay
+    .split(",")
+    .map((day) => REPEAT_DAY_LABELS[day.trim()])
+    .filter(Boolean);
+  if (!days.length) return "";
+  const timeRange = [formatTime(startAt), formatTime(endAt)].filter(Boolean).join("~");
+  return `매주 ${days.join("·")}${timeRange ? ` ${timeRange}` : ""}`;
+}
+
 function getDday(value) {
   if (!value) return "D-?";
   const target = new Date(value);
@@ -72,13 +108,13 @@ function getDday(value) {
   target.setHours(0, 0, 0, 0);
   const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
   if (diff === 0) return "D-DAY";
-  return diff > 0 ? `D-${diff}` : `D+${Math.abs(diff)}`;
+  return diff > 0 ? `D-${diff}` : "종료됨";
 }
 
 function isUpcomingSchedule(value) {
-  if (!value) return true;
+  if (!value) return false;
   const target = new Date(value);
-  if (Number.isNaN(target.getTime())) return true;
+  if (Number.isNaN(target.getTime())) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   target.setHours(0, 0, 0, 0);
@@ -86,13 +122,52 @@ function isUpcomingSchedule(value) {
 }
 
 function meetingImage(meeting) {
-  return meeting.cover_image_url || meeting.image_url || meeting.thumbnail_url || FALLBACK_PROFILE_IMAGE;
+  return getMeetingCoverImage(meeting) || FALLBACK_PROFILE_IMAGE;
 }
 
 function meetingMemberText(meeting) {
   const current = meeting.current_participants ?? 0;
   const max = meeting.max_participants ?? 0;
   return max ? `${current}/${max}` : `${current}`;
+}
+
+function sportNameOf(meeting) {
+  return meeting?.sport?.name || meeting?.sport_name || "";
+}
+
+function meetingTypeLabel(type) {
+  if (type === "regular") return "정기모임";
+  if (type === "one_time") return "일회성";
+  return "";
+}
+
+function sortSessionsByStart(sessions) {
+  return [...sessions].sort((a, b) => {
+    const dateA = validDate(a.start_at);
+    const dateB = validDate(b.start_at);
+    if (!dateA && !dateB) return 0;
+    if (!dateA) return 1;
+    if (!dateB) return -1;
+    return dateA - dateB;
+  });
+}
+
+function isPastByDay(value) {
+  const date = validDate(value);
+  if (!date) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  return date < today;
+}
+
+function isMeetingEnded(item) {
+  if (item.meetingType === "regular") {
+    if (item.nextSession) return false;
+    if (!item.sessions.length) return false;
+    return item.sessions.every((session) => isPastByDay(session.end_at || session.start_at));
+  }
+  return isPastByDay(item.endTime || item.rawTime);
 }
 
 function tagLabel(user) {
@@ -109,12 +184,28 @@ function hasLinkedEmailProvider(user) {
 }
 
 function normalizeMeeting(meeting, state) {
+  const isRegular = meeting.meeting_type === "regular";
+  const scheduledSessions = sortSessionsByStart((meeting.sessions || []).filter((session) => session.status === "scheduled"));
+  const fallbackNextSession = scheduledSessions.find((session) => isUpcomingSchedule(session.start_at));
+  const nextSession = isRegular ? meeting.next_session || fallbackNextSession || null : null;
+  const lastSession = isRegular ? [...scheduledSessions].reverse().find((session) => validDate(session.start_at)) : null;
+  // 2026-07-13: 정기모임은 Meeting.start_at만으로 종료 판단하지 않고 실제 회차 데이터를 우선한다.
+  const scheduleStart = isRegular ? (nextSession?.start_at || lastSession?.start_at || null) : meeting.start_at;
+  const scheduleEnd = isRegular ? (nextSession?.end_at || lastSession?.end_at || null) : meeting.end_at;
   return {
     id: meeting.id,
     title: meeting.title || "제목 없는 모임",
     place: meeting.location_name || meeting.address || "장소 미정",
-    time: formatDateTime(meeting.start_at),
-    rawTime: meeting.start_at,
+    meetingType: meeting.meeting_type || "one_time",
+    meetingTypeLabel: meetingTypeLabel(meeting.meeting_type),
+    sportName: sportNameOf(meeting),
+    nextSession,
+    repeatRule: meeting.repeat_rule || "",
+    repeatLabel: isRegular ? formatRepeatRule(meeting.repeat_rule, scheduleStart, scheduleEnd) : "",
+    time: formatDateTime(scheduleStart),
+    rawTime: scheduleStart || null,
+    endTime: scheduleEnd || null,
+    sessions: scheduledSessions,
     member: meetingMemberText(meeting),
     state,
     chatRoomId: meeting.chat_room_id,
@@ -134,6 +225,35 @@ function uniqueMeetingsById(items) {
   return Array.from(byId.values());
 }
 
+function buildCalendarItems(items) {
+  const byKey = new Map();
+  items.forEach((item) => {
+    if (item.meetingType === "regular") {
+      item.sessions.forEach((session) => {
+        const date = validDate(session.start_at);
+        if (!date) return;
+        const key = `${item.id}-${session.id}`;
+        byKey.set(key, {
+          ...item,
+          calendarKey: key,
+          sessionId: session.id,
+          sessionNumber: session.session_number,
+          rawTime: session.start_at,
+          endTime: session.end_at,
+          time: formatDateTime(session.start_at)
+        });
+      });
+      return;
+    }
+    if (!validDate(item.rawTime)) return;
+    byKey.set(`${item.id}-one-time`, {
+      ...item,
+      calendarKey: `${item.id}-one-time`
+    });
+  });
+  return Array.from(byKey.values()).sort((a, b) => validDate(a.rawTime) - validDate(b.rawTime));
+}
+
 function pageTitle(title, desc) {
   return (
     <div className="screen-title profile-page-title">
@@ -145,8 +265,15 @@ function pageTitle(title, desc) {
   );
 }
 
-function ScheduleItem({ item }) {
+function ScheduleTag({ children, tone = "sport" }) {
+  return <span className={`profile-schedule-tag is-${tone}`}>{children}</span>;
+}
+
+function ScheduleItem({ item, variant = "schedule" }) {
   const isHost = item.state === "host";
+  const showHostTag = variant === "schedule" && isHost;
+  const showTypeTag = variant !== "schedule" && item.meetingTypeLabel;
+  const isEnded = isMeetingEnded(item);
   return (
     <article className={`proto-schedule-item proto-schedule-item--profile ${isHost ? "proto-schedule-item--host" : ""}`}>
       {isHost && (
@@ -157,16 +284,19 @@ function ScheduleItem({ item }) {
       )}
       <img src={item.img} alt={item.title} />
       <div>
-        {isHost && (
-          <div className="schedule-item-status">
-            <span className="host-badge"><Crown size={13} />내가 방장</span>
+        {(showHostTag || showTypeTag || item.sportName) && (
+          <div className="profile-schedule-tags">
+            {showHostTag && <ScheduleTag tone="host"><Crown size={13} />내가 방장</ScheduleTag>}
+            {showTypeTag && <ScheduleTag tone={item.meetingType === "regular" ? "regular" : "one-time"}>{item.meetingTypeLabel}</ScheduleTag>}
+            {item.sportName && <ScheduleTag tone="sport">{item.sportName}</ScheduleTag>}
           </div>
         )}
         <div className="schedule-meta-row">
           <span className="schedule-date">{item.time}</span>
-          <span className="schedule-dday">{getDday(item.rawTime)}</span>
+          <span className={`schedule-dday ${isEnded ? "is-ended" : ""}`}>{isEnded ? "종료됨" : getDday(item.rawTime)}</span>
         </div>
         <h3>{item.title}</h3>
+        {item.repeatLabel && <p>{item.repeatLabel}</p>}
         <p>{item.place} · {item.member}</p>
         <footer>
           <Link className="ghost-btn" to={`/meetings/${item.id}`}><FileText size={14} />상세</Link>
@@ -175,11 +305,6 @@ function ScheduleItem({ item }) {
       </div>
     </article>
   );
-}
-
-function validDate(value) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function calendarBaseDate(items) {
@@ -339,7 +464,7 @@ function CalendarModal({ open, items, onClose, highlightMeetingId, highlightChat
             <h2 className="schedule-modal-title">{calendarDayTitle(selectedDay.date)} 일정</h2>
             <div className="schedule-modal-body">
               {selectedDay.items.map((item) => (
-                <article className={`schedule-modal-item ${isHighlightedItem(item) ? "is-highlighted-from-chat" : ""}`} key={`${item.state}-${item.id}`}>
+                <article className={`schedule-modal-item ${isHighlightedItem(item) ? "is-highlighted-from-chat" : ""}`} key={item.calendarKey || `${item.state}-${item.id}`}>
                   <img src={item.img} alt={item.title} />
                   <div>
                     {isHighlightedItem(item) && isChatbotHighlight && (
@@ -448,7 +573,11 @@ function DesktopMyPage() {
   const scheduled = useMemo(
     () => uniqueMeetingsById([...hostedMeetings, ...joinedMeetings])
       .filter((item) => isUpcomingSchedule(item.rawTime))
-      .sort((a, b) => new Date(a.rawTime || 0) - new Date(b.rawTime || 0)),
+      .sort((a, b) => validDate(a.rawTime) - validDate(b.rawTime)),
+    [hostedMeetings, joinedMeetings]
+  );
+  const calendarItems = useMemo(
+    () => buildCalendarItems(uniqueMeetingsById([...hostedMeetings, ...joinedMeetings])),
     [hostedMeetings, joinedMeetings]
   );
   const writtenReviews = writtenReviewsState.data?.items || [];
@@ -468,8 +597,8 @@ function DesktopMyPage() {
       grouped[mId].peers.push(item.peer);
     }
     return Object.values(grouped).sort((a, b) => {
-      const timeA = new Date(a.meeting.start_time || 0);
-      const timeB = new Date(b.meeting.start_time || 0);
+      const timeA = validDate(a.meeting.start_time)?.getTime() ?? -Infinity;
+      const timeB = validDate(b.meeting.start_time)?.getTime() ?? -Infinity;
       return timeB - timeA;
     });
   }, [pendingReviews]);
@@ -851,7 +980,7 @@ function DesktopMyPage() {
             )}
             {!meetingsState.loading && !reviewsLoading && !["reviews", "favorite"].includes(activeActivity) && (
               activePanel.items.length
-                ? activePanel.items.map((item) => <ScheduleItem key={`${item.state}-${item.id}`} item={item} />)
+                ? activePanel.items.map((item) => <ScheduleItem key={`${item.state}-${item.id}`} item={item} variant={activeActivity} />)
                 : <p className="empty-schedule">표시할 항목이 없습니다.</p>
             )}
           </div>
@@ -945,7 +1074,7 @@ function DesktopMyPage() {
       )}
       <CalendarModal
         open={calendarOpen}
-        items={scheduled}
+        items={calendarItems}
         onClose={() => { setCalendarOpen(false); setCalendarHighlight((current) => ({ ...current, autoOpen: false })); }}
         highlightMeetingId={calendarHighlight.meetingId}
         highlightChatRoomId={calendarHighlight.chatRoomId}

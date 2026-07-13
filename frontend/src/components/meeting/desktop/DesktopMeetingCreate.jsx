@@ -14,6 +14,15 @@ const TIME_MINUTES = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45"
 const TIME_HOURS = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0"));
 
 const WEEKDAY_LABELS = ["\uc77c", "\uc6d4", "\ud654", "\uc218", "\ubaa9", "\uae08", "\ud1a0"];
+const REPEAT_DAY_OPTIONS = [
+  { value: "MO", label: "\uc6d4" },
+  { value: "TU", label: "\ud654" },
+  { value: "WE", label: "\uc218" },
+  { value: "TH", label: "\ubaa9" },
+  { value: "FR", label: "\uae08" },
+  { value: "SA", label: "\ud1a0" },
+  { value: "SU", label: "\uc77c" }
+];
 const padDatePart = (value) => String(value).padStart(2, "0");
 const formatDateValue = (date) => `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
 const parseDateValue = (value) => {
@@ -315,6 +324,7 @@ const initialForm = {
   start_time: "",
   end_date: "",
   end_time: "",
+  repeat_days: [],
   max_participants: 6
 };
 
@@ -510,6 +520,48 @@ function DesktopMeetingCreate() {
 
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
+  const updateMeetingType = (meetingType) => {
+    setForm((prev) => {
+      if (meetingType === "regular") {
+        const nextStartDate = prev.start_date || today;
+        const nextStartTime = prev.start_time || defaultStartTimeForDate(nextStartDate, today);
+        const nextEndTime = prev.end_time && prev.end_time > nextStartTime ? prev.end_time : addMinutesToTime(nextStartTime, 60);
+        return {
+          ...prev,
+          meeting_type: "regular",
+          start_date: nextStartDate,
+          start_time: nextStartTime,
+          end_date: "",
+          end_time: nextEndTime,
+        };
+      }
+      return {
+        ...prev,
+        meeting_type: "one_time",
+        repeat_days: [],
+      };
+    });
+    if (meetingType === "regular") {
+      setHasStartSchedule(true);
+      setHasEndSchedule(false);
+    } else {
+      setHasStartSchedule(true);
+    }
+  };
+
+  const toggleRepeatDay = (day) => {
+    setForm((prev) => {
+      const exists = prev.repeat_days.includes(day);
+      const nextDays = exists
+        ? prev.repeat_days.filter((item) => item !== day)
+        : [...prev.repeat_days, day];
+      const sortedDays = REPEAT_DAY_OPTIONS
+        .map((option) => option.value)
+        .filter((value) => nextDays.includes(value));
+      return { ...prev, repeat_days: sortedDays };
+    });
+  };
+
   const updateCategory = (categoryId) => {
     setForm((prev) => ({ ...prev, category_id: categoryId, sport_id: "" }));
   };
@@ -569,6 +621,7 @@ function DesktopMeetingCreate() {
   const updateStartTime = (value) => {
     setForm((prev) => {
       const next = { ...prev, start_time: value };
+      if (prev.meeting_type === "regular" && value && prev.end_time && prev.end_time <= value) next.end_time = addMinutesToTime(value, 60);
       if (prev.end_date === prev.start_date && prev.end_time && value) next.end_time = clampTimeAfterMin(prev.end_time, value);
       return next;
     });
@@ -596,17 +649,26 @@ function DesktopMeetingCreate() {
   const submit = async (event) => {
     event.preventDefault();
     const trimmedPurpose = form.purpose.trim();
-    if (!form.category_id || !form.sport_id) return alert("카테고리와 종목을 선택해주세요.");
-    if (!trimmedPurpose) return alert("모집 목적을 선택하거나 입력해주세요.");
+    if (!form.category_id || !form.sport_id) return alert("카테고리와 종목을 선택해 주세요.");
+    if (!trimmedPurpose) return alert("모집 목적을 선택하거나 입력해 주세요.");
     if (!form.location_name || !form.address) return alert("\uc704\uce58 \uac80\uc0c9 \uacb0\uacfc\ub098 \uc9c0\ub3c4\uc5d0\uc11c \uc704\uce58\ub97c \uc120\ud0dd\ud574\uc8fc\uc138\uc694.");
-    if (hasStartSchedule && (!form.start_date || !form.start_time)) return alert("시작 일정이 있는 모임은 시작일과 시작 시간을 입력해주세요.");
-    if (hasEndSchedule && !hasStartSchedule) return alert("종료 일정은 시작 일정이 있을 때만 설정할 수 있습니다.");
-    if (hasEndSchedule && (!form.end_date || !form.end_time)) return alert("종료 일정이 있는 모임은 종료일과 종료 시간을 입력해주세요.");
-    if (hasEndSchedule && form.end_date < form.start_date) return alert("종료일은 시작일 이후로 선택해주세요.");
-    if (hasEndSchedule) {
-      const startAt = new Date(combineDateTime(form.start_date, form.start_time));
-      const endAt = new Date(combineDateTime(form.end_date, form.end_time));
-      if (endAt <= startAt) return alert("종료 시간은 시작 시간 이후로 설정해주세요.");
+
+    if (form.meeting_type === "one_time") {
+      if (!form.start_date) return alert("모임 시작 날짜를 선택해 주세요.");
+      if (!form.start_time) return alert("모임 시작 시간을 선택해 주세요.");
+      if (hasEndSchedule && (!form.end_date || !form.end_time)) return alert("종료 일정을 모두 입력해 주세요.");
+      if (hasEndSchedule && form.end_date < form.start_date) return alert("종료 시간은 시작 시간 이후여야 합니다.");
+      if (hasEndSchedule) {
+        const startAt = new Date(combineDateTime(form.start_date, form.start_time));
+        const endAt = new Date(combineDateTime(form.end_date, form.end_time));
+        if (endAt <= startAt) return alert("종료 시간은 시작 시간 이후여야 합니다.");
+      }
+    } else {
+      if (!form.start_date) return alert("반복 일정 시작일을 선택해 주세요.");
+      if (!form.start_time) return alert("시작 시간을 선택해 주세요.");
+      if (!form.end_time) return alert("종료 시간을 선택해 주세요.");
+      if (!form.repeat_days.length) return alert("반복 요일을 하나 이상 선택해 주세요.");
+      if (form.end_time <= form.start_time) return alert("종료 시간은 시작 시간 이후여야 합니다.");
     }
 
     const maxPartCount = Number(form.max_participants);
@@ -614,15 +676,38 @@ function DesktopMeetingCreate() {
       return alert(`개설 최대 정원은 ${maxLimit}명 이하로만 설정 가능합니다.`);
     }
 
-    const data = await meetingApi.create({
-      ...form,
-      purpose: trimmedPurpose,
-      start_at: hasStartSchedule ? combineDateTime(form.start_date, form.start_time) : null,
-      end_at: hasEndSchedule ? combineDateTime(form.end_date, form.end_time) : null,
-      meeting_type: hasEndSchedule || !hasStartSchedule ? "regular" : form.meeting_type,
+    const basePayload = {
       sport_id: Number(form.sport_id),
-      max_participants: maxPartCount
-    });
+      title: form.title,
+      description: form.description,
+      purpose: trimmedPurpose,
+      location_name: form.location_name,
+      address: form.address,
+      latitude: form.latitude,
+      longitude: form.longitude,
+      region_sido_code: form.region_sido_code,
+      region_sigungu_code: form.region_sigungu_code,
+      max_participants: maxPartCount,
+      cover_image_url: form.cover_image_url,
+    };
+
+    const payload = form.meeting_type === "regular"
+      ? {
+          ...basePayload,
+          meeting_type: "regular",
+          schedule_start_date: form.start_date,
+          start_time: form.start_time,
+          end_time: form.end_time,
+          repeat_days: form.repeat_days,
+        }
+      : {
+          ...basePayload,
+          meeting_type: "one_time",
+          start_at: combineDateTime(form.start_date, form.start_time),
+          end_at: hasEndSchedule ? combineDateTime(form.end_date, form.end_time) : null,
+        };
+
+    const data = await meetingApi.create(payload);
     navigate(`/meetings/${data.meeting.id}`);
   };
 
@@ -644,7 +729,7 @@ function DesktopMeetingCreate() {
           <div className="desktop-form-grid">
             <label>카테고리<select value={form.category_id} disabled={categories.loading || !categoryItems.length} onChange={(event) => updateCategory(event.target.value)}>{categoryItems.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
             <label>종목<select required value={form.sport_id} disabled={sports.loading || !sportItems.length} onChange={(event) => update("sport_id", event.target.value)}>{sportItems.map((sport) => <option key={sport.id} value={sport.id}>{sport.name}</option>)}</select></label>
-            <label>모임 방식<select value={form.meeting_type} onChange={(event) => update("meeting_type", event.target.value)}><option value="one_time">한 번만 진행</option><option value="regular">반복 진행</option></select></label>
+            <label>모임 방식<select value={form.meeting_type} onChange={(event) => updateMeetingType(event.target.value)}><option value="one_time">한 번만 진행</option><option value="regular">반복 진행</option></select></label>
           </div>
         </section>
 
@@ -660,19 +745,41 @@ function DesktopMeetingCreate() {
 
         <section>
           <h2>일정 및 장소</h2>
-          <div className="desktop-schedule-toggles">
-            <label><input type="checkbox" checked={hasStartSchedule} onChange={(event) => toggleStartSchedule(event.target.checked)} /> 시작 일정 있음</label>
-            <label><input type="checkbox" checked={hasEndSchedule} disabled={!hasStartSchedule} onChange={(event) => toggleEndSchedule(event.target.checked)} /> 종료 일정 있음</label>
-          </div>
+          {form.meeting_type === "one_time" && (
+            <div className="desktop-schedule-toggles">
+              <label><input type="checkbox" checked={hasEndSchedule} onChange={(event) => toggleEndSchedule(event.target.checked)} /> 종료 일정 있음</label>
+            </div>
+          )}
           <div className="desktop-form-grid desktop-meeting-schedule-grid">
-            {hasStartSchedule && (
+            {form.meeting_type === "regular" && (
+              <fieldset className="desktop-regular-schedule desktop-form-full">
+                <legend>반복 일정</legend>
+                <p>선택한 요일을 기준으로 최초 12회 일정이 생성됩니다.</p>
+                <div className="desktop-regular-schedule__grid">
+                  <label>반복 일정 시작일<CalendarSelect label={"\ubc18\ubcf5 \uc77c\uc815 \uc2dc\uc791\uc77c"} min={today} value={form.start_date} onChange={updateStartDate} icon={<CalendarClock size={18} />} /></label>
+                  <label>시작 시간<span className="desktop-icon-input"><AlarmClock size={18} /><TimeSelect required value={form.start_time} onChange={updateStartTime} /></span></label>
+                  <label>종료 시간<span className="desktop-icon-input"><AlarmClock size={18} /><TimeSelect required min={form.start_time} value={form.end_time} onChange={updateEndTime} /></span></label>
+                </div>
+                <div className="desktop-repeat-days" role="group" aria-label="반복 요일">
+                  {REPEAT_DAY_OPTIONS.map((day) => {
+                    const selected = form.repeat_days.includes(day.value);
+                    return (
+                      <button type="button" key={day.value} className={selected ? "is-selected" : ""} aria-pressed={selected} onClick={() => toggleRepeatDay(day.value)}>
+                        {day.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            )}
+            {form.meeting_type === "one_time" && (
               <fieldset className="desktop-date-time-pair">
                 <legend>시작 일정</legend>
                 <label>시작일<CalendarSelect label={"\uc2dc\uc791\uc77c"} min={today} value={form.start_date} onChange={updateStartDate} icon={<CalendarClock size={18} />} /></label>
                 <label>시작 시간<span className="desktop-icon-input"><AlarmClock size={18} /><TimeSelect required value={form.start_time} onChange={updateStartTime} /></span></label>
               </fieldset>
             )}
-            {hasEndSchedule && (
+            {form.meeting_type === "one_time" && hasEndSchedule && (
               <fieldset className="desktop-date-time-pair">
                 <legend>종료 일정</legend>
                 <label>종료일<CalendarSelect label={"\uc885\ub8cc\uc77c"} min={form.start_date || today} value={form.end_date} onChange={updateEndDate} icon={<CalendarClock size={18} />} /></label>

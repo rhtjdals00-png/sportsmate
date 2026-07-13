@@ -1,17 +1,76 @@
 import math
+from datetime import date, datetime, time, timedelta
 
 from flask import current_app
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import ChatMessage, ChatRoom, Meeting, Participant, Review, Sport, User, Attendance
+from app.models import ChatMessage, ChatRoom, Meeting, MeetingSession, Participant, Review, Sport, User, Attendance
 from app.services.notification_service import create_notification, send_web_push
 from app.utils.timezone import kst_now, parse_client_datetime
 
 
 def parse_datetime(value):
     return parse_client_datetime(value)
+
+
+WEEKDAY_ORDER = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
+WEEKDAY_INDEX = {day: index for index, day in enumerate(WEEKDAY_ORDER)}
+
+
+def _parse_schedule_date(value):
+    try:
+        return date.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        raise ValueError("정기모임은 올바른 시작일이 필요합니다.")
+
+
+def _parse_schedule_time(value, field_name):
+    try:
+        return time.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        raise ValueError(f"정기모임은 올바른 {field_name}이 필요합니다.")
+
+
+def _normalize_repeat_days(value):
+    if not value:
+        raise ValueError("정기모임은 반복 요일을 하나 이상 선택해야 합니다.")
+    if not isinstance(value, list):
+        raise ValueError("정기모임은 반복 요일을 하나 이상 선택해야 합니다.")
+
+    normalized = []
+    for day in value:
+        normalized_day = str(day or "").strip().upper()
+        if normalized_day not in WEEKDAY_INDEX:
+            raise ValueError("올바르지 않은 반복 요일이 포함되어 있습니다.")
+        if normalized_day not in normalized:
+            normalized.append(normalized_day)
+
+    if not normalized:
+        raise ValueError("정기모임은 반복 요일을 하나 이상 선택해야 합니다.")
+    return sorted(normalized, key=lambda day: WEEKDAY_INDEX[day])
+
+
+def _build_repeat_rule(repeat_days):
+    return f"FREQ=WEEKLY;BYDAY={','.join(repeat_days)}"
+
+
+def _build_regular_sessions(schedule_start_date, start_time, end_time, repeat_days, count=12):
+    sessions = []
+    current_date = schedule_start_date
+    selected_weekdays = {WEEKDAY_INDEX[day] for day in repeat_days}
+
+    while len(sessions) < count:
+        if current_date.weekday() in selected_weekdays:
+            sessions.append({
+                "session_number": len(sessions) + 1,
+                "start_at": datetime.combine(current_date, start_time),
+                "end_at": datetime.combine(current_date, end_time),
+            })
+        current_date += timedelta(days=1)
+
+    return sessions
 
 
 def close_expired_one_time_meetings(now=None):
@@ -198,6 +257,25 @@ def list_meetings(params, current_user_id=None):
     return query.order_by(Meeting.start_at.is_(None), Meeting.start_at.asc()).limit(limit).all()
 
 
+def list_meeting_sessions(meeting_id, include_cancelled=True):
+    Meeting.query.get_or_404(meeting_id)
+    query = MeetingSession.query.filter_by(meeting_id=meeting_id)
+    if not include_cancelled:
+        query = query.filter(MeetingSession.status != "cancelled")
+    return query.order_by(MeetingSession.start_at.asc()).all()
+
+
+def get_next_meeting_session(meeting_id, now=None):
+    now = now or kst_now()
+    return (
+        MeetingSession.query
+        .filter_by(meeting_id=meeting_id, status="scheduled")
+        .filter(MeetingSession.start_at >= now)
+        .order_by(MeetingSession.start_at.asc())
+        .first()
+    )
+
+
 def update_meeting(meeting_id, host_id, data):
     meeting = Meeting.query.get_or_404(meeting_id)
     if meeting.host_id != host_id:
@@ -239,42 +317,101 @@ def update_meeting(meeting_id, host_id, data):
 
 
 def create_meeting(data, host_id):
-    sport = Sport.query.get(data["sport_id"])
-    if not sport:
-        raise ValueError("존재하지 않는 종목입니다.")
+    try:
+        sport = Sport.query.get(data["sport_id"])
+        if not sport:
+            raise ValueError("존재하지 않는 종목입니다.")
 
-    from app.utils.settings import load_system_settings
-    settings = load_system_settings()
-    max_limit = settings.get("defaultMaxParticipants", 6)
-    max_participants = int(data.get("max_participants", 6))
-    if max_participants > max_limit:
-        raise ValueError(f"개설 최대 정원은 {max_limit}명 이하로만 설정 가능합니다.")
+        from app.utils.settings import load_system_settings
+        settings = load_system_settings()
+        max_limit = settings.get("defaultMaxParticipants", 6)
+        max_participants = int(data.get("max_participants", 6))
+        if max_participants > max_limit:
+            raise ValueError(f"개설 최대 정원은 {max_limit}명 이하로만 설정 가능합니다.")
 
-    meeting = Meeting(
-        host_id=host_id,
-        sport_id=sport.id,
-        title=data["title"],
-        description=data["description"],
-        meeting_type=data.get("meeting_type", "one_time"),
-        purpose=data.get("purpose", "운동 메이트 모집"),
-        region_sido_code=data.get("region_sido_code"),
-        region_sigungu_code=data.get("region_sigungu_code"),
-        location_name=data["location_name"],
-        address=data["address"],
-        latitude=data.get("latitude"),
-        longitude=data.get("longitude"),
-        start_at=parse_datetime(data.get("start_at")),
-        end_at=parse_datetime(data.get("end_at")),
-        max_participants=data.get("max_participants", 6),
-        approval_required=True,
-        cover_image_url=data.get("cover_image_url")
-    )
-    db.session.add(meeting)
-    db.session.flush()
-    db.session.add(Participant(meeting_id=meeting.id, user_id=host_id, role="host", status="approved", approved_at=kst_now()))
-    db.session.add(ChatRoom(meeting_id=meeting.id))
-    db.session.commit()
-    return meeting
+        meeting_type = data.get("meeting_type", "one_time")
+        start_at = parse_datetime(data.get("start_at"))
+        end_at = parse_datetime(data.get("end_at"))
+        repeat_rule = None
+        regular_sessions = []
+
+        if meeting_type == "one_time":
+            if not start_at:
+                raise ValueError("일회성 모임은 시작 시간이 필요합니다.")
+            if end_at and end_at <= start_at:
+                raise ValueError("종료 시간은 시작 시간 이후여야 합니다.")
+
+        elif meeting_type == "regular":
+            if not data.get("schedule_start_date"):
+                raise ValueError("정기모임은 시작일이 필요합니다.")
+            if not data.get("start_time") or not data.get("end_time"):
+                raise ValueError("정기모임은 시작 시간과 종료 시간이 필요합니다.")
+
+            schedule_start_date = _parse_schedule_date(data.get("schedule_start_date"))
+            schedule_start_time = _parse_schedule_time(data.get("start_time"), "시작 시간")
+            schedule_end_time = _parse_schedule_time(data.get("end_time"), "종료 시간")
+            if schedule_end_time <= schedule_start_time:
+                raise ValueError("종료 시간은 시작 시간 이후여야 합니다.")
+
+            repeat_days = _normalize_repeat_days(data.get("repeat_days"))
+            repeat_rule = _build_repeat_rule(repeat_days)
+            regular_sessions = _build_regular_sessions(
+                schedule_start_date,
+                schedule_start_time,
+                schedule_end_time,
+                repeat_days,
+            )
+            if not regular_sessions:
+                raise ValueError("생성할 정기모임 회차가 없습니다.")
+            start_at = regular_sessions[0]["start_at"]
+            end_at = regular_sessions[0]["end_at"]
+
+        meeting = Meeting(
+            host_id=host_id,
+            sport_id=sport.id,
+            title=data["title"],
+            description=data["description"],
+            meeting_type=meeting_type,
+            purpose=data.get("purpose", "운동 메이트 모집"),
+            region_sido_code=data.get("region_sido_code"),
+            region_sigungu_code=data.get("region_sigungu_code"),
+            location_name=data["location_name"],
+            address=data["address"],
+            latitude=data.get("latitude"),
+            longitude=data.get("longitude"),
+            start_at=start_at,
+            end_at=end_at,
+            repeat_rule=repeat_rule,
+            max_participants=data.get("max_participants", 6),
+            approval_required=True,
+            cover_image_url=data.get("cover_image_url")
+        )
+        db.session.add(meeting)
+        db.session.flush()
+        if meeting_type == "one_time":
+            db.session.add(MeetingSession(
+                meeting_id=meeting.id,
+                session_number=1,
+                start_at=meeting.start_at,
+                end_at=meeting.end_at,
+                status="scheduled",
+            ))
+        elif meeting_type == "regular":
+            for session in regular_sessions:
+                db.session.add(MeetingSession(
+                    meeting_id=meeting.id,
+                    session_number=session["session_number"],
+                    start_at=session["start_at"],
+                    end_at=session["end_at"],
+                    status="scheduled",
+                ))
+        db.session.add(Participant(meeting_id=meeting.id, user_id=host_id, role="host", status="approved", approved_at=kst_now()))
+        db.session.add(ChatRoom(meeting_id=meeting.id))
+        db.session.commit()
+        return meeting
+    except Exception:
+        db.session.rollback()
+        raise
 
 
 def join_meeting(meeting_id, user_id, join_message=""):
