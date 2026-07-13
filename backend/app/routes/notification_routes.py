@@ -214,7 +214,13 @@ def _vote_summary_items(user_id):
 @jwt_required()
 def notifications():
     user_id = int(get_jwt_identity())
-    items = Notification.query.filter_by(user_id=user_id).order_by(Notification.created_at.desc()).all()
+    limit = request.args.get("limit", type=int)
+    
+    query = Notification.query.filter_by(user_id=user_id).order_by(Notification.created_at.desc())
+    if limit:
+        query = query.limit(limit)
+        
+    items = query.all()
     return jsonify({"items": [_enrich_notification(item, user_id) for item in items]})
 
 
@@ -250,6 +256,33 @@ def read_notification(notification_id):
     item.is_read = True
     db.session.commit()
     return jsonify({"notification": item.to_dict()})
+
+
+@notification_bp.patch("/notifications/read-all")
+@jwt_required()
+def read_all_notifications():
+    user_id = int(get_jwt_identity())
+    updated = (
+        Notification.query
+        .filter_by(user_id=user_id, is_read=False)
+        .update({"is_read": True}, synchronize_session=False)
+    )
+    db.session.commit()
+    return jsonify({"updated": updated})
+
+
+@notification_bp.patch("/notifications/chatrooms/<int:room_id>/read")
+@jwt_required()
+def read_chat_room_notifications(room_id):
+    user_id = int(get_jwt_identity())
+    updated = (
+        Notification.query
+        .filter_by(user_id=user_id, type="chat", is_read=False)
+        .filter(Notification.link_url == f"/chats/{room_id}")
+        .update({"is_read": True}, synchronize_session=False)
+    )
+    db.session.commit()
+    return jsonify({"updated": updated, "room_id": room_id})
 
 
 @notification_bp.get("/push-public-key")

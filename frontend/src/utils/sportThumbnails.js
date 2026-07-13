@@ -57,7 +57,7 @@ export function getSportIconUrl(sportName) {
 
   const exactFileName = SPORT_THUMBNAIL_FILES[normalizedName];
   if (exactFileName) {
-    return new URL(`../../public/images/sports/icons/${exactFileName}.svg`, import.meta.url).href;
+    return `/images/sports/icons/${exactFileName}.svg`;
   }
 
   const matchedEntry = Object.entries(SPORT_THUMBNAIL_FILES).find(([name]) =>
@@ -65,7 +65,7 @@ export function getSportIconUrl(sportName) {
   );
 
   if (matchedEntry) {
-    return new URL(`../../public/images/sports/icons/${matchedEntry[1]}.svg`, import.meta.url).href;
+    return `/images/sports/icons/${matchedEntry[1]}.svg`;
   }
 
   return "";

@@ -226,7 +226,7 @@ function ClimbingIcon({ size = 24, strokeWidth = 2, ...props }) {
       <path d="M10.5 9l4 2 2-2.5" />
       <path d="M10.5 14 7 13.2 5.2 16.5" />
       <path d="M10.5 14l3.5 2.5 2.2 4" />
-      <ellipse cx="19" cy="7" rx="1.2" ry=".8" stroke-width="1" />
+      <ellipse cx="19" cy="7" rx="1.2" ry=".8" strokeWidth="1" />
     </svg>
   );
 }

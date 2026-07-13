@@ -24,21 +24,30 @@ function MobileBottomNavigation() {
     return location.pathname === to || location.pathname.startsWith(`${to}/`);
   };
 
-  const fetchUnreadCount = async () => {
-    if (!user) {
+  const fetchUnreadCount = async (intervalId) => {
+    const token = localStorage.getItem("sportsmate_token");
+    if (!user || !token) {
       setUnreadCount(0);
       return;
     }
     try {
       const [roomsRes, directRes] = await Promise.all([
-        chatApi.rooms().catch(() => ({ items: [] })),
-        chatApi.directRooms().catch(() => ({ items: [] }))
+        chatApi.rooms().catch((e) => {
+          if (e.response?.status === 401) throw e;
+          return { items: [] };
+        }),
+        chatApi.directRooms().catch((e) => {
+          if (e.response?.status === 401) throw e;
+          return { items: [] };
+        })
       ]);
       const meetingUnread = (roomsRes.items || []).reduce((acc, r) => acc + (r.unread_count || 0), 0);
       const directUnread = (directRes.items || []).reduce((acc, r) => acc + (r.unread_count || 0), 0);
       setUnreadCount(meetingUnread + directUnread);
     } catch (e) {
-      console.error("Failed to fetch unread chat count", e);
+      if (e.response?.status === 401 && intervalId) {
+        clearInterval(intervalId);
+      }
     }
   };
 
@@ -47,15 +56,16 @@ function MobileBottomNavigation() {
       setUnreadCount(0);
       return undefined;
     }
-    fetchUnreadCount();
+    let interval;
+    fetchUnreadCount(interval);
 
-    const interval = setInterval(() => {
+    interval = setInterval(() => {
       if (document.hidden) return;
-      fetchUnreadCount();
+      fetchUnreadCount(interval);
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user || !isSupabaseConfigured || !supabase) return undefined;
@@ -77,7 +87,7 @@ function MobileBottomNavigation() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user?.id]);
 
   return (
     <nav className="bottom-nav" aria-label="주요 메뉴">

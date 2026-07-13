@@ -88,7 +88,13 @@ function StaticMapCard({ meeting }) {
 
     return () => {
       disposed = true;
-      if (markerRef.current) markerRef.current.setMap(null);
+      if (markerRef.current) {
+        try {
+          markerRef.current.setMap(null);
+        } catch (e) {
+          // ignore cleanup errors from Naver Maps API
+        }
+      }
       markerRef.current = null;
       mapRef.current = null;
     };
@@ -189,22 +195,26 @@ function StaticMapCard({ meeting }) {
 
   return (
     <section className="map-card" style={{ display: "grid", gap: "10px" }}>
-      {hasCoordinates && mapClientId ? (
-        <div 
-          className="map-card__canvas" 
-          ref={mapElementRef}
-          style={{ position: "relative", overflow: "hidden" }}
-        >
-          {mapStatus === "loading" && (
+      {hasCoordinates ? (
+        <div style={{ position: "relative", width: "100%", height: "180px", borderRadius: "16px", overflow: "hidden" }}>
+          <div 
+            className="map-card__canvas" 
+            ref={mapElementRef}
+            style={{ width: "100%", height: "100%", display: "block" }}
+          />
+          {(!mapClientId) ? (
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc", zIndex: 5, fontSize: "12px", color: "#ef4444" }}>
+              네이버 지도 클라이언트 키가 설정되지 않았습니다.
+            </div>
+          ) : mapStatus === "loading" ? (
             <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc", zIndex: 5, fontSize: "12px", color: "#64748b" }}>
               지도를 불러오는 중입니다...
             </div>
-          )}
-          {mapStatus === "error" && (
+          ) : mapStatus === "error" ? (
             <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc", zIndex: 5, fontSize: "12px", color: "#ef4444" }}>
               지도를 불러오지 못했습니다.
             </div>
-          )}
+          ) : null}
         </div>
       ) : (
         <div className="map-card__canvas">

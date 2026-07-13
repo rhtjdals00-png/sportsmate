@@ -142,6 +142,23 @@ def messages(room_id):
         )
         room_data["participants"] = [participant_item(item) for item in approved_participants]
         ordered_messages = sorted(room.messages, key=lambda message: (message.created_at, message.id))
+        read_ids = {
+            row.chat_message_id
+            for row in ChatMessageRead.query
+            .filter_by(user_id=user_id)
+            .join(ChatMessage, ChatMessage.id == ChatMessageRead.chat_message_id)
+            .filter(ChatMessage.chat_room_id == room.id)
+            .all()
+        }
+        first_unread = next(
+            (
+                message
+                for message in ordered_messages
+                if message.user_id != user_id and message.id not in read_ids
+            ),
+            None
+        )
+        room_data["first_unread_message_id"] = first_unread.id if first_unread else None
         mark_room_messages_read(room, user_id)
         attach_read_counts(ordered_messages)
         return jsonify({"room": room_data, "items": [message.to_dict() for message in ordered_messages]})

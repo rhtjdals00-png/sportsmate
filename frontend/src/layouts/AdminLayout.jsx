@@ -9,7 +9,8 @@ import {
   ChevronDown,
   BarChart3,
   Bell,
-  ClipboardList
+  ClipboardList,
+  Headphones
 } from "lucide-react";
 import { useResponsive } from "../hooks/useResponsive";
 import { useAuth } from "../contexts/AuthContext.jsx";
@@ -48,6 +49,8 @@ function AdminLayout() {
         return "전체 통계 대시보드";
       case "/admin/audit-logs":
         return "관리자 작업 이력 로그";
+      case "/admin/support":
+        return "고객 문의 관리";
       case "/admin/settings":
         return "시스템 설정";
       case "/admin":
@@ -155,6 +158,17 @@ function AdminLayout() {
           >
             <ClipboardList size={18} />
             <span>작업 이력 로그</span>
+          </NavLink>
+
+          <NavLink 
+            to="/admin/support" 
+            onClick={(e) => handleNavItemClick(e, "/admin/support")}
+            className={({ isActive }) => 
+              `admin-sidebar__nav-item${isActive ? " active" : ""}`
+            }
+          >
+            <Headphones size={18} />
+            <span>고객 문의</span>
           </NavLink>
 
           <NavLink 

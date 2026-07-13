@@ -5,5 +5,40 @@
     "action_type": "개별 알림 발송",
     "description": "회원 고성민(ID 22)에게 개별 알림을 전송했습니다. 내용: 'dsadsasaddas...'",
     "target_id": 22
+  },
+  {
+    "timestamp": "2026-07-13 12:18:27",
+    "admin": "test01",
+    "action_type": "고객 문의 처리",
+    "description": "문의 #1 'test문의입니다.' 상태를 접수(으)로 저장했습니다.",
+    "target_id": null
+  },
+  {
+    "timestamp": "2026-07-13 12:18:37",
+    "admin": "test01",
+    "action_type": "고객 문의 처리",
+    "description": "문의 #1 'test문의입니다.' 상태를 답변 완료(으)로 저장했습니다.",
+    "target_id": null
+  },
+  {
+    "timestamp": "2026-07-13 16:20:24",
+    "admin": "test01",
+    "action_type": "회원 관리",
+    "description": "회원 강경근naver(ID 54)의 계정 정지 처리 작업을 수행했습니다.",
+    "target_id": 54
+  },
+  {
+    "timestamp": "2026-07-13 16:42:04",
+    "admin": "test01",
+    "action_type": "고객 문의 처리",
+    "description": "문의 #6 '사진 업로드 되나 확인용도입니다' 상태를 답변 완료(으)로 저장했습니다.",
+    "target_id": null
+  },
+  {
+    "timestamp": "2026-07-13 16:42:07",
+    "admin": "test01",
+    "action_type": "고객 문의 처리",
+    "description": "문의 #6 '사진 업로드 되나 확인용도입니다' 상태를 답변 완료(으)로 저장했습니다.",
+    "target_id": null
   }
 ]

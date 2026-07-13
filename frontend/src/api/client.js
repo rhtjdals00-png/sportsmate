@@ -5,6 +5,8 @@ const API_BASE_URL =
   typeof window !== "undefined" &&
   !window.location.hostname.includes("localhost") &&
   !window.location.hostname.includes("127.0.0.1") &&
+  !window.location.hostname.startsWith("192.168.") &&
+  !window.location.hostname.startsWith("10.") &&
   configuredApiBaseUrl.startsWith("/api")
     ? "https://sportsmate.onrender.com/api/v1"
     : configuredApiBaseUrl;

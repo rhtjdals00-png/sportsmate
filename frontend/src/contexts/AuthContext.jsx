@@ -367,19 +367,25 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!user) return;
     const interval = setInterval(async () => {
+      const token = localStorage.getItem("sportsmate_token");
+      if (!token) {
+        clearInterval(interval);
+        return;
+      }
       try {
         await authApi.me();
       } catch (err) {
         if (err.response?.status === 401) {
+          clearInterval(interval);
           const msg = err.response.data?.message || err.response.data?.msg;
           if (msg === "정지된 회원입니다.") {
-            clearInterval(interval);
+            // Optional specific logic for suspended users if needed in the future
           }
         }
       }
     }, 15000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user?.id]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

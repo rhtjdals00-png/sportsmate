@@ -66,7 +66,9 @@ function normalizeScheduleMeeting(meeting, state) {
     title: meeting.title || "제목 없는 모임",
     place: meeting.location_name || meeting.address || "장소 미정",
     start_at: meeting.start_at,
-    state
+    state,
+    status: meeting.status, // 모집 상태(open, closed 등) 추가하여 캘린더에서 구분
+    meeting_type: meeting.meeting_type // 일회성/정기 구분용 추가
   };
 }
 
@@ -283,40 +285,110 @@ function MobileMyPage() {
         </Link>
       </section>
       <section className={`mobile-my-calendar ${isCalendarExpanded ? "is-expanded" : ""}`} aria-label="내 운동 일정">
-        <div 
-          className="mobile-my-calendar__head" 
+        <header 
+          className="mobile-my-calendar__head"
           onClick={() => setIsCalendarExpanded(!isCalendarExpanded)} 
           style={{ cursor: 'pointer', userSelect: 'none' }}
         >
           <div>
             <span>{monthBase.getFullYear()}년 {monthBase.getMonth() + 1}월</span>
-            <h2 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              내 운동 일정
-              {isCalendarExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </h2>
+            <h2>내 운동 일정</h2>
           </div>
-          <Link to="/mypage/meetings" onClick={(e) => e.stopPropagation()}>전체 보기</Link>
-        </div>
+          <div style={{ color: '#64748b', display: 'flex', alignItems: 'center' }}>
+            {isCalendarExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </div>
+        </header>
         <div className={`mobile-my-calendar__body ${isCalendarExpanded ? "is-expanded" : ""}`}>
           <div className="mobile-my-calendar__week"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
           <div className="mobile-my-calendar__grid">
-            {calendarCells.map((cell) => cell.empty ? (
-              <span key={cell.key} aria-hidden="true" />
-            ) : (
-              <button key={cell.key} type="button" className={`${cell.items.length ? "has-event" : ""} ${activeScheduleKey === cell.key ? "is-active" : ""}`} onClick={() => cell.items.length && setSelectedScheduleKey(cell.key)} disabled={!cell.items.length}>
-                <b>{cell.day}</b>
-                {cell.items.length ? <em>{cell.items.length}</em> : null}
-              </button>
-            ))}
+            {calendarCells.map((cell) => {
+              const isActive = activeScheduleKey === cell.key;
+              return cell.empty ? (
+                <span key={cell.key} aria-hidden="true" />
+              ) : (
+                <button key={cell.key} type="button" className={`${cell.items.length ? "has-event" : ""} ${isActive ? "is-active" : ""}`} onClick={() => cell.items.length && setSelectedScheduleKey(cell.key)} disabled={!cell.items.length} style={{ position: 'relative' }}>
+                  <b>{cell.day}</b>
+                  {cell.items.length ? (
+                    <em style={{
+                      position: 'absolute',
+                      bottom: '4px',
+                      right: '4px',
+                      background: isActive ? '#ffffff' : '#4f46e5',
+                      color: isActive ? '#4f46e5' : 'white',
+                      fontSize: '9px',
+                      fontWeight: 'bold',
+                      minWidth: '16px',
+                      height: '16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: '8px',
+                      fontStyle: 'normal',
+                      padding: '0 4px'
+                    }}>
+                      {cell.items.length}
+                    </em>
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
           <div className="mobile-my-calendar__list">
-            {selectedSchedules.length ? selectedSchedules.map((item) => (
-              <Link key={`${item.state}-${item.id}`} to={item.state === "host" ? `/host/meetings/${item.id}` : `/meetings/${item.id}`}>
-                <span>{item.state === "host" ? "방장" : "참여"} · {shortTime(item.start_at)}</span>
-                <strong>{item.title}</strong>
-                <p>{item.place}</p>
-              </Link>
-            )) : <p>표시할 일정이 없습니다.</p>}
+            {selectedSchedules.length ? selectedSchedules.map((item) => {
+              // 모집 종료 여부 확인 (open이 아니면 종료로 간주)
+              const isClosed = item.status !== "open";
+              
+              return (
+                <Link key={`${item.state}-${item.id}`} to={item.state === "host" ? `/host/meetings/${item.id}` : `/meetings/${item.id}`}>
+                  {/* 방장/참여중 및 모집 종료 여부를 직관적으로 보여주는 뱃지 영역 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                    <span style={{
+                      fontSize: '11px',
+                      padding: '3px 8px',
+                      borderRadius: '12px',
+                      background: item.state === "host" ? "#eff6ff" : "#f0fdf4",
+                      color: item.state === "host" ? "#3b82f6" : "#22c55e",
+                      fontWeight: '800'
+                    }}>
+                      {item.state === "host" ? "👑 방장" : "🙌 참여중"}
+                    </span>
+                    
+                    {/* 일회성 / 정기 구분 뱃지 */}
+                    <span style={{
+                      fontSize: '11px',
+                      padding: '3px 8px',
+                      borderRadius: '12px',
+                      background: "#fff7ed",
+                      color: "#ea580c",
+                      fontWeight: '800'
+                    }}>
+                      {item.meeting_type === "regular" ? "🔄 정기" : "⚡ 일회성"}
+                    </span>
+                    
+                    {isClosed && (
+                      <span style={{
+                        fontSize: '11px',
+                        padding: '3px 8px',
+                        borderRadius: '12px',
+                        background: "#f1f5f9",
+                        color: "#64748b",
+                        fontWeight: '800'
+                      }}>
+                        🔒 모집 종료
+                      </span>
+                    )}
+                    
+                    <span style={{ fontSize: '12px', color: '#94a3b8', marginLeft: 'auto' }}>
+                      {shortTime(item.start_at)}
+                    </span>
+                  </div>
+                  
+                  {/* 모집 종료된 모임은 약간 흐리게 처리하여 시각적으로 구분 */}
+                  <strong style={{ color: isClosed ? "#94a3b8" : "inherit" }}>{item.title}</strong>
+                  <p style={{ color: isClosed ? "#cbd5e1" : "inherit" }}>{item.place}</p>
+                </Link>
+              );
+            }) : <p>표시할 일정이 없습니다.</p>}
           </div>
         </div>
       </section>
@@ -328,6 +400,7 @@ function MobileMyPage() {
           </Link>
         ) : null}
         <Link to="/mypage/profile">프로필 수정</Link>
+        <Link to="/mypage/meetings" style={{ fontWeight: 'bold', color: '#4f46e5' }}>📝 내 전체 모임 목록 보기</Link>
         <Link to="/mypage/meetings?tab=hosted">내가 만든 모임 <span>{hostedCount}</span></Link>
         <Link to="/mypage/meetings?tab=joined">참여 중인 모임 <span>{joinedCount}</span></Link>
         <Link to="/meetings">관심 모임</Link>

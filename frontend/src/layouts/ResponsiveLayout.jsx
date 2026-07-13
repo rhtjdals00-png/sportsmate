@@ -104,9 +104,7 @@ function ResponsiveLayout() {
       {toast ? <div className="app-toast" role="status" aria-live="polite">{toast}</div> : null}
       {!hideChatbotFloating ? (
         <Link className="desktop-chatbot-floating" to="/chatbot" aria-label="AI 챗봇 열기">
-          <span className="desktop-chatbot-floating__logo"><img src="/images/logo.png" alt="" /></span>
-          <b>AI 비서</b>
-          <small>맞춤 모임 추천</small>
+          <span className="desktop-chatbot-floating__logo"><img src="/img/sportsmate_bot.png" alt="" /></span>
         </Link>
       ) : null}
       {permissionGuideOpen ? (

@@ -37,10 +37,12 @@ import AdminAnalyticsPage from "../pages/AdminAnalyticsPage.jsx";
 import AdminSettingsPage from "../pages/AdminSettingsPage.jsx";
 import AdminBroadcastPage from "../pages/AdminBroadcastPage.jsx";
 import AdminAuditLogsPage from "../pages/AdminAuditLogsPage.jsx";
+import AdminSupportPage from "../pages/AdminSupportPage.jsx";
 import NotFoundPage from "../pages/NotFoundPage.jsx";
 import NotificationsPage from "../pages/NotificationsPage.jsx";
 import MapPage from "../pages/MapPage.jsx";
 import AppSettingsPage from "../pages/AppSettingsPage.jsx";
+import SupportPage from "../pages/SupportPage.jsx";
 import ProtectedRoute from "../components/common/ProtectedRoute.jsx";
 import AdminRoute from "../components/common/AdminRoute.jsx";
 
@@ -65,6 +67,7 @@ function AppRouter() {
         <Route path="/chats/:chatRoomId" element={protect(<ChatRoomPage />)} />
         <Route path="/chatbot" element={protect(<ChatbotPage />)} />
         <Route path="/notifications" element={protect(<NotificationsPage />)} />
+        <Route path="/support" element={protect(<SupportPage />)} />
         <Route path="/settings" element={protect(<AppSettingsPage />)} />
         <Route path="/map" element={<MapPage />} />
         <Route path="/mypage" element={protect(<MyPage />)} />
@@ -96,6 +99,7 @@ function AppRouter() {
         <Route path="broadcast" element={<AdminBroadcastPage />} />
         <Route path="analytics" element={<AdminAnalyticsPage />} />
         <Route path="audit-logs" element={<AdminAuditLogsPage />} />
+        <Route path="support" element={<AdminSupportPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />
       </Route>
     </Routes>

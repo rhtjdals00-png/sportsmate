@@ -6,7 +6,9 @@ import { getMeetingCoverImage, isUsingSportThumbnail } from "../../../utils/spor
 
 
 function MeetingCard({ meeting, compact = false }) {
-  const statusLabel = getStatusLabel(meeting.status);
+  const isPast = new Date(meeting.start_at) < new Date();
+  const actualStatus = meeting.status === "cancelled" ? "cancelled" : (isPast ? "closed" : meeting.status);
+  const statusLabel = getStatusLabel(actualStatus);
   const coverImage = getMeetingCoverImage(meeting);
   const isSportThumb = isUsingSportThumbnail(meeting);
 
@@ -18,7 +20,7 @@ function MeetingCard({ meeting, compact = false }) {
         </div>
         <div>
           <div className="meeting-card__top">
-            <Badge tone={meeting.status === "open" ? "success" : "slate"}>
+            <Badge tone={actualStatus === "open" ? "success" : "slate"}>
               {statusLabel}
             </Badge>
             <Badge tone="sky" className="meeting-card__sport-badge">

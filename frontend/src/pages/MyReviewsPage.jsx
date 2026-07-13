@@ -7,10 +7,12 @@ import LoadingCards from "../components/common/LoadingCards.jsx";
 import { userApi } from "../api/userApi";
 import { meetingApi } from "../api/meetingApi";
 import { useAsync } from "../hooks/useAsync";
+import { useResponsive } from "../hooks/useResponsive";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { Star } from "lucide-react";
 
 function MyReviewsPage() {
+  const { isMobile, isDesktop } = useResponsive();
   const [refreshKey, setRefreshKey] = useState(0);
   const [subTab, setSubTab] = useState("written"); // "written" | "received"
   const [writingReview, setWritingReview] = useState(null); // { meetingId, peerId, peerNickname, meetingTitle }
@@ -106,7 +108,7 @@ function MyReviewsPage() {
   }, [reviews.data, user]);
 
   // 탭 상태 ("written" (디폴트), "received") - 전체보기("all") 제거!
-  const [activeTab, setActiveTab] = useState("written");
+  const [activeTab, setActiveTab] = useState("received");
   
   // 수정 중인 후기 상태 관리
   const [editingId, setEditingId] = useState(null);
@@ -196,11 +198,17 @@ function MyReviewsPage() {
 
   return (
     <>
-      <MobileHeader title="내 후기" />
+      {/* 
+        [수정사항] PC, 모바일 공유 페이지에서 두 디자인이 겹치는 오류 수정 
+        isMobile, isDesktop 상태에 따라 헤더와 리뷰 목록 디자인을 분기 처리함
+      */}
+      {isMobile && <MobileHeader title="내 후기" />}
       
-      {/* Sub tabs */}
-      <div style={{ display: "flex", width: "100%", borderBottom: "1px solid #e5e7eb", backgroundColor: "#ffffff" }}>
-        <button
+      {/* PC 버전 리뷰 영역 */}
+      {isDesktop && (
+        <>
+          <div style={{ display: "flex", width: "100%", borderBottom: "1px solid #e5e7eb", backgroundColor: "#ffffff" }}>
+            <button
           type="button"
           style={{
             flex: 1,
@@ -345,7 +353,9 @@ function MyReviewsPage() {
             )}
           </>
         )}
-      </div>
+        </div>
+        </>
+      )}
 
       {/* Review Writing Modal */}
       {writingReview && (
@@ -447,21 +457,25 @@ function MyReviewsPage() {
           </form>
         </div>
       )}
-      {/* 탭 네비게이션 (내가 남긴 후기 | 받은 후기 1:1 레이아웃) */}
+      
+      {/* 모바일 버전 리뷰 영역 */}
+      {isMobile && (
+        <>
+          {/* 탭 네비게이션 (내가 남긴 후기 | 받은 후기 1:1 레이아웃) */}
       <div className="mobile-reviews-tabs">
-        <button
-          type="button"
-          className={`mobile-reviews-tab-btn ${activeTab === "written" ? "is-active" : ""}`}
-          onClick={() => setActiveTab("written")}
-        >
-          내가 남긴 후기
-        </button>
         <button
           type="button"
           className={`mobile-reviews-tab-btn ${activeTab === "received" ? "is-active" : ""}`}
           onClick={() => setActiveTab("received")}
         >
           받은 후기
+        </button>
+        <button
+          type="button"
+          className={`mobile-reviews-tab-btn ${activeTab === "written" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("written")}
+        >
+          내가 남긴 후기
         </button>
       </div>
 
@@ -622,6 +636,8 @@ function MyReviewsPage() {
           actionLabel="모임 보러가기"
           actionTo="/meetings"
         />
+      )}
+      </>
       )}
     </>
   );

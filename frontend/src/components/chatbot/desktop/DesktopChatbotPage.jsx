@@ -1,4 +1,4 @@
-import { ArrowRight, Bot, CalendarDays, MessageSquare, Plus, Search, Send, Trash2, User } from "lucide-react";
+import { ArrowRight, Bell, CalendarDays, ClipboardList, FilePlus, Headphones, MessageSquare, Plus, Search, Send, Trash2, User, UserRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { chatbotApi } from "../../../api/chatbotApi";
@@ -44,7 +44,41 @@ function getMessageActions(message) {
 function ChatbotActionIcon({ type }) {
   if (type === "schedule") return <CalendarDays size={15} />;
   if (type === "meeting_search") return <Search size={15} />;
+  if (type === "support") return <Headphones size={15} />;
+  if (type === "create_meeting") return <FilePlus size={15} />;
+  if (type === "notifications") return <Bell size={15} />;
+  if (type === "joined_meetings") return <CalendarDays size={15} />;
+  if (type === "profile") return <UserRound size={15} />;
+  if (type === "chat") return <MessageSquare size={15} />;
   return <ArrowRight size={15} />;
+}
+
+function QuickActionIcon({ type }) {
+  if (type === "schedule") return <CalendarDays size={18} />;
+  if (type === "support") return <Headphones size={18} />;
+  if (type === "meetings") return <ClipboardList size={18} />;
+  return <ArrowRight size={18} />;
+}
+
+function QuickActionLink({ action, className }) {
+  const content = (
+    <>
+      <QuickActionIcon type={action.type} />
+      <span>{action.label}</span>
+    </>
+  );
+  if (action.external) {
+    return (
+      <a className={className} href={action.href}>
+        {content}
+      </a>
+    );
+  }
+  return (
+    <Link className={className} to={action.href}>
+      {content}
+    </Link>
+  );
 }
 
 function displayMessageContent(content) {
@@ -73,7 +107,7 @@ function DesktopChatbotPage() {
     const data = await chatbotApi.sessions();
     const items = data.items || [];
     setSessions(items);
-    if (items.length && (selectFirst || !currentSessionId)) {
+    if (items.length && selectFirst) {
       setCurrentSessionId(items[0].id);
     }
     if (!items.length) {
@@ -118,7 +152,7 @@ function DesktopChatbotPage() {
   };
 
   useEffect(() => {
-    loadSessions(true).catch(() => setError("대화 목록을 불러오지 못했습니다."));
+    loadSessions(false).catch(() => setError("대화 목록을 불러오지 못했습니다."));
     loadMemory();
   }, []);
 
@@ -154,10 +188,26 @@ function DesktopChatbotPage() {
     if (!remaining.length) await handleNewSession();
   };
 
+  const handleShowHome = () => {
+    setCurrentSessionId(null);
+    setMessages([]);
+    setHasMoreMessages(false);
+    setNextBeforeId(null);
+    setError("");
+  };
+
   const handleSendMessage = async (event) => {
     event.preventDefault();
     const content = inputText.trim();
-    if (!content || !currentSessionId || sending) return;
+    if (!content || sending) return;
+
+    let targetSessionId = currentSessionId;
+    if (!targetSessionId) {
+      const session = await chatbotApi.createSession({ title: content.slice(0, 40) || "새로운 대화" });
+      setSessions((current) => [session, ...current]);
+      setCurrentSessionId(session.id);
+      targetSessionId = session.id;
+    }
 
     const tempMessage = {
       id: `temp-${Date.now()}`,
@@ -172,7 +222,7 @@ function DesktopChatbotPage() {
 
     try {
       const location = isMyNearbyRequest(content) ? await requestBrowserLocation() : null;
-      const response = await chatbotApi.sendMessage(currentSessionId, { content, location });
+      const response = await chatbotApi.sendMessage(targetSessionId, { content, location });
       const botMessage = response.bot_message
         ? { ...response.bot_message, actions: response.actions || response.bot_message.actions || [] }
         : null;
@@ -197,6 +247,14 @@ function DesktopChatbotPage() {
     "한강 근처 러닝 모임 찾아줘",
   ];
 
+  const quickActions = [
+    { type: "schedule", label: "참여 중인 모임", href: "/mypage?panel=joined" },
+    { type: "support", label: "고객센터 문의하기", href: "/support" },
+  ];
+  const currentSession = sessions.find((session) => session.id === currentSessionId);
+  const showWelcome = !currentSessionId || !messages.length;
+  const recentSessions = sessions.filter((session) => session.last_message || session.id !== currentSessionId).slice(0, 5);
+
   return (
     <section className="desktop-page desktop-prototype desktop-chatbot-page">
       <div className="desktop-chatbot-shell">
@@ -212,6 +270,10 @@ function DesktopChatbotPage() {
             <strong>맞춤 메모리</strong>
             <span>{memorySummary}</span>
           </div>
+          <button className="desktop-chatbot-home-button" type="button" onClick={handleShowHome}>
+            <MessageSquare size={16} />
+            <span>AI 홈 보기</span>
+          </button>
           <div className="desktop-chatbot-session-list">
             {sessions.map((session) => (
               <div key={session.id} className={`desktop-chatbot-session ${session.id === currentSessionId ? "is-active" : ""}`}>
@@ -231,9 +293,9 @@ function DesktopChatbotPage() {
 
         <main className="desktop-chatbot-room">
           <header className="desktop-chatbot-room__header">
-            <span><Bot size={20} /></span>
+            <span className="desktop-chatbot-bot-image"><img src="/img/sportsmate_bot.png" alt="SportsMate AI" /></span>
             <div>
-              <strong>{sessions.find((session) => session.id === currentSessionId)?.title || "새로운 대화"}</strong>
+              <strong>{currentSession?.title || "AI 비서 홈"}</strong>
               <small>모임 추천, 일정 확인, 관심사 기반 안내를 도와드려요.</small>
             </div>
           </header>
@@ -244,21 +306,46 @@ function DesktopChatbotPage() {
                 {loadingOlder ? "불러오는 중..." : "이전 대화 더 보기"}
               </button>
             ) : null}
-            {!messages.length ? (
+            {showWelcome ? (
               <div className="desktop-chatbot-welcome">
-                <Bot size={34} />
+                <img className="desktop-chatbot-welcome-bot" src="/img/sportsmate_bot.png" alt="SportsMate AI" />
                 <strong>무엇을 도와드릴까요?</strong>
                 <p>SportsMate DB를 보고 내 일정이나 맞춤 모임을 찾아드릴 수 있어요.</p>
-                <div>
+                <div className="desktop-chatbot-quick-actions" aria-label="빠른 실행">
+                  {quickActions.map((action) => (
+                    <QuickActionLink key={action.label} action={action} className="desktop-chatbot-quick-action" />
+                  ))}
+                </div>
+                <div className="desktop-chatbot-quick-prompts">
                   {quickPrompts.map((prompt) => <button key={prompt} type="button" onClick={() => setInputText(prompt)}>{prompt}</button>)}
                 </div>
+                {recentSessions.length ? (
+                  <section className="desktop-chatbot-welcome-history" aria-label="이전 채팅 기록">
+                    <div>
+                      <h3>이전 채팅 기록</h3>
+                      <span>최근 대화를 바로 이어서 볼 수 있어요.</span>
+                    </div>
+                    <div className="desktop-chatbot-welcome-history__list">
+                      {recentSessions.map((session) => (
+                        <button key={session.id} type="button" onClick={() => setCurrentSessionId(session.id)}>
+                          <MessageSquare size={17} />
+                          <span>
+                            <b>{session.title || "새로운 대화"}</b>
+                            <small>{session.last_message?.content || "아직 대화가 없습니다."}</small>
+                          </span>
+                          <em>{formatChatTime(session.updated_at || session.created_at)}</em>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
               </div>
             ) : messages.map((message) => {
               const isUser = message.role === "user";
               const actions = getMessageActions(message);
               return (
                 <article key={message.id} className={`desktop-chatbot-message ${isUser ? "is-user" : "is-assistant"}`}>
-                  <span>{isUser ? <User size={16} /> : <Bot size={16} />}</span>
+                  <span>{isUser ? <User size={16} /> : <img src="/img/sportsmate_bot.png" alt="SportsMate AI" />}</span>
                   <div>
                     <p>{displayMessageContent(message.content)}</p>
                     {!isUser && actions.length ? (
@@ -291,3 +378,4 @@ function DesktopChatbotPage() {
 }
 
 export default DesktopChatbotPage;
+

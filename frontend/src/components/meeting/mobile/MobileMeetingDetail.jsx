@@ -13,6 +13,7 @@ import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { getMeetingCoverImage, isUsingSportThumbnail } from "../../../utils/sportThumbnails";
 import { reportApi } from "../../../api/reportApi";
 import { voteApi } from "../../../api/voteApi";
+import { chatApi } from "../../../api/chatApi";
 
 function MobileMeetingDetail() {
   const { meetingId } = useParams();
@@ -172,6 +173,25 @@ function MobileMeetingDetail() {
     }
   };
 
+  const startDirectChat = async () => {
+    if (!isAuthenticated) {
+      navigate("/login", { state: { from: `/meetings/${meeting.id}` } });
+      return;
+    }
+    if (user?.id === meeting.host?.id) return;
+    
+    try {
+      const data = await chatApi.createDirectRoom(meeting.host.id);
+      if (data && data.room && data.room.id) {
+        navigate(`/chats/direct/${data.room.id}`);
+      } else {
+        setMessage({ text: "채팅방을 생성하지 못했습니다.", tone: "error" });
+      }
+    } catch (error) {
+      setMessage({ text: error.response?.data?.message || "채팅방을 생성하지 못했습니다.", tone: "error" });
+    }
+  };
+
   return (
     <>
       <MobileHeader title="모임 상세" />
@@ -186,10 +206,24 @@ function MobileMeetingDetail() {
         <div className="detail-card">
           <div className="meeting-card__top">
             <Badge tone={meeting.status === "open" ? "success" : "slate"}>{meeting.status === "open" ? "모집중" : "모집마감"}</Badge>
-            <Badge tone="sky">{formatMeetingType(meeting.meeting_type)}</Badge>
+            <Badge tone="sky">{meeting.is_lesson ? "강습형 모임" : formatMeetingType(meeting.meeting_type)}</Badge>
             {partBadge && <Badge tone={partBadge.tone}>{partBadge.text}</Badge>}
           </div>
           <p>{meeting.description}</p>
+          
+          {meeting.is_lesson && (
+            <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', margin: '12px 0', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1e293b', fontWeight: '800', marginBottom: '6px', fontSize: '13px' }}>
+                <CalendarClock size={16} style={{ color: '#4f46e5' }} /> 강습 기간 안내
+              </div>
+              <p style={{ margin: 0, fontSize: '12px', color: '#475569', lineHeight: '1.4' }}>
+                {meeting.start_at ? meeting.start_at.slice(0, 10).replace(/-/g, '.') : '?'} ~ {meeting.end_at ? meeting.end_at.slice(0, 10).replace(/-/g, '.') : '?'} 
+                <br/>
+                <span style={{ fontWeight: '600' }}>진행 시간:</span> {meeting.start_at ? meeting.start_at.slice(11, 16) : '?'} ~ {meeting.end_at ? meeting.end_at.slice(11, 16) : '?'}
+              </p>
+            </div>
+          )}
+
           <dl className="info-list">
             <div>
               <CalendarClock size={18} />
@@ -251,6 +285,48 @@ function MobileMeetingDetail() {
                   animation: "mobileChatSlideDown 200ms ease both"
                 }}
               >
+                {/* 방장 프로필 요약 & 1:1 채팅 */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div 
+                      style={{ 
+                        width: "38px", height: "38px", borderRadius: "50%", 
+                        backgroundColor: "#f1f5f9", overflow: "hidden", 
+                        display: "flex", alignItems: "center", justifyContent: "center"
+                      }}
+                    >
+                      {meeting.host?.profile_image_url ? (
+                        <img src={meeting.host.profile_image_url} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      ) : (
+                        <UserRound size={20} color="#94a3b8" />
+                      )}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "14px", fontWeight: "800", color: "#1e293b", display: "flex", alignItems: "center", gap: "4px" }}>
+                        {meeting.host?.nickname || "방장"}
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
+                        #{meeting.host?.user_tag || "0000"}
+                      </div>
+                    </div>
+                  </div>
+                  {user?.id !== meeting.host?.id && (
+                    <button
+                      type="button"
+                      onClick={startDirectChat}
+                      style={{
+                        display: "flex", alignItems: "center", gap: "4px",
+                        padding: "6px 10px", borderRadius: "8px",
+                        backgroundColor: "#eff6ff", border: "1px solid #bfdbfe",
+                        color: "#3b82f6", fontSize: "12px", fontWeight: "800", cursor: "pointer"
+                      }}
+                    >
+                      <MessageCircle size={14} />
+                      1:1 채팅
+                    </button>
+                  )}
+                </div>
+
                 {/* 평점 및 통계 그리드 */}
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "3px", backgroundColor: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "4px 8px" }}>
@@ -308,32 +384,22 @@ function MobileMeetingDetail() {
             )}
           </div>
         </div>
-        {canViewMemberContent ? (
-          <StaticMapCard meeting={meeting} />
-        ) : (
-          <section className="detail-card member-only-card" style={{ marginBottom: '14px' }}>
-            <LockKeyhole size={22} />
-            <div>
-              <h2>장소 정보</h2>
-              <p>상세 장소 및 지도는 참여 승인 후 확인할 수 있습니다.</p>
-            </div>
-          </section>
-        )}
+        <StaticMapCard meeting={meeting} />
         {canViewMemberContent ? (
           <>
             <section className="detail-card">
               <h2>공지</h2>
               <div className="notice-list">
-                {(notices.data?.items || []).map((notice) => (
-                  <article key={notice.id}>
-                    <strong>{notice.is_pinned ? "고정 · " : ""}{notice.title}</strong>
-                    <p>{notice.content}</p>
-                  </article>
-                ))}
-                {!notices.loading && !notices.data?.items?.length && <p>등록된 공지가 없습니다.</p>}
-              </div>
-            </section>
-            <section className="detail-card">
+            {(notices.data?.items || []).map((notice) => (
+              <article key={notice.id}>
+                <strong>{notice.is_pinned ? "고정 · " : ""}{notice.title}</strong>
+                <p>{notice.content}</p>
+              </article>
+            ))}
+            {!notices.loading && !notices.data?.items?.length && <p>등록된 공지가 없습니다.</p>}
+          </div>
+        </section>
+        <section className="detail-card">
               <h2>투표</h2>
               <div className="vote-list">
                 {(votes.data?.items || []).map((vote) => (

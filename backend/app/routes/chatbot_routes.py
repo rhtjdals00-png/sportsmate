@@ -27,6 +27,56 @@ PERSONALIZED_HINTS = ["나한테", "내 취향", "맞춤", "선호", "관심", "
 MY_LOCATION_PATTERNS = [r"내\s*(?:주변|근처|위치)", r"현재\s*위치", r"주변\s*모임"]
 SEARCH_STOPWORDS = {"모임", "운동", "추천", "찾아", "찾아줘", "찾아봐", "찾아봐줘", "찾아봐줄래", "알려줘", "근처", "주변", "부근", "쪽", "인근", "할만한", "갈만한", "이번", "주말", "평일", "오늘", "내일", "지금", "모집중", "모집중인", "뭐야", "뭐가", "있어"}
 NEARBY_RADIUS_KM = 6
+ACTION_INTENTS = {
+    "support": {
+        "label": "고객센터 문의하기",
+        "href": "/support",
+        "reply": "문의는 고객센터에서 바로 남길 수 있어요. 관리자 답변과 내 문의 내역도 같은 곳에서 확인할 수 있습니다.",
+        "patterns": [
+            r"고객\s*센터", r"문의", r"1\s*:\s*1", r"일대일", r"운영자", r"관리자.*(연락|문의|메시지|쪽지)", r"메시지.*관리자", r"도움.*필요",
+        ],
+    },
+    "create_meeting": {
+        "label": "모임 만들기",
+        "href": "/meetings/create",
+        "reply": "좋아요. 새 모임 만들기 화면에서 종목, 장소, 일정, 모집 인원을 등록할 수 있어요.",
+        "patterns": [
+            r"모임.*(만들|개설|생성|등록|열|올리)", r"(만들|개설|생성|등록|열).{0,8}모임", r"방.*(만들|개설)", r"모집.*(글|게시|등록|올리)",
+        ],
+    },
+    "notifications": {
+        "label": "알림센터 보기",
+        "href": "/notifications",
+        "reply": "알림센터에서 읽지 않은 알림과 확인한 알림을 함께 볼 수 있어요.",
+        "patterns": [
+            r"알림", r"공지", r"읽지\s*않은", r"안\s*읽은", r"확인.*알림",
+        ],
+    },
+    "joined_meetings": {
+        "label": "참여 중인 모임 보기",
+        "href": "/mypage?panel=joined",
+        "reply": "참여 중인 모임은 내 정보 페이지에서 바로 확인할 수 있어요.",
+        "patterns": [
+            r"참여\s*중", r"참여한\s*모임", r"내\s*모임", r"신청한\s*모임", r"가입한\s*모임",
+        ],
+    },
+    "profile": {
+        "label": "내 정보 보기",
+        "href": "/mypage",
+        "reply": "내 정보 페이지에서 프로필, 참여 모임, 후기와 계정 정보를 확인할 수 있어요.",
+        "patterns": [
+            r"내\s*정보", r"마이\s*페이지", r"프로필", r"계정\s*정보",
+        ],
+    },
+    "chat": {
+        "label": "채팅으로 이동",
+        "href": "/chats",
+        "reply": "채팅 목록에서 참여 중인 모임 채팅방을 확인할 수 있어요.",
+        "patterns": [
+            r"채팅", r"대화방", r"채팅방", r"메시지.*방",
+        ],
+    },
+}
 PLACE_COORD_FALLBACKS = {
     "잠실": (37.5133, 127.1002),
     "잠실역": (37.5133, 127.1002),
@@ -106,6 +156,20 @@ def contains_any(text, keywords):
     return any(keyword.lower() in lowered for keyword in keywords)
 
 
+def detect_action_intents(content):
+    text = content or ""
+    detected = []
+    for action_key, action in ACTION_INTENTS.items():
+        if any(re.search(pattern, text, re.IGNORECASE) for pattern in action["patterns"]):
+            detected.append(action_key)
+
+    # "모임 추천/찾기"는 create_meeting으로 오해하지 않도록 한 번 더 걸러낸다.
+    if "create_meeting" in detected and contains_any(text, RECOMMEND_STRONG_HINTS):
+        if not any(re.search(pattern, text) for pattern in [r"만들", r"개설", r"생성", r"등록", r"올리", r"모집"]):
+            detected.remove("create_meeting")
+    return detected
+
+
 def should_use_personalized_preferences(content):
     return contains_any(content or "", PERSONALIZED_HINTS) or is_my_nearby_request(content)
 
@@ -128,6 +192,7 @@ def is_recommend_intent(content):
 
 def fallback_chatbot_nlu(content):
     extracted = extract_preferences_from_text(content)
+    action_intents = detect_action_intents(content)
     normalized = normalize_query_token(content)
     if normalized in PLACE_COORD_FALLBACKS and normalized not in extracted["places"]:
         extracted["places"].insert(0, normalized)
@@ -146,8 +211,11 @@ def fallback_chatbot_nlu(content):
         location_kind = "profile"
     else:
         location_kind = "none"
+    intent = "schedule" if is_schedule_intent(content) else ("recommend" if is_recommend_intent(content) else "general")
+    if action_intents:
+        intent = "general"
     return {
-        "intent": "schedule" if is_schedule_intent(content) else ("recommend" if is_recommend_intent(content) else "general"),
+        "intent": intent,
         "location_query": location_query,
         "location_kind": location_kind,
         "radius_km": NEARBY_RADIUS_KM if location_kind in {"current", "explicit"} else None,
@@ -155,6 +223,7 @@ def fallback_chatbot_nlu(content):
         "use_profile": should_use_personalized_preferences(content),
         "time_hint": (extracted.get("times") or [""])[0],
         "keywords": extracted.get("keywords") or [],
+        "action_intents": action_intents,
     }
 
 
@@ -163,6 +232,9 @@ def normalize_chatbot_nlu(value, content):
     if not isinstance(value, dict):
         return fallback
     intent = value.get("intent") if value.get("intent") in {"schedule", "recommend", "general"} else fallback["intent"]
+    action_intents = compact_unique((value.get("action_intents") if isinstance(value.get("action_intents"), list) else []) + fallback.get("action_intents", []))
+    if action_intents and intent == "recommend" and fallback["intent"] == "general":
+        intent = "general"
     if intent == "general" and fallback["intent"] == "recommend" and (fallback.get("sport") or fallback.get("location_query")):
         intent = "recommend"
     location_kind = value.get("location_kind") if value.get("location_kind") in {"explicit", "current", "profile", "none"} else fallback["location_kind"]
@@ -176,6 +248,7 @@ def normalize_chatbot_nlu(value, content):
         "use_profile": bool(value.get("use_profile", fallback["use_profile"])),
         "time_hint": (value.get("time_hint") or fallback["time_hint"] or "").strip(),
         "keywords": value.get("keywords") if isinstance(value.get("keywords"), list) else fallback["keywords"],
+        "action_intents": action_intents,
     }
 
 
@@ -324,8 +397,8 @@ def profile_location_context(user):
     }
 
 
-def my_nearby_context(user, content, payload=None):
-    if not is_my_nearby_request(content):
+def my_nearby_context(user, content, payload=None, nlu=None):
+    if not is_my_nearby_request(content) and (nlu or {}).get("location_kind") != "current":
         return None
     return request_location_context(payload) or profile_location_context(user) or {
         "term": "내 주변",
@@ -370,6 +443,11 @@ def extract_place_terms(content, sports=None, regions=None):
     return compact_unique(terms)
 
 
+def extract_known_place_terms(content):
+    text = content or ""
+    return [place for place in PLACE_COORD_FALLBACKS if place in text]
+
+
 def extract_preferences_from_text(content):
     lowered = content.lower()
     sports = [sport.name for sport in Sport.query.all() if sport.name and sport.name.lower() in lowered]
@@ -381,7 +459,7 @@ def extract_preferences_from_text(content):
     for alias, region_name in REGION_TEXT_ALIASES.items():
         if alias in (content or ""):
             regions.append(region_name)
-    place_terms = extract_place_terms(content, sports, regions)
+    place_terms = compact_unique(extract_known_place_terms(content) + extract_place_terms(content, sports, regions))
     times = [keyword for keyword in TIME_KEYWORDS if keyword in content]
     keywords = sports + regions + place_terms + times
     for keyword in ["초보", "입문", "가볍게", "친목", "다이어트", "퇴근", "한강", "실내", "야외"]:
@@ -462,6 +540,13 @@ def meeting_search_haystack(meeting):
     ]).lower()
 
 
+def meeting_matches_location_terms(meeting, terms):
+    if not terms:
+        return False
+    haystack = meeting_search_haystack(meeting)
+    return any(term.lower() in haystack for term in compact_unique(terms))
+
+
 def recommend_meetings(user, content, memory, payload=None, limit=5, nlu=None):
     now = kst_now()
     nlu = nlu or fallback_chatbot_nlu(content)
@@ -475,7 +560,7 @@ def recommend_meetings(user, content, memory, payload=None, limit=5, nlu=None):
     explicit_sports = extracted["sports"]
     explicit_regions = compact_unique(extracted["regions"] + extracted.get("places", []))
     use_personalized = bool(nlu.get("use_profile")) or should_use_personalized_preferences(content)
-    own_nearby_context = my_nearby_context(user, content, payload)
+    own_nearby_context = my_nearby_context(user, content, payload, nlu=nlu)
     if own_nearby_context and own_nearby_context.get("needs_location"):
         return []
     nearby_context = own_nearby_context or resolve_nearby_context(extracted.get("places", []) or extracted["regions"])
@@ -484,10 +569,12 @@ def recommend_meetings(user, content, memory, payload=None, limit=5, nlu=None):
     if not use_personalized and not nearby_context and not explicit_regions:
         regions = []
     strict_terms = []
-    if not nearby_context:
+    is_proximity_request = contains_any(content, LOCATION_HINTS) or nlu.get("location_kind") == "current"
+    if explicit_regions and (not nearby_context or not is_proximity_request):
         for region in explicit_regions:
             strict_terms.extend(location_term_variants(region))
     strict_sports = explicit_sports
+    has_explicit_conditions = bool(strict_sports or explicit_regions or nearby_context)
 
     query = (
         Meeting.query.options(joinedload(Meeting.sport), joinedload(Meeting.host), joinedload(Meeting.chat_room))
@@ -508,9 +595,15 @@ def recommend_meetings(user, content, memory, payload=None, limit=5, nlu=None):
                 meeting.latitude,
                 meeting.longitude,
             )
-            if nearby_distance is None or nearby_distance > nearby_context["radius_km"]:
+            if nearby_distance is None:
+                if explicit_regions and meeting_matches_location_terms(meeting, explicit_regions):
+                    meeting._distance_km = None
+                else:
+                    continue
+            elif nearby_distance > nearby_context["radius_km"]:
                 continue
-            meeting._distance_km = nearby_distance
+            else:
+                meeting._distance_km = nearby_distance
         if strict_terms and not any(term.lower() in haystack for term in strict_terms):
             continue
         if strict_sports and not any(sport.lower() in haystack for sport in strict_sports):
@@ -519,6 +612,8 @@ def recommend_meetings(user, content, memory, payload=None, limit=5, nlu=None):
         score = 0
         if nearby_distance is not None:
             score += max(0, 12 - nearby_distance)
+        elif nearby_context and explicit_regions and meeting_matches_location_terms(meeting, explicit_regions):
+            score += 14
         for sport in sports:
             if sport.lower() in haystack:
                 score += 4
@@ -530,6 +625,8 @@ def recommend_meetings(user, content, memory, payload=None, limit=5, nlu=None):
                 score += 1
         if meeting.host_id == user.id:
             score -= 3
+        if has_explicit_conditions and score <= 0:
+            continue
         scored.append((score, meeting))
 
     scored.sort(key=lambda pair: (-pair[0], getattr(pair[1], "_distance_km", 999999), pair[1].start_at or datetime.max))
@@ -547,7 +644,7 @@ def build_schedule_reply(user):
 
 def build_recommendation_reply(user, content, memory, payload=None, nlu=None):
     nlu = nlu or fallback_chatbot_nlu(content)
-    nearby_context = my_nearby_context(user, content, payload)
+    nearby_context = my_nearby_context(user, content, payload, nlu=nlu)
     if nearby_context and nearby_context.get("needs_location"):
         return "내 주변 모임을 보려면 현재 위치가 필요해요. 위치 권한을 허용해주시면 지금 있는 곳 기준으로 가까운 모임을 찾아드릴게요."
     meetings = recommend_meetings(user, content, memory, payload=payload, nlu=nlu)
@@ -572,12 +669,25 @@ def build_recommendation_reply(user, content, memory, payload=None, nlu=None):
     return "\n".join(lines)
 
 
+def build_action_reply(nlu):
+    action_keys = [key for key in nlu.get("action_intents", []) if key in ACTION_INTENTS]
+    if not action_keys:
+        return ""
+    replies = [ACTION_INTENTS[key]["reply"] for key in action_keys[:2]]
+    if len(action_keys) > 1:
+        return "\n".join(replies)
+    return replies[0]
+
+
 def build_general_reply(user, content, memory, payload=None, nlu=None):
     nlu = nlu or fallback_chatbot_nlu(content)
     if nlu.get("intent") == "schedule":
         return build_schedule_reply(user)
     if nlu.get("intent") == "recommend":
         return build_recommendation_reply(user, content, memory, payload=payload, nlu=nlu)
+    action_reply = build_action_reply(nlu)
+    if action_reply:
+        return action_reply
     profile_context = user_profile_context(user)
     hints = []
     if profile_context["sports"]:
@@ -612,10 +722,10 @@ def build_meeting_search_href(content, memory, user=None, payload=None, recommen
     if nlu.get("location_query") and nlu.get("location_kind") == "explicit":
         extracted["places"].insert(0, nlu["location_query"])
     use_personalized = bool(nlu.get("use_profile")) or should_use_personalized_preferences(content)
-    sports = extracted["sports"] or (csv_items(memory.preferred_sports) if use_personalized else [])
+    profile_sports = csv_items(memory.preferred_sports) if use_personalized else []
     explicit_regions = compact_unique(extracted["regions"] + extracted.get("places", []))
     regions = explicit_regions or (csv_items(memory.preferred_regions) if use_personalized else [])
-    own_nearby_context = my_nearby_context(user, content, payload) if user else None
+    own_nearby_context = my_nearby_context(user, content, payload, nlu=nlu) if user else None
     nearby_context = None if (own_nearby_context and own_nearby_context.get("needs_location")) else own_nearby_context
     nearby_context = nearby_context or resolve_nearby_context(extracted.get("places", []) or extracted["regions"])
     if not nearby_context and contains_any(content, LOCATION_HINTS):
@@ -623,13 +733,17 @@ def build_meeting_search_href(content, memory, user=None, payload=None, recommen
         latitude = coerce_float((first_recommended or {}).get("latitude"))
         longitude = coerce_float((first_recommended or {}).get("longitude"))
         if latitude is not None and longitude is not None:
+            extracted_term = (extracted.get("places") or extracted["regions"] or [""])[0]
+            recommended_term = (first_recommended or {}).get("location_name") or "선택 위치"
+            fallback_term = recommended_term if nlu.get("location_kind") == "current" or len(extracted_term) < 2 else extracted_term
             nearby_context = {
-                "term": (extracted.get("places") or extracted["regions"] or [(first_recommended or {}).get("location_name") or "선택 위치"])[0],
+                "term": fallback_term,
                 "latitude": latitude,
                 "longitude": longitude,
                 "source": "recommended-meeting",
                 "radius_km": NEARBY_RADIUS_KM,
             }
+    sports = extracted["sports"] or (profile_sports if not nearby_context else [])
     params = {}
 
     if sports:
@@ -643,6 +757,8 @@ def build_meeting_search_href(content, memory, user=None, payload=None, recommen
         params["lng"] = str(nearby_context["longitude"])
         params["radius_km"] = str(nearby_context["radius_km"])
         params["near"] = nearby_context["term"]
+        if explicit_regions and nlu.get("location_kind") != "current":
+            params["keyword"] = explicit_regions[0]
     elif regions:
         params["keyword"] = regions[0]
     if not params:
@@ -656,17 +772,27 @@ def build_meeting_search_href(content, memory, user=None, payload=None, recommen
 def build_chatbot_actions(user, content, memory, context, payload=None, nlu=None):
     nlu = nlu or context.get("nlu") or fallback_chatbot_nlu(content)
     actions = []
+    for action_key in nlu.get("action_intents", []):
+        action = ACTION_INTENTS.get(action_key)
+        if not action:
+            continue
+        actions.append({
+            "type": action_key,
+            "label": action["label"],
+            "description": action["reply"],
+            "href": action["href"],
+        })
     schedule_intent = nlu.get("intent") == "schedule"
     recommend_intent = nlu.get("intent") == "recommend"
     if schedule_intent:
         upcoming = upcoming_user_meetings(user.id, limit=1)
-        href = "/mypage?calendar=1&from=chatbot"
+        href = "/mypage?panel=joined"
         if upcoming:
             href += f"&meeting={upcoming[0].id}"
         actions.append({
             "type": "schedule",
-            "label": "일정 확인하러 가기",
-            "description": "가장 가까운 일정을 내 달력에서 열어요.",
+            "label": "참여 중인 모임 보기",
+            "description": "내 정보 페이지의 참여 중인 모임으로 이동해요.",
             "href": href,
         })
     if recommend_intent:
@@ -709,6 +835,7 @@ def build_chatbot_context(user, content, memory, fallback_reply, payload=None, n
         "intent": {
             "schedule": nlu.get("intent") == "schedule",
             "recommend": nlu.get("intent") == "recommend",
+            "actions": nlu.get("action_intents", []),
         },
         "nlu": nlu,
         "upcoming_meetings": [meeting_context(meeting) for meeting in upcoming],

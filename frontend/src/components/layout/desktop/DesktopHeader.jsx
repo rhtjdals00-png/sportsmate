@@ -1,4 +1,4 @@
-import { Bell, BellRing, Home, List, LogOut, Megaphone, MessageCircle, Search, User, Vote } from "lucide-react";
+import { Bell, BellRing, Headphones, Home, List, LogOut, Megaphone, MessageCircle, Search, User, Vote } from "lucide-react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
@@ -6,6 +6,7 @@ import { notificationApi } from "../../../api/notificationApi";
 import {
   dismissNotificationKey,
   notificationKey,
+  notificationLinkUrl,
   notificationMessage,
   notificationTitle,
   visibleNotifications
@@ -15,7 +16,8 @@ const navItems = [
   { to: "/", label: "홈", icon: Home },
   { to: "/meetings", label: "모임게시판", icon: List },
   { to: "/chats", label: "채팅", icon: MessageCircle },
-  { to: "/mypage", label: "내 정보", icon: User }
+  { to: "/mypage", label: "내 정보", icon: User },
+  { to: "/support", label: "고객센터", icon: Headphones }
 ];
 
 const copy = {
@@ -130,7 +132,8 @@ function DesktopHeader() {
         // 이동을 막지 않습니다.
       }
     }
-    if (item.link_url) navigate(item.link_url);
+    const targetUrl = notificationLinkUrl(item);
+    if (targetUrl) navigate(targetUrl);
   };
 
   return (

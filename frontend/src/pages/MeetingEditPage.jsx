@@ -22,6 +22,7 @@ function MeetingEditPage() {
       title: meeting.title,
       description: meeting.description,
       meeting_type: meeting.meeting_type,
+      is_lesson: meeting.is_lesson || false,
       purpose: meeting.purpose,
       location_name: meeting.location_name,
       address: meeting.address,
@@ -82,12 +83,26 @@ function MeetingEditPage() {
         </label>
         <label>제목<input required value={form.title} onChange={(event) => update("title", event.target.value)} /></label>
         <label>설명<textarea required value={form.description} onChange={(event) => update("description", event.target.value)} /></label>
+        
+        {form.meeting_type === "regular" && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', background: '#f8fafc', borderRadius: '8px', marginBottom: '16px', border: '1px solid #e2e8f0', cursor: 'pointer' }}>
+            <input type="checkbox" checked={form.is_lesson} onChange={(e) => update("is_lesson", e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+            <span style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>기간이 정해진 강습 형태입니다</span>
+          </label>
+        )}
+        
         <label>모집 목적<input value={form.purpose} onChange={(event) => update("purpose", event.target.value)} /></label>
         <label>장소명<input required value={form.location_name} onChange={(event) => update("location_name", event.target.value)} /></label>
         <label>주소<input required value={form.address} onChange={(event) => update("address", event.target.value)} /></label>
-        <label>시작 시간<input required type="datetime-local" value={form.start_at} onChange={(event) => handleStartAtChange(event.target.value)} /></label>
+        {form.is_lesson && (
+          <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', marginBottom: '12px', border: '1px solid #e2e8f0' }}>
+            <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#1e293b' }}>📅 강습 기간 설정</h4>
+            <p style={{ margin: '0 0 0 0', fontSize: '11px', color: '#64748b' }}>강습 전체 기간과 진행 요일/시간을 확인하세요.</p>
+          </div>
+        )}
+        <label>{form.is_lesson ? "강습 시작 일정" : "시작 시간"}<input required type="datetime-local" value={form.start_at} onChange={(event) => handleStartAtChange(event.target.value)} /></label>
         <label>
-          종료 시간
+          {form.is_lesson ? "강습 종료 일정" : "종료 시간"}
           <input type="datetime-local" value={form.end_at} onChange={(event) => update("end_at", event.target.value)} />
           {isTimeInvalid && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>종료 시간은 시작 시간 이후여야 합니다.</span>}
         </label>

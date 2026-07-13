@@ -192,31 +192,32 @@ function MobileMeetingList() {
         </button>
       </section>
 
+      <div className="mobile-filter-type-tabs" style={{ margin: '8px 16px 12px' }}>
+        <button
+          type="button"
+          className={!params.get("meeting_type") ? "is-active" : ""}
+          onClick={() => setMeetingType("")}
+        >
+          전체 모임
+        </button>
+        <button
+          type="button"
+          className={params.get("meeting_type") === "one_time" ? "is-active" : ""}
+          onClick={() => setMeetingType("one_time")}
+        >
+          일회성 모임
+        </button>
+        <button
+          type="button"
+          className={params.get("meeting_type") === "regular" ? "is-active" : ""}
+          onClick={() => setMeetingType("regular")}
+        >
+          정기 모임
+        </button>
+      </div>
+
       {filterOpen ? (
         <section className="mobile-filter-panel" aria-label={filterSummary}>
-          <div className="mobile-filter-type-tabs">
-            <button
-              type="button"
-              className={!params.get("meeting_type") ? "is-active" : ""}
-              onClick={() => setMeetingType("")}
-            >
-              전체 모임
-            </button>
-            <button
-              type="button"
-              className={params.get("meeting_type") === "one_time" ? "is-active" : ""}
-              onClick={() => setMeetingType("one_time")}
-            >
-              일회성 모임
-            </button>
-            <button
-              type="button"
-              className={params.get("meeting_type") === "regular" ? "is-active" : ""}
-              onClick={() => setMeetingType("regular")}
-            >
-              정기 모임
-            </button>
-          </div>
           <label>
             종목 카테고리
             <select value={params.get("category") || ""} onChange={(event) => setCategory(event.target.value)}>

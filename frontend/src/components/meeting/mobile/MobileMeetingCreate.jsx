@@ -1,13 +1,152 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import Button from "../../common/Button.jsx";
-import { AlarmClock, CalendarClock, ChevronLeft, ChevronRight } from "lucide-react";
+import { AlarmClock, CalendarClock, ChevronLeft, ChevronRight, MapPin, Map as MapIcon, Search } from "lucide-react";
 import { meetingApi } from "../../../api/meetingApi";
 import { sportApi } from "../../../api/sportApi";
 import { locationApi } from "../../../api/locationApi";
 import { useAsync } from "../../../hooks/useAsync";
-import { koreaRegions } from "../../../data/koreaRegions";
+
+const DEFAULT_MAP_CENTER = { latitude: 37.5665, longitude: 126.9780 };
+const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
+
+function loadNaverMapScript(clientId) {
+  if (!clientId) return Promise.reject(new Error("missing naver map client id"));
+  if (window.naver?.maps) return Promise.resolve(window.naver.maps);
+  if (window.__sportsmateNaverMapPromise) return window.__sportsmateNaverMapPromise;
+
+  window.__sportsmateNaverMapPromise = new Promise((resolve, reject) => {
+    const existing = document.getElementById(NAVER_MAP_SCRIPT_ID);
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.naver.maps), { once: true });
+      existing.addEventListener("error", reject, { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = NAVER_MAP_SCRIPT_ID;
+    script.async = true;
+    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(clientId)}`;
+    script.onload = () => resolve(window.naver.maps);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+
+  return window.__sportsmateNaverMapPromise;
+}
+
+function toMapPoint(place) {
+  const latitude = Number(place?.latitude);
+  const longitude = Number(place?.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { latitude, longitude };
+}
+
+const ADMIN_REGION_PATTERN = /(특별시|광역시|특별자치시|도|시|군|구|읍|면|동|리)$/;
+const normalizePlaceText = (value) => (value || "").replace(/<[^>]+>/g, "").trim();
+const isAdministrativeRegion = (place) => {
+  const title = normalizePlaceText(place?.title || place?.address || place?.road_address);
+  const category = normalizePlaceText(place?.category);
+  return category === "주소" && ADMIN_REGION_PATTERN.test(title.split(/\s+/).at(-1) || title);
+};
+
+function MobileLocationMap({ clientId, selectedLocation, results, onSelect }) {
+  const mapElementRef = useRef(null);
+  const mapRef = useRef(null);
+  const selectedMarkerRef = useRef(null);
+  const resultMarkersRef = useRef([]);
+  const [mapStatus, setMapStatus] = useState("idle");
+
+  useEffect(() => {
+    if (!clientId) return;
+    let disposed = false;
+    setMapStatus("loading");
+    loadNaverMapScript(clientId)
+      .then((maps) => {
+        if (disposed || !mapElementRef.current || mapRef.current) return;
+        const center = new maps.LatLng(DEFAULT_MAP_CENTER.latitude, DEFAULT_MAP_CENTER.longitude);
+        mapRef.current = new maps.Map(mapElementRef.current, {
+          center,
+          zoom: 12,
+          mapDataControl: false,
+          scaleControl: false,
+          zoomControl: true,
+          zoomControlOptions: {
+            position: maps.Position.TOP_RIGHT,
+            style: maps.ZoomControlStyle.SMALL,
+          },
+        });
+        maps.Event.addListener(mapRef.current, "click", (event) => {
+          onSelect({
+            source: "map-click",
+            latitude: event.coord.lat(),
+            longitude: event.coord.lng(),
+          });
+        });
+        setMapStatus("ready");
+      })
+      .catch(() => setMapStatus("error"));
+
+    return () => {
+      disposed = true;
+    };
+  }, [clientId, onSelect]);
+
+  useEffect(() => {
+    const maps = window.naver?.maps;
+    const map = mapRef.current;
+    const selectedPoint = toMapPoint(selectedLocation);
+    if (!maps || !map || !selectedPoint) return;
+
+    const position = new maps.LatLng(selectedPoint.latitude, selectedPoint.longitude);
+    if (!selectedMarkerRef.current) {
+      selectedMarkerRef.current = new maps.Marker({ map, position });
+    } else {
+      selectedMarkerRef.current.setPosition(position);
+      selectedMarkerRef.current.setMap(map);
+    }
+    map.setCenter(position);
+    if (map.getZoom() < 14) map.setZoom(15);
+  }, [selectedLocation?.latitude, selectedLocation?.longitude]);
+
+  useEffect(() => {
+    const maps = window.naver?.maps;
+    const map = mapRef.current;
+    if (!maps || !map) return;
+
+    resultMarkersRef.current.forEach((marker) => marker.setMap(null));
+    resultMarkersRef.current = [];
+
+    const bounds = new maps.LatLngBounds();
+    let hasBounds = false;
+    results.forEach((place) => {
+      const point = toMapPoint(place);
+      if (!point) return;
+      const position = new maps.LatLng(point.latitude, point.longitude);
+      const marker = new maps.Marker({ map, position });
+      maps.Event.addListener(marker, "click", () => onSelect(place));
+      resultMarkersRef.current.push(marker);
+      bounds.extend(position);
+      hasBounds = true;
+    });
+    if (hasBounds && !toMapPoint(selectedLocation)) map.fitBounds(bounds, { top: 36, right: 36, bottom: 36, left: 36 });
+  }, [results, onSelect, selectedLocation?.latitude, selectedLocation?.longitude]);
+
+  if (!clientId) return null;
+
+  return (
+    <div style={{ width: '100%', marginTop: '12px', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+      <div style={{ padding: '8px 12px', background: '#f8fafc', fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', borderBottom: '1px solid #e2e8f0' }}>
+        <MapIcon size={14} /> 지도에서 클릭하여 위치 지정 가능
+      </div>
+      <div ref={mapElementRef} style={{ width: '100%', height: '240px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {mapStatus === "loading" && <span style={{ fontSize: '14px', color: '#64748b' }}>지도를 불러오는 중입니다.</span>}
+        {mapStatus === "error" && <span style={{ fontSize: '14px', color: '#ef4444' }}>지도를 불러오지 못했습니다.</span>}
+      </div>
+    </div>
+  );
+}
 
 const TITLE_MAX_LENGTH = 40;
 const CUSTOM_PURPOSE = "custom";
@@ -65,9 +204,9 @@ function CalendarSelect({ value, onChange, min, icon, label }) {
       {open && (
         <div className="meeting-calendar-popover">
           <div className="meeting-calendar-head">
-            <button type="button" onClick={() => moveMonth(-1)} aria-label={"\uc774\uc804 \ub2ec"}><ChevronLeft size={18} /></button>
-            <strong>{viewDate.getFullYear()}{"\ub144"} {viewDate.getMonth() + 1}{"\uc6d4"}</strong>
-            <button type="button" onClick={() => moveMonth(1)} aria-label={"\ub2e4\uc74c \ub2ec"}><ChevronRight size={18} /></button>
+            <button type="button" onClick={() => moveMonth(-1)} aria-label={"이전 달"}><ChevronLeft size={18} /></button>
+            <strong>{viewDate.getFullYear()}{"년"} {viewDate.getMonth() + 1}{"월"}</strong>
+            <button type="button" onClick={() => moveMonth(1)} aria-label={"다음 달"}><ChevronRight size={18} /></button>
           </div>
           <div className="meeting-calendar-weekdays">
             {WEEKDAY_LABELS.map((day) => <span key={day}>{day}</span>)}
@@ -107,28 +246,34 @@ const buildTimeValue = ({ period, hour, minute }) => {
   return `${String(hour24).padStart(2, "0")}:${minute}`;
 };
 
-function TimeSelect({ value, onChange, min, required = false }) {
-  const parts = splitTimeValue(value);
+function TimeSelect({ value, onChange, required = false }) {
+  const [localParts, setLocalParts] = useState(() => splitTimeValue(value));
+
+  useEffect(() => {
+    setLocalParts(splitTimeValue(value));
+  }, [value]);
+
   const changePart = (key, nextValue) => {
-    const nextParts = { ...parts, [key]: nextValue };
+    const nextParts = { ...localParts, [key]: nextValue };
+    setLocalParts(nextParts);
     const nextTime = buildTimeValue(nextParts);
-    if (!nextTime) return onChange("");
-    if (min && nextTime <= min) return onChange("");
-    return onChange(nextTime);
+    if (nextTime) {
+      onChange(nextTime);
+    }
   };
 
   return (
     <span className="meeting-time-select" data-required={required ? "true" : "false"}>
-      <select aria-label={"\uc624\uc804 \uc624\ud6c4"} value={parts.period} onChange={(event) => changePart("period", event.target.value)}>
-        <option value="AM">{"\uc624\uc804"}</option>
-        <option value="PM">{"\uc624\ud6c4"}</option>
+      <select aria-label={"오전 오후"} value={localParts.period} onChange={(event) => changePart("period", event.target.value)}>
+        <option value="AM">{"오전"}</option>
+        <option value="PM">{"오후"}</option>
       </select>
-      <select aria-label={"\uc2dc"} value={parts.hour} onChange={(event) => changePart("hour", event.target.value)}>
-        <option value="">{"\uc2dc"}</option>
-        {TIME_HOURS.map((hour) => <option key={hour} value={hour}>{Number(hour)}{"\uc2dc"}</option>)}
+      <select aria-label={"시"} value={localParts.hour} onChange={(event) => changePart("hour", event.target.value)}>
+        <option value="">{"시"}</option>
+        {TIME_HOURS.map((hour) => <option key={hour} value={hour}>{Number(hour)}{"시"}</option>)}
       </select>
-      <select aria-label={"\ubd84"} value={parts.minute} onChange={(event) => changePart("minute", event.target.value)}>
-        {TIME_MINUTES.map((minute) => <option key={minute} value={minute}>{minute}{"\ubd84"}</option>)}
+      <select aria-label={"분"} value={localParts.minute} onChange={(event) => changePart("minute", event.target.value)}>
+        {TIME_MINUTES.map((minute) => <option key={minute} value={minute}>{minute}{"분"}</option>)}
       </select>
     </span>
   );
@@ -141,10 +286,6 @@ const initialForm = {
   description: "",
   meeting_type: "one_time",
   purpose: "운동 메이트 모집",
-  region_sido_code: "",
-  region_sigungu_code: "",
-  region_sido: "",
-  region_area: "",
   location_name: "",
   address: "",
   start_date: "",
@@ -188,9 +329,16 @@ function MobileMeetingCreate() {
   const navigate = useNavigate();
   const [form, setForm] = useState(initialForm);
   const [step, setStep] = useState(1);
-  const [addressKeyword, setAddressKeyword] = useState("");
-  const [addressResults, setAddressResults] = useState([]);
-  const [addressLoading, setAddressLoading] = useState(false);
+  const [locationKeyword, setLocationKeyword] = useState("");
+  const [locationResults, setLocationResults] = useState([]);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationScope, setLocationScope] = useState("");
+  const [mapClientId, setMapClientId] = useState("");
+  
+  const locationSearchRequestRef = useRef(0);
+  const selectedLocationKeywordRef = useRef("");
+  const locationReverseRequestRef = useRef(0);
+
   const [submitting, setSubmitting] = useState(false);
   const [formMessage, setFormMessage] = useState("");
   const [purposeMode, setPurposeMode] = useState(initialForm.purpose);
@@ -200,7 +348,7 @@ function MobileMeetingCreate() {
   const sports = useAsync(() => sportApi.sports(isNumericId(form.category_id) ? { category_id: form.category_id } : {}), [form.category_id]);
   const today = toDateInputValue(new Date());
   const nowTime = toTimeInputValue(new Date());
-  const selectedRegion = koreaRegions.find((region) => region.name === form.region_sido);
+  
   const displayCategories = useMemo(() => mergeSportCategories(categories.data?.items || []), [categories.data?.items]);
   const displaySports = useMemo(() => {
     if (!form.category_id) return [];
@@ -223,6 +371,10 @@ function MobileMeetingCreate() {
   const [maxLimit, setMaxLimit] = useState(6);
 
   useEffect(() => {
+    locationApi.mapConfig()
+      .then((data) => setMapClientId(data.naver_dynamic_map_client_id || ""))
+      .catch(() => setMapClientId(""));
+
     meetingApi.getConfig()
       .then((data) => {
         if (data && data.defaultMaxParticipants) {
@@ -244,19 +396,31 @@ function MobileMeetingCreate() {
   }, [displaySports, form.sport_id]);
 
   useEffect(() => {
-    if (!addressKeyword.trim()) {
-      setAddressResults([]);
+    const keyword = locationKeyword.trim();
+    if (!keyword || selectedLocationKeywordRef.current === keyword) {
+      setLocationResults([]);
+      setLocationLoading(false);
       return;
     }
+    const scopedKeyword = locationScope && !keyword.startsWith(locationScope) ? `${locationScope} ${keyword}` : keyword;
+    const requestId = locationSearchRequestRef.current + 1;
+    locationSearchRequestRef.current = requestId;
     const timer = window.setTimeout(() => {
-      setAddressLoading(true);
-      locationApi.searchPlaces({ query: addressKeyword.trim(), size: 8 })
-        .then((data) => setAddressResults(data.items || []))
-        .catch(() => setAddressResults([]))
-        .finally(() => setAddressLoading(false));
-    }, 350);
+      setLocationLoading(true);
+      locationApi.searchPlaces({ keyword: scopedKeyword, size: 8 })
+        .then((data) => {
+          if (locationSearchRequestRef.current !== requestId || selectedLocationKeywordRef.current === keyword) return;
+          setLocationResults(data.items || []);
+        })
+        .catch(() => {
+          if (locationSearchRequestRef.current === requestId) setLocationResults([]);
+        })
+        .finally(() => {
+          if (locationSearchRequestRef.current === requestId) setLocationLoading(false);
+        });
+    }, 300);
     return () => window.clearTimeout(timer);
-  }, [addressKeyword]);
+  }, [locationKeyword, locationScope]);
 
   const updateCategory = (categoryId) => {
     const category = displayCategories.find((item) => String(item.id) === String(categoryId));
@@ -270,18 +434,75 @@ function MobileMeetingCreate() {
     update("purpose", value === CUSTOM_PURPOSE ? "" : value);
   };
 
-  const updateRegion = (sidoName, areaName = "") => {
-    const regionName = sidoName ? (areaName ? `${sidoName} ${areaName}` : sidoName) : "";
-    setForm((prev) => ({ ...prev, region_sido: sidoName, region_area: areaName, region_sido_code: sidoName, region_sigungu_code: areaName, address: regionName && !prev.address ? regionName : prev.address }));
-  };
+  const selectLocation = useCallback(async (place) => {
+    if (place.source === "map-click") {
+      const requestId = locationReverseRequestRef.current + 1;
+      locationReverseRequestRef.current = requestId;
+      const latitude = place.latitude;
+      const longitude = place.longitude;
+      selectedLocationKeywordRef.current = "지도에서 선택한 위치";
+      locationSearchRequestRef.current += 1;
+      setLocationScope("");
+      setLocationResults([]);
+      setLocationLoading(false);
+      setLocationKeyword("지도에서 선택한 위치");
+      setForm((prev) => ({
+        ...prev,
+        location_name: "주소 확인 중",
+        address: "지도에서 선택한 위치의 주소를 확인하고 있습니다.",
+        latitude,
+        longitude
+      }));
 
-  const selectAddress = (place) => {
-    const title = (place.title || "").replace(/<[^>]+>/g, "");
-    const address = place.address || title;
+      try {
+        const data = await locationApi.reverseGeocode({ latitude, longitude });
+        const item = data.item || {};
+        const title = normalizePlaceText(item.title) || item.address || "지도에서 선택한 위치";
+        const address = item.address || item.road_address || title;
+        if (locationReverseRequestRef.current !== requestId) return;
+        selectedLocationKeywordRef.current = address;
+        setForm((prev) => ({
+          ...prev,
+          location_name: title,
+          address,
+          latitude,
+          longitude
+        }));
+        setLocationKeyword(address);
+      } catch {
+        if (locationReverseRequestRef.current !== requestId) return;
+        setForm((prev) => ({
+          ...prev,
+          location_name: "지도에서 선택한 위치",
+          address: `위도 ${Number(latitude).toFixed(6)}, 경도 ${Number(longitude).toFixed(6)}`,
+          latitude,
+          longitude
+        }));
+      }
+      return;
+    }
+
+    const title = normalizePlaceText(place.title);
+    const address = place.address || place.road_address || title;
+    if (isAdministrativeRegion(place)) {
+      const scope = address || title;
+      selectedLocationKeywordRef.current = "";
+      locationSearchRequestRef.current += 1;
+      setLocationScope(scope);
+      setLocationKeyword("");
+      setLocationResults([]);
+      setLocationLoading(false);
+      setForm((prev) => ({ ...prev, location_name: "", address: scope, latitude: undefined, longitude: undefined }));
+      return;
+    }
+    selectedLocationKeywordRef.current = address;
+    locationSearchRequestRef.current += 1;
+    setLocationScope("");
     setForm((prev) => ({ ...prev, location_name: title || address, address, latitude: place.latitude, longitude: place.longitude }));
-    setAddressKeyword(address);
-    setAddressResults([]);
-  };
+    setLocationKeyword(address);
+    setLocationResults([]);
+    setLocationLoading(false);
+  }, []);
 
   const toggleStartSchedule = (checked) => {
     setHasStartSchedule(checked);
@@ -296,27 +517,50 @@ function MobileMeetingCreate() {
     if (!checked) setForm((prev) => ({ ...prev, end_date: "", end_time: "" }));
   };
 
-  const updateStartDate = (value) => setForm((prev) => ({ ...prev, start_date: value, start_time: value === today && prev.start_time && prev.start_time < nowTime ? nowTime : prev.start_time, end_date: prev.end_date && prev.end_date < value ? value : prev.end_date }));
-  const updateStartTime = (value) => setForm((prev) => ({ ...prev, start_time: prev.start_date === today && value < nowTime ? nowTime : value, end_time: prev.end_date === prev.start_date && prev.end_time && value && prev.end_time <= value ? "" : prev.end_time }));
+  const updateStartDate = (value) => setForm((prev) => ({ 
+    ...prev, 
+    start_date: value
+  }));
+  const updateStartTime = (value) => setForm((prev) => ({ 
+    ...prev, 
+    start_time: value 
+  }));
 
-  const updateEndDate = (value) => setForm((prev) => {
-    const minDate = prev.start_date || today;
-    const nextEndDate = value && value < minDate ? minDate : value;
-    return {
-      ...prev,
-      end_date: nextEndDate,
-      end_time: nextEndDate === prev.start_date && prev.start_time && prev.end_time && prev.end_time <= prev.start_time ? "" : prev.end_time,
-    };
-  });
+  const updateEndDate = (value) => setForm((prev) => ({
+    ...prev,
+    end_date: value,
+  }));
 
-  const updateEndTime = (value) => setForm((prev) => {
-    if (prev.end_date === prev.start_date && prev.start_time && value && value <= prev.start_time) {
-      return { ...prev, end_time: "" };
-    }
-    return { ...prev, end_time: value };
-  });
+  const updateEndTime = (value) => setForm((prev) => ({
+    ...prev,
+    end_time: value,
+  }));
 
   const updateTitle = (value) => update("title", value.slice(0, TITLE_MAX_LENGTH));
+
+  const scheduleError = (() => {
+    if (hasStartSchedule) {
+      if (form.start_date && form.start_date < today) {
+        return "과거 날짜는 선택할 수 없습니다.";
+      }
+      if (form.start_date === today && form.start_time && form.start_time < nowTime) {
+        return "과거 시간은 선택할 수 없습니다.";
+      }
+    }
+    if (hasStartSchedule && hasEndSchedule) {
+      if (form.start_date && form.end_date) {
+        if (form.end_date < form.start_date) {
+          return "시작 날짜보다 전 날짜, 시간은 선택할 수 없습니다.";
+        }
+        if (form.end_date === form.start_date && form.start_time && form.end_time) {
+          if (form.end_time <= form.start_time) {
+            return "시작 날짜보다 전 날짜, 시간은 선택할 수 없습니다.";
+          }
+        }
+      }
+    }
+    return "";
+  })();
 
   const validateStep = (targetStep = step) => {
     if (targetStep === 1) {
@@ -331,10 +575,10 @@ function MobileMeetingCreate() {
     if (targetStep === 3) {
       if (!form.address.trim()) return "주소를 입력하거나 검색 결과를 선택해주세요.";
       if (!form.location_name.trim()) return "장소명을 입력해주세요.";
-      if (hasStartSchedule && (!form.start_date || !form.start_time)) return "시작 일정이 있는 모임은 시작일과 시작 시간을 입력해주세요.";
+      if (hasStartSchedule && (!form.start_date || !form.start_time)) return "_HIDDEN_EMPTY_DATE";
       if (hasEndSchedule && !hasStartSchedule) return "종료 일정은 시작 일정이 있을 때만 설정할 수 있습니다.";
-      if (hasEndSchedule && (!form.end_date || !form.end_time)) return "종료 일정이 있는 모임은 종료일과 종료 시간을 입력해주세요.";
-      if (hasEndSchedule && new Date(combineDateTime(form.end_date, form.end_time)) <= new Date(combineDateTime(form.start_date, form.start_time))) return "종료 시간은 시작 시간 이후로 선택해주세요.";
+      if (hasEndSchedule && (!form.end_date || !form.end_time)) return "_HIDDEN_EMPTY_DATE";
+      if (scheduleError) return scheduleError;
       if (Number(form.max_participants) < 2) return "정원은 최소 2명 이상이어야 합니다.";
       if (Number(form.max_participants) > maxLimit) return `개설 최대 정원은 ${maxLimit}명 이하로만 설정 가능합니다.`;
     }
@@ -380,14 +624,14 @@ function MobileMeetingCreate() {
     <>
       <MobileHeader title="모임 만들기" />
       <form className="mobile-form" onSubmit={submit}>
-        <div className="meeting-create-hero"><span>SportsMate</span><h1>{form.meeting_type === "regular" ? "반복 모임 만들기" : "한 번만 진행하는 모임"}</h1><p>운동 종목, 일정, 장소 정보를 순서대로 입력합니다.</p></div>
+        <div className="meeting-create-hero"><span>SportsMate</span><h1>{form.meeting_type === "regular" ? "정기 모임 만들기" : "일회성 모임 만들기"}</h1><p>운동 종목, 일정, 장소 정보를 순서대로 입력합니다.</p></div>
         <div className="form-progress"><span>단계 {step}/3</span><div aria-hidden="true">{[1, 2, 3].map((item) => <i key={item} className={item <= step ? "active" : ""} />)}</div></div>
-        {formMessage ? <p className="mobile-form-message mobile-form-message--error">{formMessage}</p> : null}
+        {formMessage && !formMessage.startsWith("_HIDDEN") ? <p className="mobile-form-message mobile-form-message--error">{formMessage}</p> : null}
         {step === 1 && <section>
           <label>카테고리<select value={form.category_id} onChange={(event) => updateCategory(event.target.value)}><option value="">카테고리 선택</option>{displayCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
           <label>종목<select required value={form.sport_id} onChange={(event) => update("sport_id", event.target.value)} disabled={!form.category_id}><option value="">종목 선택</option>{displaySports.map((sport) => <option key={sport.id} value={sport.id}>{sport.name}</option>)}</select></label>
           {usingFallbackSports ? <p className="mobile-form-message">기본 종목 목록을 표시하고 있습니다. 실제 등록은 DB 종목 데이터가 연결된 뒤 가능합니다.</p> : null}
-          <div className="meeting-type-segment" role="group" aria-label="모임 방식"><button type="button" className={form.meeting_type === "one_time" ? "active" : ""} onClick={() => update("meeting_type", "one_time")}>한 번만 진행</button><button type="button" className={form.meeting_type === "regular" ? "active" : ""} onClick={() => update("meeting_type", "regular")}>반복 진행</button></div>
+          <div className="meeting-type-segment" role="group" aria-label="모임 방식"><button type="button" className={form.meeting_type === "one_time" ? "active" : ""} onClick={() => update("meeting_type", "one_time")}>일회성 모임</button><button type="button" className={form.meeting_type === "regular" ? "active" : ""} onClick={() => update("meeting_type", "regular")}>정기 모임</button></div>
           <label>모집 목적<select value={purposeMode} onChange={(event) => updatePurposeMode(event.target.value)}>{purposeOptions.map((purpose) => <option key={purpose} value={purpose}>{purpose}</option>)}<option value={CUSTOM_PURPOSE}>기타</option></select></label>
           {purposeMode === CUSTOM_PURPOSE && <label>기타 모집 목적<input value={form.purpose} onChange={(event) => update("purpose", event.target.value.slice(0, 30))} /></label>}
         </section>}
@@ -396,13 +640,42 @@ function MobileMeetingCreate() {
           <label>설명<textarea required value={form.description} onChange={(event) => update("description", event.target.value)} /></label>
         </section>}
         {step === 3 && <section>
-          <section className="profile-region-field meeting-region-field"><strong>지역</strong><div className="region-inline"><select value={form.region_sido} onChange={(event) => updateRegion(event.target.value, "")}><option value="">전국</option>{koreaRegions.map((region) => <option key={region.name} value={region.name}>{region.name}</option>)}</select><select value={form.region_area} onChange={(event) => updateRegion(form.region_sido, event.target.value)} disabled={!form.region_sido}><option value="">전체</option>{(selectedRegion?.areas || []).map((area) => <option key={area} value={area}>{area}</option>)}</select></div></section>
-          <label>주소 검색<input required value={addressKeyword || form.address} placeholder="주소나 장소명을 입력하세요" onChange={(event) => { setAddressKeyword(event.target.value); update("address", event.target.value); }} /></label>
-          {(addressLoading || addressResults.length > 0) && <div className="address-result-list">{addressLoading ? <span>검색 중입니다.</span> : addressResults.map((place, index) => <button type="button" key={`${place.title}-${index}`} onClick={() => selectAddress(place)}><strong>{(place.title || place.address || "").replace(/<[^>]+>/g, "")}</strong><small>{place.address}</small></button>)}</div>}
-          <label>장소명<input required value={form.location_name} onChange={(event) => update("location_name", event.target.value)} /></label>
-          <div className="mobile-schedule-toggles"><label><input type="checkbox" checked={hasStartSchedule} onChange={(event) => toggleStartSchedule(event.target.checked)} /> 시작 일정 있음</label><label><input type="checkbox" checked={hasEndSchedule} disabled={!hasStartSchedule} onChange={(event) => toggleEndSchedule(event.target.checked)} /> 종료 일정 있음</label></div>
-          {hasStartSchedule && <div className="date-time-row"><label>{"\uc2dc\uc791 \ub0a0\uc9dc"}<CalendarSelect label={"\uc2dc\uc791\uc77c"} min={today} value={form.start_date} onChange={updateStartDate} icon={<CalendarClock size={17} />} /></label><label>{"\uc2dc\uc791 \uc2dc\uac04"}<span className="mobile-icon-input"><AlarmClock size={17} /><TimeSelect required min={form.start_date === today ? nowTime : undefined} value={form.start_time} onChange={updateStartTime} /></span></label></div>}
-          {hasEndSchedule && <div className="date-time-row"><label>{"\uc885\ub8cc \ub0a0\uc9dc"}<CalendarSelect label={"\uc885\ub8cc\uc77c"} min={form.start_date || today} value={form.end_date} onChange={updateEndDate} icon={<CalendarClock size={17} />} /></label><label>{"\uc885\ub8cc \uc2dc\uac04"}<span className="mobile-icon-input"><AlarmClock size={17} /><TimeSelect required min={form.end_date === form.start_date ? form.start_time : undefined} value={form.end_time} onChange={updateEndTime} /></span></label></div>}
+          <label>도로명/주소 검색<span className="mobile-icon-input"><Search size={18} /><input value={locationKeyword} placeholder="예: 경기 화성시 동탄대로, 만세구 새솔동" onChange={(event) => { selectedLocationKeywordRef.current = ""; setLocationKeyword(event.target.value); setLocationScope(""); setForm((prev) => ({ ...prev, address: event.target.value, location_name: "", latitude: undefined, longitude: undefined })); }} /></span></label>
+          {(locationLoading || locationResults.length > 0) && <div className="address-result-list" style={{ marginTop: '-8px', marginBottom: '16px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', zIndex: 10 }}>
+            {locationLoading ? (
+              <span style={{ display: 'block', padding: '12px', fontSize: '14px', color: '#64748b' }}>검색 중입니다.</span>
+            ) : (
+              locationResults.map((place, index) => {
+                const isRegion = isAdministrativeRegion(place);
+                const title = (place.title || "").replace(/<[^>]+>/g, "");
+                return (
+                  <button type="button" key={`${title}-${index}`} onClick={() => selectLocation(place)} style={{ width: '100%', textAlign: 'left', padding: '12px', borderBottom: '1px solid #f1f5f9', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                    <strong style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#1e293b' }}>
+                      {isRegion ? <MapIcon size={14} /> : <MapPin size={14} />} {title}
+                    </strong>
+                    <small style={{ display: 'block', marginTop: '4px', fontSize: '12px', color: '#64748b' }}>{place.address || place.road_address}</small>
+                  </button>
+                );
+              })
+            )}
+          </div>}
+          <label>선택된 장소명<input required value={form.location_name} onChange={(event) => update("location_name", event.target.value)} placeholder="검색 결과를 선택하면 장소명이 자동으로 입력됩니다." /></label>
+          <MobileLocationMap clientId={mapClientId} selectedLocation={(form.location_name && !locationScope) ? form : null} results={locationResults} onSelect={selectLocation} />
+          
+          <div className="mobile-schedule-toggles" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '30px', width: '100%', marginBottom: '12px', marginTop: '24px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', minHeight: 'auto', fontWeight: '600', flexDirection: 'row', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={hasStartSchedule} onChange={(event) => toggleStartSchedule(event.target.checked)} style={{ width: '20px', height: '20px', minHeight: '20px', accentColor: '#4f46e5', margin: 0, padding: 0, cursor: 'pointer' }} /> 
+                  시작 일정 있음
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', minHeight: 'auto', fontWeight: '600', flexDirection: 'row', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={hasEndSchedule} disabled={!hasStartSchedule} onChange={(event) => toggleEndSchedule(event.target.checked)} style={{ width: '20px', height: '20px', minHeight: '20px', accentColor: '#4f46e5', margin: 0, padding: 0, cursor: 'pointer' }} /> 
+                  종료 일정 있음
+                </label>
+              </div>
+              {hasStartSchedule && <div className="date-time-row"><label>{"\uc2dc\uc791 \ub0a0\uc9dc"}<CalendarSelect label={"\uc2dc\uc791\uc77c"} value={form.start_date} onChange={updateStartDate} icon={<CalendarClock size={17} />} /></label><label>{"\uc2dc\uc791 \uc2dc\uac04"}<span className="mobile-icon-input"><AlarmClock size={17} /><TimeSelect required value={form.start_time} onChange={updateStartTime} /></span></label></div>}
+              {hasEndSchedule && <div className="date-time-row"><label>{"\uc885\ub8cc \ub0a0\uc9dc"}<CalendarSelect label={"\uc885\ub8cc\uc77c"} value={form.end_date} onChange={updateEndDate} icon={<CalendarClock size={17} />} /></label><label>{"\uc885\ub8cc \uc2dc\uac04"}<span className="mobile-icon-input"><AlarmClock size={17} /><TimeSelect required value={form.end_time} onChange={updateEndTime} /></span></label></div>}
+              {scheduleError && hasEndSchedule && <p className="mobile-form-message mobile-form-message--error" style={{marginTop: '8px'}}>{scheduleError}</p>}
+
           <label>정원<input type="number" min="2" max={maxLimit} value={form.max_participants} onChange={(event) => update("max_participants", event.target.value)} /></label>
         </section>}
         <div className="form-actions">{step > 1 && <Button type="button" variant="secondary" onClick={() => setStep(step - 1)}>이전</Button>}{step < 3 ? <Button type="button" onClick={goNext}>다음</Button> : <Button type="submit" disabled={submitting}>{submitting ? "등록 중..." : "모임 등록"}</Button>}</div>

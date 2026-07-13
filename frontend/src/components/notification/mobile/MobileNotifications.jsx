@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { BellRing, MessageCircle, UserPlus, Megaphone, HelpCircle } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import EmptyState from "../../common/EmptyState.jsx";
 import Button from "../../common/Button.jsx";
 import { notificationApi } from "../../../api/notificationApi";
+import { apiClient } from "../../../api/client";
 import { useAsync } from "../../../hooks/useAsync";
 import { enablePushNotifications, getPushSupportState } from "../../../utils/pushNotifications";
 import { visibleNotifications } from "../../../utils/notificationDisplay";
@@ -43,11 +44,14 @@ function MobileNotifications() {
   const [permission, setPermission] = useState(() => ("Notification" in window ? Notification.permission : "default"));
   const [filterTab, setFilterTab] = useState("all");
   const [onlyUnread, setOnlyUnread] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(7);
+  const [localReadIds, setLocalReadIds] = useState(new Set());
   
-  const notifications = useAsync(() => notificationApi.list(), [refreshKey]);
+  const notifications = useAsync(() => apiClient.get("/notifications?limit=50").then(res => res.data), [refreshKey]);
   const pushSupport = useMemo(() => getPushSupportState(), []);
 
   const markRead = async (id) => {
+    setLocalReadIds((prev) => new Set(prev).add(id));
     if (Number.isInteger(Number(id))) {
       try {
         await notificationApi.read(Number(id));
@@ -87,7 +91,8 @@ function MobileNotifications() {
     const items = visibleNotifications(rawItems);
     return items.filter((item) => {
       if (!item) return false;
-      if (onlyUnread && item.is_read) return false;
+      const isRead = item.is_read || localReadIds.has(item.id);
+      if (onlyUnread && isRead) return false;
 
       const isNotice = [
         "notice",
@@ -107,6 +112,14 @@ function MobileNotifications() {
       return true;
     });
   }, [notifications.data?.items, filterTab, onlyUnread]);
+
+  useEffect(() => {
+    setVisibleCount(7);
+  }, [filterTab, onlyUnread]);
+
+  const displayedNotifications = useMemo(() => {
+    return filteredNotifications.slice(0, visibleCount);
+  }, [filteredNotifications, visibleCount]);
 
   return (
     <>
@@ -230,14 +243,14 @@ function MobileNotifications() {
 
       {/* 알림 리스트 영역 */}
       <div className="notification-list">
-        {filteredNotifications.map((item) => {
+        {displayedNotifications.map((item) => {
           const meta = notificationMeta(item);
           const Icon = meta.icon;
-          const isUnread = !item.is_read;
+          const isUnread = !item.is_read && !localReadIds.has(item.id);
           return (
             <article
               key={item.id}
-              className={`${item.is_read ? "read" : ""} ${isUnread ? "unread" : ""}`}
+              className={`${!isUnread ? "read" : ""} ${isUnread ? "unread" : ""}`}
               style={
                 isUnread
                   ? {
@@ -262,7 +275,7 @@ function MobileNotifications() {
                   <button type="button" onClick={() => handleAction(item)}>
                     {meta.action}
                   </button>
-                  {!item.is_read && (
+                  {!item.is_read && !localReadIds.has(item.id) && (
                     <button
                       type="button"
                       className="is-muted"
@@ -278,6 +291,18 @@ function MobileNotifications() {
           );
         })}
       </div>
+
+      {visibleCount < filteredNotifications.length && (
+        <div style={{ padding: '16px', textAlign: 'center' }}>
+          <button
+            type="button"
+            onClick={() => setVisibleCount(prev => prev + 7)}
+            style={{ padding: '10px 24px', borderRadius: '24px', border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: '13px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
+          >
+            더 보기
+          </button>
+        </div>
+      )}
 
       {!notifications.loading && !filteredNotifications.length && (
         <EmptyState

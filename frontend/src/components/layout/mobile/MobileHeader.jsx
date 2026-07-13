@@ -28,33 +28,38 @@ function MobileHeader({ title, showLogo = false, actions = null, showBack = true
     else navigate("/");
   };
 
-  const fetchUnreadNotifications = async () => {
-    if (!user) return;
+  const fetchUnreadNotifications = async (intervalId) => {
+    const token = localStorage.getItem("sportsmate_token");
+    if (!user || !token) return;
     try {
       const data = await notificationApi.list();
       const visible = visibleNotifications(data.items || []);
       const unreadCount = visible.filter(item => !item.is_read).length;
       setUnreadNotifCount(unreadCount);
-    } catch {
+    } catch (e) {
+      if (e.response?.status === 401 && intervalId) {
+        clearInterval(intervalId);
+      }
       setUnreadNotifCount(0);
     }
   };
 
   useEffect(() => {
     if (!user) return undefined;
-    fetchUnreadNotifications();
+    let timer;
+    fetchUnreadNotifications(timer);
     
     const handleUpdate = () => {
-      fetchUnreadNotifications();
+      fetchUnreadNotifications(timer);
     };
     window.addEventListener("notifications_updated", handleUpdate);
     
-    const timer = setInterval(fetchUnreadNotifications, 15000);
+    timer = setInterval(() => fetchUnreadNotifications(timer), 15000);
     return () => {
       clearInterval(timer);
       window.removeEventListener("notifications_updated", handleUpdate);
     };
-  }, [user]);
+  }, [user?.id]);
 
   return (
     <header className="mobile-header">

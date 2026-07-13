@@ -422,7 +422,7 @@ def update_user(user_id):
             type="account_suspension",
             title="계정 정지 안내",
             message="귀하의 계정이 정지되었습니다. 관련 문의사항은 고객센터로 연락해주시기 바랍니다.",
-            link_url="/notifications",
+            link_url="/support",
             commit=False,
             send_push=True
         )
@@ -433,7 +433,7 @@ def update_user(user_id):
             type="account_unsuspension",
             title="계정 정지 해제 안내",
             message="귀하의 계정 정지가 해제되었습니다. 이제 서비스를 정상적으로 이용하실 수 있습니다.",
-            link_url="/notifications",
+            link_url="/support",
             commit=False,
             send_push=True
         )
@@ -556,7 +556,7 @@ def send_user_message(user_id):
         type="admin_message",
         title="관리자 알림",
         message=message_text,
-        link_url="/notifications",
+        link_url="/support",
         commit=True,
         send_push=True
     )
@@ -640,7 +640,7 @@ def send_broadcast():
     data = request.get_json() or {}
     title = data.get("title")
     message = data.get("message")
-    link_url = data.get("link_url") or "/notifications"
+    link_url = data.get("link_url") or "/support"
     target_type = data.get("target_type") or "all"
     target_value = data.get("target_value")
     send_push = data.get("send_push", True)
@@ -716,3 +716,109 @@ def get_audit_logs():
     from app.utils.audit import load_audit_logs
     return jsonify(load_audit_logs())
 
+
+
+
+SUPPORT_STATUS_LABELS = {
+    "pending": "접수",
+    "in_progress": "처리 중",
+    "resolved": "답변 완료",
+    "closed": "종료",
+}
+
+SUPPORT_PRIORITY_VALUES = {"low", "normal", "high", "urgent"}
+
+
+def _require_admin_user():
+    from flask_jwt_extended import get_jwt_identity
+    current_user_id = int(get_jwt_identity())
+    admin_user = User.query.options(joinedload(User.profile)).get(current_user_id)
+    if not admin_user or admin_user.role not in ["superadmin", "admin"]:
+        return None
+    return admin_user
+
+
+@admin_bp.get("/support/inquiries")
+@jwt_required()
+def list_support_inquiries():
+    from app.models import SupportInquiry
+
+    admin_user = _require_admin_user()
+    if not admin_user:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+
+    status = request.args.get("status")
+    category = request.args.get("category")
+    query = SupportInquiry.query.options(joinedload(SupportInquiry.user), joinedload(SupportInquiry.admin))
+    if status and status != "all":
+        query = query.filter(SupportInquiry.status == status)
+    if category and category != "all":
+        query = query.filter(SupportInquiry.category == category)
+
+    items = query.order_by(SupportInquiry.created_at.desc(), SupportInquiry.id.desc()).limit(admin_limit()).all()
+    return jsonify({"items": [item.to_dict(include_internal=True) for item in items]})
+
+
+@admin_bp.patch("/support/inquiries/<int:inquiry_id>")
+@jwt_required()
+def update_support_inquiry(inquiry_id):
+    from app.models import SupportInquiry
+    from app.services.notification_service import create_notification
+    from app.utils.audit import log_admin_action
+
+    admin_user = _require_admin_user()
+    if not admin_user:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+
+    inquiry = SupportInquiry.query.options(joinedload(SupportInquiry.user)).get_or_404(inquiry_id)
+    data = request.get_json() or {}
+    previous_status = inquiry.status
+    previous_response = inquiry.admin_response or ""
+
+    if "status" in data:
+        next_status = data.get("status")
+        if next_status not in SUPPORT_STATUS_LABELS:
+            return jsonify({"message": "지원하지 않는 문의 상태입니다."}), 400
+        inquiry.status = next_status
+        if next_status in {"resolved", "closed"} and not inquiry.resolved_at:
+            inquiry.resolved_at = kst_now()
+        if next_status in {"pending", "in_progress"}:
+            inquiry.resolved_at = None
+
+    if "priority" in data:
+        priority = data.get("priority") or "normal"
+        if priority not in SUPPORT_PRIORITY_VALUES:
+            return jsonify({"message": "지원하지 않는 우선순위입니다."}), 400
+        inquiry.priority = priority
+
+    if "admin_response" in data:
+        inquiry.admin_response = (data.get("admin_response") or "").strip()
+    if "internal_note" in data:
+        inquiry.internal_note = (data.get("internal_note") or "").strip()
+
+    inquiry.admin_id = admin_user.id
+
+    should_notify = previous_status != inquiry.status or previous_response != (inquiry.admin_response or "")
+    if should_notify and inquiry.user_id:
+        status_label = SUPPORT_STATUS_LABELS.get(inquiry.status, inquiry.status)
+        title = "문의 답변이 등록되었습니다" if inquiry.admin_response else "문의 처리 상태가 변경되었습니다"
+        create_notification(
+            inquiry.user_id,
+            "support_reply",
+            title,
+            f"'{inquiry.title}' 문의가 {status_label} 상태로 업데이트되었습니다.",
+            "/support",
+            commit=False,
+            send_push=True,
+        )
+
+    db.session.commit()
+
+    admin_name = admin_user.nickname or admin_user.name or admin_user.email
+    log_admin_action(
+        admin_name=admin_name,
+        action_type="고객 문의 처리",
+        description=f"문의 #{inquiry.id} '{inquiry.title}' 상태를 {SUPPORT_STATUS_LABELS.get(inquiry.status, inquiry.status)}(으)로 저장했습니다."
+    )
+
+    return jsonify({"item": inquiry.to_dict(include_internal=True), "message": "문의 처리 내용이 저장되었습니다."})
