@@ -854,6 +854,74 @@
   min-width: 0;
 }
 
+.desktop-regular-schedule {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 16px;
+}
+
+.desktop-regular-schedule legend {
+  padding: 0 6px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.desktop-regular-schedule p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.desktop-regular-schedule__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.desktop-repeat-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.desktop-repeat-days button {
+  min-width: 48px;
+  min-height: 40px;
+  border: 1px solid #dbe4f0;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.desktop-repeat-days button:hover,
+.desktop-repeat-days button:focus-visible {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.desktop-repeat-days button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
+.desktop-repeat-days button.is-selected {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
 .desktop-icon-input {
   position: relative;
   display: block;
@@ -888,6 +956,10 @@
 
 @media (max-width: 920px) {
   .desktop-meeting-schedule-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .desktop-regular-schedule__grid {
     grid-template-columns: 1fr;
   }
 }

@@ -4,8 +4,9 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import Meeting, Participant, Review, Sport, User, UserProfile
+from app.models import Meeting, MeetingSession, Participant, Review, Sport, User, UserProfile
 from app.services.auth_service import validate_password
+from app.utils.timezone import kst_now
 
 user_bp = Blueprint("users", __name__)
 
@@ -163,6 +164,8 @@ def bounded_limit(default=100, maximum=200):
 
 def meetings_for_user(user_id, status=None, hosted=False):
     query = Meeting.query.options(*MEETING_LIST_OPTIONS)
+    # 2026-07-13: 사용자 마이페이지에서는 삭제/관리 정지된 모임을 노출하지 않도록 제외.
+    query = query.filter(~Meeting.status.in_(["cancelled", "suspended"]))
     if hosted:
         query = query.filter(Meeting.host_id == user_id)
     else:
@@ -173,13 +176,46 @@ def meetings_for_user(user_id, status=None, hosted=False):
     return query.order_by(Meeting.start_at.is_(None), Meeting.start_at.desc()).limit(bounded_limit()).all()
 
 
+def attach_schedule_sessions(meetings):
+    meeting_ids = sorted({meeting.id for meeting in meetings})
+    sessions_by_meeting = {meeting_id: [] for meeting_id in meeting_ids}
+    if meeting_ids:
+        rows = (
+            MeetingSession.query
+            .filter(MeetingSession.meeting_id.in_(meeting_ids))
+            .filter(MeetingSession.status == "scheduled")
+            .order_by(MeetingSession.meeting_id.asc(), MeetingSession.start_at.asc())
+            .all()
+        )
+        for row in rows:
+            sessions_by_meeting.setdefault(row.meeting_id, []).append(row)
+
+    now = kst_now()
+    result = []
+    for meeting in meetings:
+        data = meeting.to_dict()
+        sessions = sessions_by_meeting.get(meeting.id, [])
+        session_dicts = [session.to_dict() for session in sessions]
+        next_session = next((session for session in sessions if session.start_at >= now), None)
+        data["repeat_rule"] = meeting.repeat_rule
+        data["sessions"] = session_dicts
+        data["next_session"] = next_session.to_dict() if next_session else None
+        result.append(data)
+    return result
+
+
 @user_bp.get("/me/meetings")
 @jwt_required()
 def my_meetings():
     user_id = int(get_jwt_identity())
-    hosted = [meeting.to_dict() for meeting in meetings_for_user(user_id, hosted=True)]
-    joined = [meeting.to_dict() for meeting in meetings_for_user(user_id, status="approved")]
-    pending = [meeting.to_dict() for meeting in meetings_for_user(user_id, status="pending")]
+    hosted_items = meetings_for_user(user_id, hosted=True)
+    joined_items = meetings_for_user(user_id, status="approved")
+    pending_items = meetings_for_user(user_id, status="pending")
+    unique_items = {meeting.id: meeting for meeting in [*hosted_items, *joined_items, *pending_items]}
+    hydrated = {item["id"]: item for item in attach_schedule_sessions(unique_items.values())}
+    hosted = [hydrated[meeting.id] for meeting in hosted_items]
+    joined = [hydrated[meeting.id] for meeting in joined_items]
+    pending = [hydrated[meeting.id] for meeting in pending_items]
     return jsonify({"hosted": hosted, "joined": joined, "pending": pending})
 
 

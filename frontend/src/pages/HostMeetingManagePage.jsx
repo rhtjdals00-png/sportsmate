@@ -33,6 +33,7 @@ function HostMeetingManagePage() {
   const navigate = useNavigate();
   const [refreshKey, setRefreshKey] = useState(0);
   const [notice, setNotice] = useState({ title: "", content: "", is_pinned: true });
+  const [isDeletingMeeting, setIsDeletingMeeting] = useState(false);
   const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId]);
   const notices = useAsync(() => meetingApi.notices(meetingId), [meetingId, refreshKey]);
 
@@ -84,6 +85,26 @@ function HostMeetingManagePage() {
     }
   };
 
+  const deleteMeeting = async () => {
+    if (isDeletingMeeting) return;
+
+    const ok = window.confirm(
+      "이 모임을 삭제할까요?\n\n삭제하면 참여자에게 더 이상 표시되지 않으며, 모임에 접근할 수 없습니다."
+    );
+    if (!ok) return;
+
+    try {
+      setIsDeletingMeeting(true);
+      await meetingApi.cancel(meeting.id);
+      alert("모임이 삭제되었습니다.");
+      navigate("/mypage?panel=hosted");
+    } catch (err) {
+      console.error("Failed to delete meeting", err);
+      alert(err.response?.data?.message || "모임 삭제에 실패했습니다. 다시 시도해 주세요.");
+      setIsDeletingMeeting(false);
+    }
+  };
+
   const submitNotice = async (event) => {
     event.preventDefault();
     await meetingApi.createNotice(meeting.id, notice);
@@ -101,6 +122,8 @@ function HostMeetingManagePage() {
         setNotice={setNotice}
         submitNotice={submitNotice}
         toggleMeetingStatus={toggleMeetingStatus}
+        deleteMeeting={deleteMeeting}
+        isDeletingMeeting={isDeletingMeeting}
       />
     );
   }
@@ -189,7 +212,7 @@ function formatMeetingDate(dateStr) {
   }
 }
 
-function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading, setNotice, submitNotice, toggleMeetingStatus }) {
+function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading, setNotice, submitNotice, toggleMeetingStatus, deleteMeeting, isDeletingMeeting }) {
   const [activeTab, setActiveTab] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const fileInputRef = useRef(null);
@@ -418,6 +441,14 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
           <h1>방장 관리</h1>
           <span>모임 정보와 운영 메뉴, 공지 내용을 한 화면에서 편리하게 관리합니다.</span>
         </div>
+        <button
+          type="button"
+          className="desktop-host-delete-link"
+          onClick={deleteMeeting}
+          disabled={isDeletingMeeting}
+        >
+          {isDeletingMeeting ? "삭제 중..." : "모임 삭제"}
+        </button>
       </div>
       <div className="desktop-host-manage-layout">
         {/* 모임 기본 정보 카드 */}

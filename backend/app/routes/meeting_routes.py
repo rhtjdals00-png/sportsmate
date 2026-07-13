@@ -5,7 +5,7 @@ from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models import Attendance, ChatMessage, ChatRoom, Meeting, Notice, Participant, Review, Sport, User, Vote, VoteOption, VoteResponse
-from app.services.meeting_service import close_expired_one_time_meetings, create_meeting, create_review, join_meeting, list_meetings, update_application, update_meeting
+from app.services.meeting_service import close_expired_one_time_meetings, create_meeting, create_review, join_meeting, list_meeting_sessions, list_meetings, update_application, update_meeting
 from app.utils.timezone import parse_client_datetime
 
 meeting_bp = Blueprint("meetings", __name__)
@@ -107,6 +107,12 @@ def show(meeting_id):
     if meeting.host:
         data["host_summary"] = host_summary(meeting.host)
     return jsonify({"meeting": data})
+
+
+@meeting_bp.get("/<int:meeting_id>/sessions")
+def sessions(meeting_id):
+    items = list_meeting_sessions(meeting_id)
+    return jsonify({"items": [item.to_dict() for item in items]})
 
 
 @meeting_bp.patch("/<int:meeting_id>")
