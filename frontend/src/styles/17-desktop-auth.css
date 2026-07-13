@@ -681,6 +681,189 @@
   flex: 0 0 auto;
 }
 
+.desktop-suspended-support-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.46);
+  padding: 32px;
+}
+
+.desktop-suspended-support-modal__panel {
+  display: grid;
+  width: min(520px, 100%);
+  gap: 14px;
+  border: 1px solid #dbe5f3;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 22px;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+}
+
+.desktop-suspended-support-modal__panel header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 16px;
+}
+
+.desktop-suspended-support-modal__panel header span {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.desktop-suspended-support-modal__panel h2 {
+  margin: 6px 0;
+  color: #0f172a;
+  font-size: 24px;
+  font-weight: 950;
+}
+
+.desktop-suspended-support-modal__panel p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.55;
+}
+
+.desktop-suspended-support-modal__panel header button,
+.desktop-suspended-support-modal__actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dbe5f3;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #475569;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.desktop-suspended-support-modal__panel header button {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+}
+
+.desktop-suspended-support-modal__panel label {
+  display: grid;
+  gap: 8px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.desktop-suspended-support-modal__panel input,
+.desktop-suspended-support-modal__panel textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 11px 12px;
+  font: inherit;
+  font-weight: 650;
+  outline: none;
+}
+
+.desktop-suspended-support-modal__panel input:read-only {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.desktop-suspended-support-modal__panel textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.desktop-suspended-support-modal__message {
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8 !important;
+  padding: 10px 12px;
+  font-weight: 850 !important;
+}
+
+.desktop-suspended-support-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.desktop-suspended-support-modal__actions button {
+  min-height: 40px;
+  gap: 7px;
+  padding: 0 14px;
+}
+
+.desktop-suspended-support-modal__actions button[type="submit"] {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.desktop-suspended-support-modal__actions button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.desktop-support-success-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 190;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.36);
+  padding: 32px;
+}
+
+.desktop-support-success-modal__panel {
+  display: grid;
+  width: min(360px, 100%);
+  gap: 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 24px;
+  text-align: center;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+}
+
+.desktop-support-success-modal__panel h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.desktop-support-success-modal__panel p {
+  margin: 0 0 8px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.desktop-support-success-modal__panel button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  border: 0;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #ffffff;
+  padding: 0 18px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
 @keyframes desktopAuthToastIn {
   from {
     opacity: 0;

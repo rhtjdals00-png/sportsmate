@@ -7,6 +7,7 @@ from .notifications import Notification, PushSubscription
 from .engagement import Review, Notice, Vote, VoteOption, VoteResponse, Attendance
 from .moderation import Report
 from .chatbot import ChatbotSession, ChatbotMessage, ChatbotUserMemory
+from .support import SupportInquiry
 
 __all__ = [
     "TimestampMixin",
@@ -34,5 +35,6 @@ __all__ = [
     "ChatbotSession",
     "ChatbotMessage",
     "ChatbotUserMemory",
+    "SupportInquiry",
 ]
 

@@ -79,9 +79,71 @@ def ensure_chat_schema(app):
         app.logger.warning("Chat message schema compatibility check failed: %s", error)
 
 
+SUPPORT_INQUIRY_COLUMNS = {
+    "requester_email": "VARCHAR(255) NOT NULL DEFAULT ''",
+    "requester_name": "VARCHAR(120) NOT NULL DEFAULT ''",
+    "source": "VARCHAR(30) NOT NULL DEFAULT 'member'",
+    "category": "VARCHAR(40) NOT NULL DEFAULT 'general'",
+    "title": "VARCHAR(120) NOT NULL DEFAULT ''",
+    "content": "TEXT NOT NULL DEFAULT ''",
+    "attachment_url": "TEXT NOT NULL DEFAULT ''",
+    "attachment_name": "VARCHAR(255) NOT NULL DEFAULT ''",
+    "status": "VARCHAR(30) NOT NULL DEFAULT 'pending'",
+    "priority": "VARCHAR(20) NOT NULL DEFAULT 'normal'",
+    "admin_id": "INTEGER",
+    "admin_response": "TEXT NOT NULL DEFAULT ''",
+    "internal_note": "TEXT NOT NULL DEFAULT ''",
+    "resolved_at": "TIMESTAMP",
+    "created_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    "updated_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+}
+
+
+def ensure_support_schema(app):
+    try:
+        inspector = inspect(db.engine)
+        with db.engine.begin() as connection:
+            connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS support_inquiries (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    requester_email VARCHAR(255) NOT NULL DEFAULT '',
+                    requester_name VARCHAR(120) NOT NULL DEFAULT '',
+                    source VARCHAR(30) NOT NULL DEFAULT 'member',
+                    category VARCHAR(40) NOT NULL DEFAULT 'general',
+                    title VARCHAR(120) NOT NULL,
+                    content TEXT NOT NULL,
+                    attachment_url TEXT NOT NULL DEFAULT '',
+                    attachment_name VARCHAR(255) NOT NULL DEFAULT '',
+                    status VARCHAR(30) NOT NULL DEFAULT 'pending',
+                    priority VARCHAR(20) NOT NULL DEFAULT 'normal',
+                    admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    admin_response TEXT NOT NULL DEFAULT '',
+                    internal_note TEXT NOT NULL DEFAULT '',
+                    resolved_at TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            if inspector.has_table("support_inquiries"):
+                existing = {column["name"] for column in inspector.get_columns("support_inquiries")}
+                for name, column_type in SUPPORT_INQUIRY_COLUMNS.items():
+                    if name not in existing:
+                        connection.execute(text(f"ALTER TABLE support_inquiries ADD COLUMN {name} {column_type}"))
+                connection.execute(text("ALTER TABLE support_inquiries ALTER COLUMN user_id DROP NOT NULL"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_support_inquiries_user_id ON support_inquiries(user_id)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_support_inquiries_source ON support_inquiries(source)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_support_inquiries_admin_id ON support_inquiries(admin_id)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_support_inquiries_status ON support_inquiries(status)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_support_inquiries_category ON support_inquiries(category)"))
+    except Exception as error:
+        app.logger.warning("Support inquiry schema compatibility check failed: %s", error)
+
+
 def ensure_chat_message_columns(app):
     ensure_chat_schema(app)
     ensure_chatbot_schema(app)
+    ensure_support_schema(app)
 
 CHATBOT_MEMORY_COLUMNS = {
     "preferred_sports": "TEXT NOT NULL DEFAULT ''",

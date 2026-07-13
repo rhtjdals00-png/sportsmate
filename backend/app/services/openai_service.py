@@ -53,7 +53,8 @@ Schema:
   "sport": string | "",
   "use_profile": boolean,
   "time_hint": string | "",
-  "keywords": string[]
+  "keywords": string[],
+  "action_intents": string[]
 }
 Rules:
 - "내 모임", "내 일정", "참여한 모임", "신청한 모임" mean schedule, not recommend.
@@ -61,6 +62,14 @@ Rules:
 - "상암 주변", "상암 주변에", "상암쪽", "상암 근처에서" all mean recommend with location_query "상암" and radius_km 6.
 - If the user explicitly says a place or region, put it in location_query.
 - Do not use profile/default location unless the user asks for personalized or matched recommendations.
+- Fill action_intents with zero or more of:
+  support, create_meeting, notifications, joined_meetings, profile, chat.
+- "문의하고 싶어", "고객센터", "관리자에게 메시지" => support.
+- "모임 만들고 싶어", "모임 개설", "모집글 올리기" => create_meeting.
+- "알림 확인", "공지 보고 싶어" => notifications.
+- "참여 중인 모임", "내 모임 보기" => joined_meetings.
+- "내 정보", "프로필" => profile.
+- "채팅방", "채팅 확인" => chat.
 """.strip()
 
     input_text = "\n".join([
@@ -110,6 +119,7 @@ Do not invent meeting names, times, participants, locations, or user preferences
 Keep answers concise, practical, and friendly. Prefer 2-5 short lines.
 Do not expose internal evidence labels such as "참고한 정보", "DB context", "fallback", or "context".
 When recommending meetings, explain briefly why they match the user.
+When the recommended_meetings list is empty, never recommend unrelated meetings. Say no matching meetings were found and suggest broadening the condition.
 Do not sound like a report. Sound like a real counselor continuing the conversation.
 """.strip()
 

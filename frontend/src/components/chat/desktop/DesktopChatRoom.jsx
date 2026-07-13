@@ -27,7 +27,7 @@ import {
   BellOff
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import EmptyState from "../../common/EmptyState.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import { chatApi } from "../../../api/chatApi";
@@ -429,6 +429,7 @@ function VoteDeadlinePicker({ value, onChange }) {
 
 function DesktopChatRoom() {
   const { chatRoomId, directRoomId } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const isDirectChat = Boolean(directRoomId);
@@ -495,6 +496,7 @@ function DesktopChatRoom() {
   const longPressTimerRef = useRef(null);
   const dragReplyRef = useRef(null);
   const photoDragRef = useRef(null);
+  const unreadJumpDoneRef = useRef(false);
 
   const messages = useAsync(() => chatRoomId ? chatApi.messages(chatRoomId) : Promise.resolve(null), [chatRoomId, refreshKey]);
   const directMessages = useAsync(() => directRoomId ? chatApi.directMessages(directRoomId) : Promise.resolve(null), [directRoomId, directRefreshKey]);
@@ -524,6 +526,8 @@ function DesktopChatRoom() {
   };
   const activeMessages = isDirectChat ? directMessages : messages;
   const room = activeMessages.data?.room;
+  const shouldJumpToUnread = !isDirectChat && new URLSearchParams(location.search).get("unread") === "1";
+  const firstUnreadMessageId = room?.first_unread_message_id;
   const directOtherUser = isDirectChat ? room?.other_user : null;
   const meeting = room?.meeting;
   const renderedMessages = activeMessages.data?.items || [];
@@ -565,15 +569,31 @@ function DesktopChatRoom() {
     setSearchQuery("");
     setReplyTarget(null);
     setActionMenuOpen(false);
-  }, [isDirectChat, chatRoomId, directRoomId]);
+    unreadJumpDoneRef.current = false;
+  }, [isDirectChat, chatRoomId, directRoomId, location.search]);
 
   useLayoutEffect(() => {
     if (!messageListRef.current || !activeMessages.data?.items) return;
+    if (shouldJumpToUnread && firstUnreadMessageId && !unreadJumpDoneRef.current) return;
     messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     setShowLatestJump(false);
     setRoomRefreshKey((value) => value + 1);
     if (isDirectChat) setDirectRoomRefreshKey((value) => value + 1);
-  }, [activeMessages.data?.items?.length, pinnedNotice?.id, isDirectChat]);
+  }, [activeMessages.data?.items?.length, pinnedNotice?.id, isDirectChat, shouldJumpToUnread, firstUnreadMessageId]);
+
+  useEffect(() => {
+    if (!shouldJumpToUnread || !firstUnreadMessageId || unreadJumpDoneRef.current) return;
+    const timer = window.setTimeout(() => {
+      const node = messageRefs.current[firstUnreadMessageId];
+      if (!node) return;
+      node.scrollIntoView({ block: "center", behavior: "smooth" });
+      setFocusedMessageId(firstUnreadMessageId);
+      setShowLatestJump(true);
+      unreadJumpDoneRef.current = true;
+      window.setTimeout(() => setFocusedMessageId((current) => current === firstUnreadMessageId ? null : current), 1800);
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [shouldJumpToUnread, firstUnreadMessageId, visibleMessages.length]);
 
   const scrollToLatestMessage = (behavior = "smooth") => {
     const node = messageListRef.current;

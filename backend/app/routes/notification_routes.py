@@ -252,6 +252,33 @@ def read_notification(notification_id):
     return jsonify({"notification": item.to_dict()})
 
 
+@notification_bp.patch("/notifications/read-all")
+@jwt_required()
+def read_all_notifications():
+    user_id = int(get_jwt_identity())
+    updated = (
+        Notification.query
+        .filter_by(user_id=user_id, is_read=False)
+        .update({"is_read": True}, synchronize_session=False)
+    )
+    db.session.commit()
+    return jsonify({"updated": updated})
+
+
+@notification_bp.patch("/notifications/chatrooms/<int:room_id>/read")
+@jwt_required()
+def read_chat_room_notifications(room_id):
+    user_id = int(get_jwt_identity())
+    updated = (
+        Notification.query
+        .filter_by(user_id=user_id, type="chat", is_read=False)
+        .filter(Notification.link_url == f"/chats/{room_id}")
+        .update({"is_read": True}, synchronize_session=False)
+    )
+    db.session.commit()
+    return jsonify({"updated": updated, "room_id": room_id})
+
+
 @notification_bp.get("/push-public-key")
 def push_public_key():
     return jsonify({"publicKey": current_app.config.get("VAPID_PUBLIC_KEY", "")})

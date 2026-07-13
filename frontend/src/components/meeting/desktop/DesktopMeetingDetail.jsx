@@ -89,6 +89,12 @@ function MeetingLocationMap({ clientId, meeting }) {
           },
         });
         markerRef.current = new maps.Marker({ map: mapRef.current, position });
+        window.setTimeout(() => {
+          if (!disposed && mapRef.current) {
+            maps.Event.trigger(mapRef.current, "resize");
+            mapRef.current.setCenter(position);
+          }
+        }, 80);
         setStatus("ready");
       })
       .catch(() => setStatus("error"));
@@ -120,7 +126,7 @@ function MeetingLocationMap({ clientId, meeting }) {
   }
 
   return (
-    <div className="desktop-meeting-location-map" ref={mapElementRef}>
+    <div className="desktop-meeting-location-map is-live" ref={mapElementRef}>
       {status === "loading" && <span>지도를 불러오는 중입니다.</span>}
       {status === "error" && <span>지도를 불러오지 못했습니다.</span>}
     </div>

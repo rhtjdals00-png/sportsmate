@@ -185,13 +185,15 @@ def list_meetings(params, current_user_id=None):
     longitude = _float_param(params, "lng") or _float_param(params, "longitude")
     if latitude is not None and longitude is not None:
         radius_km = _float_param(params, "radius_km") or _float_param(params, "radius")
+        has_keyword_filter = bool(params.get("keyword"))
         candidates = query.order_by(Meeting.start_at.is_(None), Meeting.start_at.asc()).limit(80).all()
         for meeting in candidates:
             meeting._distance_km = _distance_km(latitude, longitude, meeting.latitude, meeting.longitude)
         if radius_km is not None:
             candidates = [
                 meeting for meeting in candidates
-                if meeting._distance_km is not None and meeting._distance_km <= radius_km
+                if (meeting._distance_km is not None and meeting._distance_km <= radius_km)
+                or (has_keyword_filter and meeting._distance_km is None)
             ]
         candidates.sort(key=lambda meeting: meeting._distance_km if meeting._distance_km is not None else 999999)
         return candidates[:limit]
