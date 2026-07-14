@@ -70,7 +70,22 @@ function MobileNotifications() {
     if (item.link_url) {
       navigate(item.link_url);
     } else {
-      alert(`${item.title}\n\n${item.message}`);
+      const isNotice = [
+        "notice",
+        "admin_broadcast",
+        "admin_message",
+        "account_suspension",
+        "account_unsuspension",
+        "broadcast",
+        "admin",
+        "system"
+      ].includes(item.type);
+
+      if (isNotice) {
+        navigate("/support?tab=messages");
+      } else {
+        alert(`${item.title}\n\n${item.message}`);
+      }
     }
   };
 

@@ -68,10 +68,10 @@ function MobileHeader({ title, showLogo = false, actions = null, showBack = true
           <ArrowLeft size={20} />
         </button>
       ) : null}
-      <Link to="/" className="mobile-header__brand">
+      <div className="mobile-header__brand" style={{ cursor: 'default' }}>
         {showLogo && <img src="/images/logo.png" alt="SportsMate" />}
         <span>{resolvedTitle}</span>
-      </Link>
+      </div>
       {actions || (
         <div className="mobile-header__actions">
           <button

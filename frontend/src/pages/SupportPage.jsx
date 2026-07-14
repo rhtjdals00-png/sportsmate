@@ -8,6 +8,7 @@ import { notificationApi } from "../api/notificationApi";
 import { supportApi } from "../api/supportApi";
 import { useAsync } from "../hooks/useAsync";
 import { useResponsive } from "../hooks/useResponsive";
+import MobileSupportPage from "../components/support/mobile/MobileSupportPage.jsx";
 
 const ADMIN_NOTIFICATION_TYPES = new Set([
   "admin_broadcast",
@@ -322,12 +323,7 @@ function SupportPage() {
   );
 
   if (isMobile) {
-    return (
-      <>
-        <MobileHeader title="운영 메시지함" />
-        {page}
-      </>
-    );
+    return <MobileSupportPage />;
   }
 
   return page;

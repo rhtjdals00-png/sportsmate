@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useResponsive } from "../hooks/useResponsive";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import MobileBottomNavigation from "../components/layout/mobile/MobileBottomNavigation.jsx";
 
 function AdminLayout() {
   const location = useLocation();
@@ -68,6 +69,7 @@ function AdminLayout() {
         <main className="mobile-main">
           <Outlet />
         </main>
+        <MobileBottomNavigation />
       </div>
     );
   }

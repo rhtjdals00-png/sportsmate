@@ -40,10 +40,10 @@ function MobileAdminReportsPage() {
       if (res && res.items) {
         const formatted = res.items.map((r, index) => ({
           id: r.id || index + 1,
-          type: r.reason || "기타",
-          target: r.target_name || r.target_type || `대상 #${r.target_id || ""}`,
+          type: r.target_type === 'meeting' ? '모임' : r.target_type === 'user' ? '사용자' : r.target_type || '기타',
+          target: r.target_name || `대상 #${r.target_id || ""}`,
           reporter: r.reporter_name || "신고자",
-          reason: r.reason_detail || "상세 사유가 제공되지 않았습니다.",
+          reason: r.reason || "상세 사유가 제공되지 않았습니다.",
           date: r.created_at ? new Date(r.created_at).toLocaleDateString().replace(/\s/g, "").replace(/\.$/, "") : "2023.10.27",
           status: r.status === "pending" || r.status === "대기 중" ? "대기 중" : "처리 완료"
         }));

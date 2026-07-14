@@ -1,4 +1,4 @@
-import { ArrowLeft, Bot, MessageSquare, Plus, Send, Trash2, User, Edit2, Check, X, CalendarDays, ArrowRight, Search } from "lucide-react";
+import { ArrowLeft, Bot, MessageSquare, Plus, Send, Trash2, User, Edit2, Check, X, CalendarDays, ArrowRight, Search, Headphones } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { chatbotApi } from "../../../api/chatbotApi";
@@ -43,6 +43,7 @@ function getMessageActions(message) {
 function ChatbotActionIcon({ type }) {
   if (type === "schedule") return <CalendarDays size={15} />;
   if (type === "meeting_search") return <Search size={15} />;
+  if (type === "support") return <Headphones size={15} />;
   return <ArrowRight size={15} />;
 }
 
@@ -256,6 +257,11 @@ function MobileChatbotPage() {
     "한강 근처 러닝 모임 찾아줘",
   ];
 
+  const quickActions = [
+    { type: "schedule", label: "참여 중인 모임", href: "/mypage?panel=joined" },
+    { type: "support", label: "고객센터 문의하기", href: "/support" },
+  ];
+
   return (
     <div className="mobile-chatbot-container">
       {/* 모바일 헤더 */}
@@ -285,6 +291,20 @@ function MobileChatbotPage() {
             </div>
             <h3>스포츠메이트 AI 챗봇</h3>
             <p>스포츠 모임 정보, 매칭, 장소 추천 등 궁금한 점을 질문해보세요!</p>
+            <div className="mobile-chatbot-quick-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center', margin: '20px 0 10px 0' }}>
+              {quickActions.map((action) => (
+                <Link key={action.label} to={action.href} style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  background: '#f8fafc', border: '1px solid #e2e8f0',
+                  padding: '8px 12px', borderRadius: '20px',
+                  fontSize: '13px', color: '#334155', textDecoration: 'none',
+                  fontWeight: '600'
+                }}>
+                  <ChatbotActionIcon type={action.type} />
+                  <span>{action.label}</span>
+                </Link>
+              ))}
+            </div>
             <div className="mobile-chatbot-quick-prompts">
               {quickPrompts.map((prompt) => (
                 <button key={prompt} type="button" onClick={() => setInputText(prompt)}>

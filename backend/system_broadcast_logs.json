@@ -77,14 +77,21 @@
     "send_push": true
   },
   {
-    "timestamp": "2026-07-09 17:30:23",
-    "admin": "ms",
-    "title": "배고프다",
-    "message": "ㅇㅇㅇ",
     "timestamp": "2026-07-09 17:27:59",
     "admin": "임승찬",
     "title": "님들 ㅎㅇㅋㅋ",
     "message": "ㅎㅇㅋㅋ",
+    "link_url": "/notifications",
+    "target_type": "all",
+    "target_value": "",
+    "target_count": 13,
+    "send_push": true
+  },
+  {
+    "timestamp": "2026-07-14 11:02:34",
+    "admin": "임승찬",
+    "title": "님들 ㅎㅇㅋㅋ",
+    "message": "ㅎㅇ요",
     "link_url": "/notifications",
     "target_type": "all",
     "target_value": "",

@@ -1,5 +1,5 @@
-import { Check, MapPin, Pencil, Search, X, CheckCircle2, CircleAlert, LockKeyhole, XCircle } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Check, MapPin, Pencil, Search, X, CheckCircle2, CircleAlert, LockKeyhole, XCircle, Camera } from "lucide-react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { userApi } from "../../../api/userApi";
 import { sportApi } from "../../../api/sportApi";
@@ -129,6 +129,19 @@ function MobileProfileEdit() {
   const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
   const [withdrawText, setWithdrawText] = useState("");
   const [withdrawStatus, setWithdrawStatus] = useState("idle");
+  
+  const fileInputRef = useRef(null);
+
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      update("profile_image_url", reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     Promise.all([sportApi.categories(), sportApi.sports()])
@@ -397,7 +410,38 @@ function MobileProfileEdit() {
         </div>
         <div className="mobile-profile-top-content">
           <div className="mobile-profile-preview">
-            <img src={form.profile_image_url || "/images/logo.png"} alt="프로필 미리보기" />
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <img src={form.profile_image_url || "/images/logo.png"} alt="프로필 미리보기" style={{ cursor: 'pointer' }} onClick={() => fileInputRef.current?.click()} />
+              <button 
+                type="button" 
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  position: 'absolute',
+                  bottom: '0',
+                  right: '0',
+                  background: '#4f46e5',
+                  color: 'white',
+                  border: '2px solid white',
+                  borderRadius: '50%',
+                  width: '28px',
+                  height: '28px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: 0
+                }}
+              >
+                <Camera size={14} />
+              </button>
+            </div>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              style={{ display: 'none' }} 
+              accept="image/*" 
+              onChange={handleImageChange} 
+            />
             <h2>{form.nickname || "닉네임"}</h2>
             <p>{savedIntro}</p>
           </div>
