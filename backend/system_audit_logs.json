@@ -5,5 +5,26 @@
     "action_type": "개별 알림 발송",
     "description": "회원 고성민(ID 22)에게 개별 알림을 전송했습니다. 내용: 'dsadsasaddas...'",
     "target_id": 22
+  },
+  {
+    "timestamp": "2026-07-10 17:38:42",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 엄준식(ID 21)의 계정 정지 처리 작업을 수행했습니다.",
+    "target_id": 21
+  },
+  {
+    "timestamp": "2026-07-10 17:38:47",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 엄준식(ID 21)의 계정 활성화 상태 변경 작업을 수행했습니다.",
+    "target_id": 21
+  },
+  {
+    "timestamp": "2026-07-10 17:39:54",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 엄준식(ID 21)의 권한을 admin(으)로 변경, 회원 개인 정보 수정 작업을 수행했습니다.",
+    "target_id": 21
   }
 ]
