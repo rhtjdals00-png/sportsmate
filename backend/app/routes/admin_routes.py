@@ -1,10 +1,13 @@
+import os
+import json
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models import ChatMessage, ChatRoom, DirectChatMessage, DirectChatRoom, Meeting, Report, User, Participant, Sport
 from app.utils.timezone import kst_now, parse_client_datetime
+from app.utils.audit import log_admin_action
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -943,6 +946,7 @@ def update_support_inquiry(inquiry_id):
     from app.models import SupportInquiry
     from app.services.notification_service import create_notification
     from app.utils.audit import log_admin_action
+    from app.utils.timezone import to_kst_iso, kst_now
 
     admin_user = _require_admin_user()
     if not admin_user:
@@ -977,7 +981,6 @@ def update_support_inquiry(inquiry_id):
     inquiry.admin_id = admin_user.id
 
     import json
-    from app.utils.timezone import to_kst_iso, kst_now
     try:
         history_list = json.loads(inquiry.reply_history or "[]")
     except Exception:
@@ -1018,3 +1021,144 @@ def update_support_inquiry(inquiry_id):
     )
 
     return jsonify({"item": inquiry.to_dict(include_internal=True), "message": "문의 처리 내용이 저장되었습니다."})
+
+
+# --- System Notice Management ---
+SYSTEM_NOTICES_FILE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "system_notices.json")
+
+def load_system_notices():
+    import json
+    if os.path.exists(SYSTEM_NOTICES_FILE_PATH):
+        try:
+            with open(SYSTEM_NOTICES_FILE_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return []
+
+def save_system_notices(notices):
+    import json
+    try:
+        with open(SYSTEM_NOTICES_FILE_PATH, "w", encoding="utf-8") as f:
+            json.dump(notices, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False
+
+@admin_bp.get("/notices")
+@jwt_required()
+def get_admin_notices():
+    current_user_id = int(get_jwt_identity())
+    admin_user = User.query.get(current_user_id)
+    if not admin_user or admin_user.role not in ["superadmin", "admin"]:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+    notices = load_system_notices()
+    # Sort: is_pinned (True first) then created_at (newest first)
+    notices.sort(key=lambda x: (1 if x.get("is_pinned") else 0, x.get("created_at", "")), reverse=True)
+    return jsonify(notices)
+
+@admin_bp.post("/notices")
+@jwt_required()
+def create_admin_notice():
+    current_user_id = int(get_jwt_identity())
+    admin_user = User.query.get(current_user_id)
+    if not admin_user or admin_user.role not in ["superadmin", "admin"]:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+
+    data = request.get_json() or {}
+    title = (data.get("title") or "").strip()
+    content = (data.get("content") or "").strip()
+    is_pinned = bool(data.get("is_pinned", False))
+
+    if not title or not content:
+        return jsonify({"message": "제목과 내용을 모두 입력해주세요."}), 400
+
+    import time
+    from app.utils.timezone import kst_now
+    
+    notices = load_system_notices()
+    new_notice = {
+        "id": int(time.time() * 1000),
+        "title": title,
+        "content": content,
+        "is_pinned": is_pinned,
+        "author": admin_user.nickname or admin_user.name or admin_user.email,
+        "created_at": kst_now().isoformat()
+    }
+    notices.append(new_notice)
+    save_system_notices(notices)
+
+    log_admin_action(
+        admin_name=new_notice["author"],
+        action_type="공지사항 등록",
+        description=f"공지사항 '{title}'을 등록했습니다."
+    )
+    return jsonify({"item": new_notice, "message": "공지사항이 성공적으로 등록되었습니다."}), 201
+
+@admin_bp.put("/notices/<int:notice_id>")
+@jwt_required()
+def update_admin_notice(notice_id):
+    current_user_id = int(get_jwt_identity())
+    admin_user = User.query.get(current_user_id)
+    if not admin_user or admin_user.role not in ["superadmin", "admin"]:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+
+    data = request.get_json() or {}
+    title = (data.get("title") or "").strip()
+    content = (data.get("content") or "").strip()
+    is_pinned = bool(data.get("is_pinned", False))
+
+    if not title or not content:
+        return jsonify({"message": "제목과 내용을 모두 입력해주세요."}), 400
+
+    notices = load_system_notices()
+    found_notice = None
+    for n in notices:
+        if n.get("id") == notice_id:
+            found_notice = n
+            break
+
+    if not found_notice:
+        return jsonify({"message": "존재하지 않는 공지사항입니다."}), 404
+
+    found_notice["title"] = title
+    found_notice["content"] = content
+    found_notice["is_pinned"] = is_pinned
+    save_system_notices(notices)
+
+    admin_name = admin_user.nickname or admin_user.name or admin_user.email
+    log_admin_action(
+        admin_name=admin_name,
+        action_type="공지사항 수정",
+        description=f"공지사항 '{title}'을 수정했습니다."
+    )
+    return jsonify({"item": found_notice, "message": "공지사항이 수정되었습니다."})
+
+@admin_bp.delete("/notices/<int:notice_id>")
+@jwt_required()
+def delete_admin_notice(notice_id):
+    current_user_id = int(get_jwt_identity())
+    admin_user = User.query.get(current_user_id)
+    if not admin_user or admin_user.role not in ["superadmin", "admin"]:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+
+    notices = load_system_notices()
+    notice_to_delete = None
+    for n in notices:
+        if n.get("id") == notice_id:
+            notice_to_delete = n
+            break
+
+    if not notice_to_delete:
+        return jsonify({"message": "존재하지 않는 공지사항입니다."}), 404
+
+    notices = [n for n in notices if n.get("id") != notice_id]
+    save_system_notices(notices)
+
+    admin_name = admin_user.nickname or admin_user.name or admin_user.email
+    log_admin_action(
+        admin_name=admin_name,
+        action_type="공지사항 삭제",
+        description=f"공지사항 '{notice_to_delete.get('title')}'을 삭제했습니다."
+    )
+    return jsonify({"message": "공지사항이 삭제되었습니다."})

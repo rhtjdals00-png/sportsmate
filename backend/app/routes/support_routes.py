@@ -7,6 +7,22 @@ from app.services.notification_service import create_notification
 
 support_bp = Blueprint("support", __name__)
 
+@support_bp.get("/notices")
+def get_public_notices():
+    import json
+    import os
+    file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "system_notices.json")
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                notices = json.load(f)
+                # Sort: is_pinned (True first) then created_at (newest first)
+                notices.sort(key=lambda x: (1 if x.get("is_pinned") else 0, x.get("created_at", "")), reverse=True)
+                return jsonify({"items": notices})
+        except Exception:
+            pass
+    return jsonify({"items": []})
+
 CATEGORY_LABELS = {
     "account": "계정",
     "meeting": "모임",

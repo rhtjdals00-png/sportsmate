@@ -21,5 +21,9 @@ export const adminApi = {
   getBroadcastLogs: () => apiClient.get(`/admin/broadcast/logs?_=${Date.now()}`).then((res) => res.data),
   getAuditLogs: () => apiClient.get(`/admin/audit-logs?_=${Date.now()}`).then((res) => res.data),
   supportInquiries: (params = {}) => apiClient.get(`/admin/support/inquiries?_=${Date.now()}`, { params }).then((res) => res.data),
-  updateSupportInquiry: (inquiryId, data) => apiClient.patch(`/admin/support/inquiries/${inquiryId}`, data).then((res) => res.data)
+  updateSupportInquiry: (inquiryId, data) => apiClient.patch(`/admin/support/inquiries/${inquiryId}`, data).then((res) => res.data),
+  getNotices: () => apiClient.get(`/admin/notices?_=${Date.now()}`).then((res) => res.data),
+  createNotice: (data) => apiClient.post("/admin/notices", data).then((res) => res.data),
+  updateNotice: (noticeId, data) => apiClient.put(`/admin/notices/${noticeId}`, data).then((res) => res.data),
+  deleteNotice: (noticeId) => apiClient.delete(`/admin/notices/${noticeId}`).then((res) => res.data)
 };

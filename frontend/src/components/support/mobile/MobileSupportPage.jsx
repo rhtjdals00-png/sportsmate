@@ -1,22 +1,11 @@
-import { BellRing, Headphones, ImagePlus, Megaphone, Send, ShieldCheck, X, MessageSquareText, FileText } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Headphones, ImagePlus, Send, X, FileText, Megaphone, ChevronDown, ChevronUp } from "lucide-react";
+import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import EmptyState from "../../common/EmptyState.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
-import { notificationApi } from "../../../api/notificationApi";
 import { supportApi } from "../../../api/supportApi";
 import { useAsync } from "../../../hooks/useAsync";
-
-const ADMIN_NOTIFICATION_TYPES = new Set([
-  "admin_broadcast",
-  "admin_message",
-  "account_suspension",
-  "account_unsuspension",
-  "broadcast",
-  "admin",
-  "system"
-]);
 
 const CATEGORIES = [
   { value: "general", label: "일반 문의" },
@@ -34,9 +23,7 @@ const STATUS_LABELS = {
   closed: "종료"
 };
 
-function isAdminNotification(item) {
-  return ADMIN_NOTIFICATION_TYPES.has(item?.type);
-}
+
 
 function formatSupportTime(value) {
   if (!value) return "";
@@ -49,13 +36,7 @@ function formatSupportTime(value) {
   }).format(new Date(value));
 }
 
-function supportTypeLabel(type) {
-  if (type === "admin_broadcast" || type === "broadcast") return "운영 공지";
-  if (type === "admin_message") return "관리자 메시지";
-  if (type === "account_suspension" || type === "account_unsuspension") return "계정 안내";
-  if (type === "system") return "시스템 안내";
-  return "운영 안내";
-}
+
 
 function categoryLabel(value) {
   return CATEGORIES.find((item) => item.value === value)?.label || "일반 문의";
@@ -64,30 +45,26 @@ function categoryLabel(value) {
 function MobileSupportPage() {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
-  const initialTab = searchParams.get("tab") || "inquiry";
+  const initialTab = searchParams.get("tab") || "notice";
   
-  const [activeTab, setActiveTab] = useState(initialTab); // inquiry | history | messages
+  const [activeTab, setActiveTab] = useState(initialTab); // notice | inquiry | history
   const [refreshKey, setRefreshKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [form, setForm] = useState({ category: "general", title: "", content: "", attachment_url: "", attachment_name: "" });
+  const [expandedNotice, setExpandedNotice] = useState(null);
+  const [expandedInquiry, setExpandedInquiry] = useState(null);
+  const [noticePage, setNoticePage] = useState(1);
   
-  const notifications = useAsync(() => notificationApi.list(), [refreshKey]);
   const inquiries = useAsync(() => supportApi.inquiries(), [refreshKey]);
-  const supportItems = useMemo(() => (notifications.data?.items || []).filter(isAdminNotification), [notifications.data]);
-  const unreadCount = supportItems.filter((item) => !item.is_read).length;
+  const notices = useAsync(() => supportApi.getNotices(), [refreshKey]);
+  
   const inquiryItems = inquiries.data?.items || [];
-
-  const markRead = async (item) => {
-    if (!item?.id || item.is_read) return;
-    try {
-      await notificationApi.read(item.id);
-      setRefreshKey((value) => value + 1);
-      window.dispatchEvent(new Event("notifications_updated"));
-    } catch {
-      setMessage("알림 읽음 처리에 실패했습니다. 잠시 후 다시 시도해주세요.");
-    }
-  };
+  const noticeItems = notices.data?.items || [];
+  
+  const noticesPerPage = 10;
+  const totalNoticePages = Math.ceil(noticeItems.length / noticesPerPage);
+  const paginatedNotices = noticeItems.slice((noticePage - 1) * noticesPerPage, noticePage * noticesPerPage);
 
   const updateForm = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -146,6 +123,12 @@ function MobileSupportPage() {
       {/* 모바일 탭 네비게이션 */}
       <nav style={{ display: 'flex', background: '#fff', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: '56px', zIndex: 10 }}>
         <button 
+          onClick={() => setActiveTab("notice")} 
+          style={{ flex: 1, padding: '14px 0', fontSize: '14px', fontWeight: activeTab === 'notice' ? 'bold' : '500', color: activeTab === 'notice' ? '#4f46e5' : '#64748b', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', outline: 'none', borderBottom: activeTab === 'notice' ? '2px solid #4f46e5' : '2px solid transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+        >
+          <Megaphone size={16} /> 공지사항
+        </button>
+        <button 
           onClick={() => setActiveTab("inquiry")} 
           style={{ flex: 1, padding: '14px 0', fontSize: '14px', fontWeight: activeTab === 'inquiry' ? 'bold' : '500', color: activeTab === 'inquiry' ? '#4f46e5' : '#64748b', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', outline: 'none', borderBottom: activeTab === 'inquiry' ? '2px solid #4f46e5' : '2px solid transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
         >
@@ -155,20 +138,7 @@ function MobileSupportPage() {
           onClick={() => setActiveTab("history")} 
           style={{ flex: 1, padding: '14px 0', fontSize: '14px', fontWeight: activeTab === 'history' ? 'bold' : '500', color: activeTab === 'history' ? '#4f46e5' : '#64748b', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', outline: 'none', borderBottom: activeTab === 'history' ? '2px solid #4f46e5' : '2px solid transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
         >
-          <FileText size={16} /> 내 문의 내역
-        </button>
-        <button 
-          onClick={() => setActiveTab("messages")} 
-          style={{ flex: 1, padding: '14px 0', fontSize: '14px', fontWeight: activeTab === 'messages' ? 'bold' : '500', color: activeTab === 'messages' ? '#4f46e5' : '#64748b', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', outline: 'none', borderBottom: activeTab === 'messages' ? '2px solid #4f46e5' : '2px solid transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', position: 'relative' }}
-        >
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <ShieldCheck size={16} /> 운영 메시지
-            {unreadCount > 0 && (
-              <span style={{ position: 'absolute', top: '-10px', right: '-24px', background: '#ef4444', color: '#fff', fontSize: '10px', fontWeight: 'bold', padding: '2px 5px', borderRadius: '10px', lineHeight: 1 }}>
-                {unreadCount}
-              </span>
-            )}
-          </div>
+          <FileText size={16} /> 내 문의 내역 ({inquiryItems.length})
         </button>
       </nav>
 
@@ -252,43 +222,94 @@ function MobileSupportPage() {
               <LoadingCards count={2} />
             ) : inquiryItems.length ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {inquiryItems.map((item) => (
-                  <article key={item.id} style={{ background: '#fff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', background: '#f1f5f9', padding: '4px 8px', borderRadius: '6px' }}>{categoryLabel(item.category)}</span>
-                        <time style={{ fontSize: '12px', color: '#94a3b8' }}>{formatSupportTime(item.created_at)}</time>
+                {inquiryItems.map((item) => {
+                  const isExpanded = expandedInquiry === item.id;
+                  return (
+                    <article
+                      key={item.id}
+                      style={{
+                        background: '#fff',
+                        padding: '16px',
+                        borderRadius: '12px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onClick={() => setExpandedInquiry(isExpanded ? null : item.id)}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                          <span style={{ 
+                            fontSize: '11px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '6px',
+                            background: '#f1f5f9',
+                            color: '#64748b',
+                            flexShrink: 0
+                          }}>
+                            {categoryLabel(item.category)}
+                          </span>
+                          <strong style={{ fontSize: '14px', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</strong>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0, marginLeft: '8px' }}>
+                          <span style={{ 
+                            fontSize: '11px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '6px',
+                            background: item.status === 'resolved' ? '#dcfce7' : '#fef3c7',
+                            color: item.status === 'resolved' ? '#16a34a' : '#d97706',
+                            flexShrink: 0
+                          }}>
+                            {STATUS_LABELS[item.status] || item.status}
+                          </span>
+                          <time style={{ fontSize: '11px', color: '#94a3b8' }}>{formatSupportTime(item.created_at)}</time>
+                          {isExpanded ? <ChevronUp size={14} color="#94a3b8" /> : <ChevronDown size={14} color="#94a3b8" />}
+                        </div>
                       </div>
-                      <span style={{ 
-                        fontSize: '11px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '6px',
-                        background: item.status === 'resolved' ? '#dcfce7' : item.status === 'in_progress' ? '#fef3c7' : '#f1f5f9',
-                        color: item.status === 'resolved' ? '#16a34a' : item.status === 'in_progress' ? '#d97706' : '#64748b'
-                      }}>
-                        {STATUS_LABELS[item.status] || item.status}
-                      </span>
-                    </div>
-                    <strong style={{ display: 'block', fontSize: '15px', color: '#1e293b', marginBottom: '6px' }}>{item.title}</strong>
-                    <p style={{ fontSize: '14px', color: '#475569', lineHeight: 1.5, marginBottom: '12px' }}>{item.content}</p>
-                    
-                    {item.attachment_url && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px', background: '#f8fafc', borderRadius: '8px', marginBottom: '12px' }}>
-                        <ImagePlus size={14} color="#94a3b8" />
-                        <span style={{ fontSize: '12px', color: '#64748b' }}>첨부 이미지 포함</span>
-                      </div>
-                    )}
-                    
-                    {item.admin_response ? (
-                      <div style={{ background: '#eef2ff', padding: '12px', borderRadius: '8px', borderLeft: '3px solid #4f46e5' }}>
-                        <span style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#4f46e5', marginBottom: '4px' }}>관리자 답변</span>
-                        <p style={{ fontSize: '13px', color: '#334155', margin: 0, lineHeight: 1.5 }}>{item.admin_response}</p>
-                      </div>
-                    ) : (
-                       <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
-                         <span style={{ fontSize: '12px', color: '#94a3b8' }}>아직 관리자 답변이 등록되지 않았습니다.</span>
-                       </div>
-                    )}
-                  </article>
-                ))}
+
+                      {isExpanded && (
+                        <div 
+                          style={{ 
+                            marginTop: '12px', 
+                            paddingTop: '12px', 
+                            borderTop: '1px solid #f1f5f9', 
+                            fontSize: '13px', 
+                            color: '#475569', 
+                            lineHeight: 1.5 
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div style={{ marginBottom: '10px' }}>
+                            <span style={{ display: 'block', fontSize: '11px', color: '#94a3b8', fontWeight: 'bold', marginBottom: '2px' }}>문의 유형</span>
+                            <span style={{ color: '#334155' }}>{categoryLabel(item.category)}</span>
+                          </div>
+
+                          <div style={{ marginBottom: '10px' }}>
+                            <span style={{ display: 'block', fontSize: '11px', color: '#94a3b8', fontWeight: 'bold', marginBottom: '2px' }}>문의 내용</span>
+                            <p style={{ margin: 0, color: '#334155', whiteSpace: 'pre-wrap' }}>{item.content}</p>
+                          </div>
+                          
+                          {item.attachment_url && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '12px' }}>
+                              <img src={item.attachment_url} alt={item.attachment_name || "문의 첨부 이미지"} style={{ maxWidth: '100%', maxHeight: '180px', borderRadius: '8px', objectFit: 'contain', border: '1px solid #cbd5e1' }} />
+                              <span style={{ fontSize: '11px', color: '#94a3b8' }}>{item.attachment_name || "첨부 이미지"}</span>
+                            </div>
+                          )}
+                          
+                          {item.admin_response ? (
+                            <div style={{ background: '#eef2ff', padding: '12px', borderRadius: '8px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#4f46e5' }}>관리자 답변</span>
+                                <span style={{ fontSize: '10px', color: '#818cf8', fontWeight: 500 }}>{formatSupportTime(item.resolved_at || item.updated_at)}</span>
+                              </div>
+                              <p style={{ fontSize: '13px', color: '#334155', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{item.admin_response}</p>
+                            </div>
+                          ) : (
+                            <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                              <span style={{ fontSize: '12px', color: '#94a3b8' }}>아직 관리자 답변이 등록되지 않았습니다.</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
               </div>
             ) : (
               <EmptyState title="접수한 문의가 없습니다." description="궁금한 점이나 불편한 점은 '문의하기' 탭에서 남겨주세요." />
@@ -296,50 +317,110 @@ function MobileSupportPage() {
           </div>
         )}
 
-        {/* 탭 3: 운영 메시지 */}
-        {activeTab === "messages" && (
+        {/* 탭 0: 공지사항 */}
+        {activeTab === "notice" && (
           <div>
-            {notifications.loading && !notifications.data ? (
+            {notices.loading && !notices.data ? (
               <LoadingCards count={3} />
-            ) : supportItems.length ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {supportItems.map((item) => (
-                  <article key={item.id} style={{ background: item.is_read ? '#fff' : '#f0fdf4', border: item.is_read ? '1px solid transparent' : '1px solid #bbf7d0', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-                    <div style={{ display: 'flex', gap: '12px' }}>
-                      <div style={{ background: item.type === "admin_broadcast" || item.type === "broadcast" ? '#fee2e2' : '#e0e7ff', width: '36px', height: '36px', borderRadius: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        {item.type === "admin_broadcast" || item.type === "broadcast" ? <Megaphone size={18} color="#ef4444" /> : <ShieldCheck size={18} color="#4f46e5" />}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                          <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b' }}>{supportTypeLabel(item.type)}</span>
-                          <time style={{ fontSize: '11px', color: '#94a3b8' }}>{formatSupportTime(item.created_at)}</time>
+            ) : noticeItems.length ? (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {paginatedNotices.map((item, index) => {
+                    const globalIndex = (noticePage - 1) * noticesPerPage + index;
+                    const isExpanded = expandedNotice === globalIndex;
+                    return (
+                      <article 
+                        key={item.id || index} 
+                        onClick={() => setExpandedNotice(isExpanded ? null : globalIndex)}
+                        style={{ 
+                          background: item.is_pinned ? '#fffafb' : '#fff', 
+                          border: item.is_pinned ? '1px solid #fed7d7' : 'none',
+                          padding: '16px', 
+                          borderRadius: '12px', 
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.04)', 
+                          cursor: 'pointer' 
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ 
+                              fontSize: '11px', 
+                              fontWeight: 'bold', 
+                              color: '#fff', 
+                              background: item.is_pinned ? '#ef4444' : '#64748b', 
+                              padding: '2px 6px', 
+                              borderRadius: '4px' 
+                            }}>
+                              {item.is_pinned ? "중요" : "공지"}
+                            </span>
+                            <time style={{ fontSize: '12px', color: '#94a3b8' }}>{formatSupportTime(item.created_at || item.timestamp)}</time>
+                          </div>
+                          {isExpanded ? <ChevronUp size={16} color="#64748b" /> : <ChevronDown size={16} color="#64748b" />}
                         </div>
-                        <strong style={{ display: 'block', fontSize: '15px', color: '#1e293b', marginBottom: '6px' }}>{item.title || "운영 안내"}</strong>
-                        <p style={{ fontSize: '14px', color: '#475569', lineHeight: 1.5, marginBottom: '12px' }}>{item.message}</p>
+                        <strong style={{ display: 'block', fontSize: '15px', color: '#1e293b' }}>{item.title}</strong>
                         
-                        {!item.is_read && (
-                          <button 
-                            type="button" 
-                            onClick={() => markRead(item)}
-                            style={{ background: '#22c55e', color: '#fff', fontSize: '12px', fontWeight: 'bold', padding: '6px 12px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '4px', border: 'none', cursor: 'pointer' }}
+                        {isExpanded && (
+                          <div 
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #f1f5f9', fontSize: '14px', color: '#475569', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}
                           >
-                            읽음 처리
-                          </button>
+                            {item.content || item.message}
+                            {item.link_url && item.link_url !== "/notifications" && (
+                              <div style={{ marginTop: '10px' }}>
+                                <a href={item.link_url} style={{ color: '#4f46e5', fontWeight: 'bold', textDecoration: 'underline' }}>관련 링크로 이동 →</a>
+                              </div>
+                            )}
+                          </div>
                         )}
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                {/* Pagination Controls */}
+                {totalNoticePages > 1 && (
+                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "6px", marginTop: "20px" }}>
+                    <button
+                      disabled={noticePage === 1}
+                      onClick={() => { setNoticePage(p => Math.max(p - 1, 1)); setExpandedNotice(null); }}
+                      style={{
+                        border: "1px solid #cbd5e1",
+                        backgroundColor: noticePage === 1 ? "#f1f5f9" : "#ffffff",
+                        color: noticePage === 1 ? "#94a3b8" : "#334155",
+                        padding: "6px 12px",
+                        borderRadius: "6px",
+                        cursor: noticePage === 1 ? "not-allowed" : "pointer",
+                        fontSize: "13px",
+                        fontWeight: 600
+                      }}
+                    >
+                      이전
+                    </button>
+                    <span style={{ fontSize: "13px", color: "#475569", fontWeight: 700 }}>
+                      {noticePage} / {totalNoticePages}
+                    </span>
+                    <button
+                      disabled={noticePage === totalNoticePages}
+                      onClick={() => { setNoticePage(p => Math.min(p + 1, totalNoticePages)); setExpandedNotice(null); }}
+                      style={{
+                        border: "1px solid #cbd5e1",
+                        backgroundColor: noticePage === totalNoticePages ? "#f1f5f9" : "#ffffff",
+                        color: noticePage === totalNoticePages ? "#94a3b8" : "#334155",
+                        padding: "6px 12px",
+                        borderRadius: "6px",
+                        cursor: noticePage === totalNoticePages ? "not-allowed" : "pointer",
+                        fontSize: "13px",
+                        fontWeight: 600
+                      }}
+                    >
+                      다음
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
-              <EmptyState title="운영 메시지가 없습니다." description="관리자로부터 안내 메시지나 공지가 오면 이곳에 표시됩니다." />
+              <EmptyState title="등록된 공지사항이 없습니다." description="새로운 소식이 등록되면 이곳에 표시됩니다." />
             )}
-            
-            <div style={{ marginTop: '20px', textAlign: 'center' }}>
-              <Link to="/notifications" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#64748b', fontWeight: 'bold', textDecoration: 'none', background: '#f1f5f9', padding: '8px 16px', borderRadius: '20px' }}>
-                <BellRing size={14} /> 전체 알림 보기
-              </Link>
-            </div>
           </div>
         )}
       </main>

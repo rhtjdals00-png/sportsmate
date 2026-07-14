@@ -1,4 +1,4 @@
-import { Headphones, ImagePlus, Send, X } from "lucide-react";
+import { Headphones, ImagePlus, Send, X, Megaphone, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import EmptyState from "../components/common/EmptyState.jsx";
 import LoadingCards from "../components/common/LoadingCards.jsx";
@@ -49,9 +49,12 @@ function SupportPage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [form, setForm] = useState({ category: "general", title: "", content: "", attachment_url: "", attachment_name: "" });
-  const [selectedInquiry, setSelectedInquiry] = useState(null);
-  const [view, setView] = useState("submit"); // 'submit' or 'history'
+  const [expandedInquiry, setExpandedInquiry] = useState(null);
+  const [view, setView] = useState("notice"); // 'notice', 'submit', or 'history'
+  const [expandedNotice, setExpandedNotice] = useState(null);
+  const [noticePage, setNoticePage] = useState(1);
   const inquiries = useAsync(() => supportApi.inquiries(), [refreshKey]);
+  const notices = useAsync(() => supportApi.getNotices(), [refreshKey]);
 
   const updateForm = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -104,62 +107,222 @@ function SupportPage() {
   };
 
   const inquiryItems = inquiries.data?.items || [];
+  const noticeItems = notices.data?.items || [];
+
+  const noticesPerPage = 10;
+  const totalNoticePages = Math.ceil(noticeItems.length / noticesPerPage);
+  const paginatedNotices = noticeItems.slice((noticePage - 1) * noticesPerPage, noticePage * noticesPerPage);
 
   const page = (
     <section className="support-center-page">
       <header className="support-center-hero" style={{
-        display: isMobile ? "block" : "flex",
-        justifyContent: "space-between",
-        alignItems: "flex-start",
-        gap: "20px",
         marginBottom: "22px"
       }}>
-        <div style={{ marginBottom: isMobile ? "16px" : 0 }}>
-          <span><Headphones size={18} /> 운영 메시지함</span>
-          <h1 style={{ marginTop: "8px" }}>관리자 안내와 1:1 문의를 한 곳에서 확인해요.</h1>
-          <p style={{ marginTop: "8px" }}>관리자가 보낸 메시지, 전체 공지, 계정 안내를 모아보고 필요한 경우 앱 안에서 바로 문의를 남길 수 있습니다.</p>
+        <div>
+          <span><Headphones size={18} /> 고객센터</span>
+          <h1 style={{ marginTop: "8px" }}>무엇을 도와드릴까요?</h1>
+          <p style={{ marginTop: "8px" }}>스포츠메이트 서비스 공지사항을 확인하고 1:1 문의를 남기실 수 있습니다.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setView(view === "submit" ? "history" : "submit")}
-          style={{
-            width: isMobile ? "100%" : "auto",
-            justifyContent: "center",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "8px",
-            padding: "10px 18px",
-            borderRadius: "10px",
-            border: "1px solid #cbd5e1",
-            backgroundColor: view === "submit" ? "#2563eb" : "#ffffff",
-            color: view === "submit" ? "#ffffff" : "#475569",
-            fontWeight: 700,
-            fontSize: "14px",
-            cursor: "pointer",
-            transition: "all 0.15s ease",
-            boxShadow: view === "submit" ? "0 4px 6px -1px rgba(37, 99, 235, 0.2)" : "none"
-          }}
-          onMouseOver={(e) => {
-            if (view === "submit") {
-              e.currentTarget.style.backgroundColor = "#1d4ed8";
-            } else {
-              e.currentTarget.style.backgroundColor = "#f1f5f9";
-            }
-          }}
-          onMouseOut={(e) => {
-            if (view === "submit") {
-              e.currentTarget.style.backgroundColor = "#2563eb";
-            } else {
-              e.currentTarget.style.backgroundColor = "#ffffff";
-            }
-          }}
-        >
-          {view === "submit" ? `내 문의 내역 (${inquiryItems.length}건) →` : "← 1:1 문의하기"}
-        </button>
       </header>
 
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid #e2e8f0", marginBottom: "24px", paddingBottom: "2px" }}>
+        <button
+          type="button"
+          onClick={() => { setView("notice"); setNoticePage(1); }}
+          style={{
+            padding: "10px 20px",
+            fontSize: "15px",
+            fontWeight: 700,
+            color: view === "notice" ? "#2563eb" : "#64748b",
+            borderBottom: view === "notice" ? "2px solid #2563eb" : "2px solid transparent",
+            backgroundColor: "transparent",
+            cursor: "pointer",
+            borderTop: "none",
+            borderLeft: "none",
+            borderRight: "none",
+            outline: "none",
+            transition: "all 0.15s ease",
+            marginBottom: "-3px"
+          }}
+        >
+          공지사항
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("submit")}
+          style={{
+            padding: "10px 20px",
+            fontSize: "15px",
+            fontWeight: 700,
+            color: view === "submit" ? "#2563eb" : "#64748b",
+            borderBottom: view === "submit" ? "2px solid #2563eb" : "2px solid transparent",
+            backgroundColor: "transparent",
+            cursor: "pointer",
+            borderTop: "none",
+            borderLeft: "none",
+            borderRight: "none",
+            outline: "none",
+            transition: "all 0.15s ease",
+            marginBottom: "-3px"
+          }}
+        >
+          1:1 문의하기
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("history")}
+          style={{
+            padding: "10px 20px",
+            fontSize: "15px",
+            fontWeight: 700,
+            color: view === "history" ? "#2563eb" : "#64748b",
+            borderBottom: view === "history" ? "2px solid #2563eb" : "2px solid transparent",
+            backgroundColor: "transparent",
+            cursor: "pointer",
+            borderTop: "none",
+            borderLeft: "none",
+            borderRight: "none",
+            outline: "none",
+            transition: "all 0.15s ease",
+            marginBottom: "-3px"
+          }}
+        >
+          내 문의 내역 ({inquiryItems.length})
+        </button>
+      </div>
+
       <section className="support-center-grid" style={{ gridTemplateColumns: "1fr" }}>
-        {view === "submit" ? (
+        {view === "notice" ? (
+          /* Notice Panel */
+          <section className="support-center-panel" style={{ marginTop: 0, width: "100%" }}>
+            {notices.loading && !notices.data ? (
+              <LoadingCards count={3} />
+            ) : noticeItems.length ? (
+              <>
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%" }}>
+                  {paginatedNotices.map((item, index) => {
+                    const globalIndex = (noticePage - 1) * noticesPerPage + index;
+                    const isExpanded = expandedNotice === globalIndex;
+                    return (
+                      <div
+                        key={item.id || index}
+                        style={{
+                          background: "#ffffff",
+                          border: item.is_pinned ? "1px solid #fed7d7" : "1px solid #e2e8f0",
+                          borderRadius: "12px",
+                          padding: "18px 24px",
+                          cursor: "pointer",
+                          transition: "all 0.2s ease",
+                          boxShadow: item.is_pinned ? "0 2px 8px rgba(239, 68, 68, 0.05)" : "0 2px 4px rgba(0,0,0,0.02)",
+                          backgroundColor: item.is_pinned ? "#fffafb" : "#ffffff"
+                        }}
+                        onClick={() => setExpandedNotice(isExpanded ? null : globalIndex)}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            <span style={{
+                              background: item.is_pinned ? "#ef4444" : "#64748b",
+                              color: "#ffffff",
+                              fontSize: "11px",
+                              fontWeight: 800,
+                              padding: "3px 8px",
+                              borderRadius: "6px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px"
+                            }}>
+                              {item.is_pinned ? "중요 공지" : "공지"}
+                            </span>
+                            <strong style={{ fontSize: "16px", color: "#1e293b" }}>{item.title}</strong>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                            <span style={{ fontSize: "13px", color: "#94a3b8" }}>{formatSupportTime(item.created_at || item.timestamp)}</span>
+                            {isExpanded ? <ChevronUp size={16} color="#64748b" /> : <ChevronDown size={16} color="#64748b" />}
+                          </div>
+                        </div>
+                        
+                        {isExpanded && (
+                          <div
+                            style={{
+                              marginTop: "16px",
+                              paddingTop: "16px",
+                              borderTop: "1px solid #f1f5f9",
+                              fontSize: "14px",
+                              color: "#475569",
+                              lineHeight: "1.6",
+                              whiteSpace: "pre-wrap"
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {item.content || item.message}
+                            {item.link_url && item.link_url !== "/notifications" && (
+                              <div style={{ marginTop: "12px" }}>
+                                <a
+                                  href={item.link_url}
+                                  style={{
+                                    color: "#2563eb",
+                                    fontWeight: 600,
+                                    textDecoration: "underline"
+                                  }}
+                                >
+                                  관련 링크로 이동 →
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Pagination Controls */}
+                {totalNoticePages > 1 && (
+                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "6px", marginTop: "24px" }}>
+                    <button
+                      disabled={noticePage === 1}
+                      onClick={() => { setNoticePage(p => Math.max(p - 1, 1)); setExpandedNotice(null); }}
+                      style={{
+                        border: "1px solid #cbd5e1",
+                        backgroundColor: noticePage === 1 ? "#f1f5f9" : "#ffffff",
+                        color: noticePage === 1 ? "#94a3b8" : "#334155",
+                        padding: "6px 12px",
+                        borderRadius: "6px",
+                        cursor: noticePage === 1 ? "not-allowed" : "pointer",
+                        fontSize: "13px",
+                        fontWeight: 600
+                      }}
+                    >
+                      이전
+                    </button>
+                    <span style={{ fontSize: "13px", color: "#475569", fontWeight: 700 }}>
+                      {noticePage} / {totalNoticePages}
+                    </span>
+                    <button
+                      disabled={noticePage === totalNoticePages}
+                      onClick={() => { setNoticePage(p => Math.min(p + 1, totalNoticePages)); setExpandedNotice(null); }}
+                      style={{
+                        border: "1px solid #cbd5e1",
+                        backgroundColor: noticePage === totalNoticePages ? "#f1f5f9" : "#ffffff",
+                        color: noticePage === totalNoticePages ? "#94a3b8" : "#334155",
+                        padding: "6px 12px",
+                        borderRadius: "6px",
+                        cursor: noticePage === totalNoticePages ? "not-allowed" : "pointer",
+                        fontSize: "13px",
+                        fontWeight: 600
+                      }}
+                    >
+                      다음
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <EmptyState title="등록된 공지사항이 없습니다." description="새로운 소식이 등록되면 이곳에 표시됩니다." />
+            )}
+          </section>
+        ) : view === "submit" ? (
           <form className="support-inquiry-form" onSubmit={submitInquiry} style={{ width: "100%" }}>
             <div className="support-center-panel__head">
               <div>
@@ -219,39 +382,93 @@ function SupportPage() {
             {inquiries.loading && !inquiries.data ? (
               <LoadingCards count={2} />
             ) : inquiryItems.length ? (
-              <div className="support-inquiry-list">
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 {inquiryItems.map((item) => {
-                  const content = (
-                    <>
-                      <div className="support-inquiry-card__meta">
-                        <span>{categoryLabel(item.category)}</span>
-                        <time>{formatSupportTime(item.created_at)}</time>
-                        <b className={`support-inquiry-status is-${item.status === "resolved" ? "resolved" : "pending"}`}>{STATUS_LABELS[item.status] || "접수중"}</b>
-                      </div>
-                      <strong>{item.title}</strong>
-                      <p>{item.content}</p>
-                      {item.attachment_url ? (
-                        <div className="support-inquiry-attachment">
-                          <img src={item.attachment_url} alt={item.attachment_name || "문의 첨부 이미지"} />
-                          <span>{item.attachment_name || "첨부 이미지"}</span>
-                        </div>
-                      ) : null}
-                      {item.admin_response ? (
-                        <div className="support-inquiry-answer">
-                          <span>관리자 답변</span>
-                          <p>{item.admin_response}</p>
-                        </div>
-                      ) : null}
-                    </>
-                  );
-                  if (isMobile) {
-                    return <article key={item.id} className="support-inquiry-card">{content}</article>;
-                  }
+                  const isExpanded = expandedInquiry === item.id;
                   return (
-                    <button key={item.id} type="button" className="support-inquiry-card support-inquiry-card--button" onClick={() => setSelectedInquiry(item)}>
-                      {content}
-                      <span className="support-inquiry-card__detail">상세 보기</span>
-                    </button>
+                    <div
+                      key={item.id}
+                      style={{
+                        background: "#ffffff",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "12px",
+                        padding: "18px 24px",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.02)"
+                      }}
+                      onClick={() => setExpandedInquiry(isExpanded ? null : item.id)}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                          <span style={{
+                            background: "#f1f5f9",
+                            color: "#475569",
+                            fontSize: "12px",
+                            fontWeight: 800,
+                            padding: "3px 8px",
+                            borderRadius: "6px"
+                          }}>
+                            {categoryLabel(item.category)}
+                          </span>
+                          <strong style={{ fontSize: "16px", color: "#1e293b" }}>{item.title}</strong>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                          <span style={{
+                            background: item.status === "resolved" ? "#dcfce7" : "#fef3c7",
+                            color: item.status === "resolved" ? "#16a34a" : "#d97706",
+                            fontSize: "12px",
+                            fontWeight: 800,
+                            padding: "3px 8px",
+                            borderRadius: "6px"
+                          }}>
+                            {STATUS_LABELS[item.status] || "접수중"}
+                          </span>
+                          <span style={{ fontSize: "13px", color: "#94a3b8" }}>{formatSupportTime(item.created_at)}</span>
+                          {isExpanded ? <ChevronUp size={16} color="#64748b" /> : <ChevronDown size={16} color="#64748b" />}
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div
+                          style={{
+                            marginTop: "16px",
+                            paddingTop: "16px",
+                            borderTop: "1px solid #f1f5f9",
+                            fontSize: "14px",
+                            color: "#475569",
+                            lineHeight: "1.6"
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div style={{ marginBottom: "14px" }}>
+                            <span style={{ display: "block", fontSize: "12px", color: "#94a3b8", fontWeight: 600, marginBottom: "4px" }}>문의 내용</span>
+                            <p style={{ margin: 0, color: "#334155", whiteSpace: "pre-wrap" }}>{item.content}</p>
+                          </div>
+                          
+                          {item.attachment_url && (
+                            <div style={{ marginTop: "12px", marginBottom: "14px" }}>
+                              <img src={item.attachment_url} alt={item.attachment_name || "문의 첨부 이미지"} style={{ maxWidth: "100%", maxHeight: "240px", borderRadius: "8px", objectFit: "contain", border: "1px solid #e2e8f0" }} />
+                              <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>{item.attachment_name || "첨부 이미지"}</div>
+                            </div>
+                          )}
+
+                          {item.admin_response ? (
+                            <div style={{ marginTop: "16px", padding: "16px", backgroundColor: "#f0f7ff", borderRadius: "10px" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                                <span style={{ fontSize: "12px", color: "#2563eb", fontWeight: 700 }}>관리자 답변</span>
+                                <span style={{ fontSize: "11px", color: "#60a5fa", fontWeight: 500 }}>{formatSupportTime(item.resolved_at || item.updated_at)}</span>
+                              </div>
+                              <p style={{ margin: 0, color: "#1e3a8a", whiteSpace: "pre-wrap" }}>{item.admin_response}</p>
+                            </div>
+                          ) : (
+                            <div style={{ marginTop: "16px", padding: "12px", backgroundColor: "#f8fafc", borderRadius: "8px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
+                              아직 답변이 등록되지 않았습니다. 조금만 기다려주세요!
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -261,46 +478,6 @@ function SupportPage() {
           </section>
         )}
       </section>
-
-
-      {!isMobile && selectedInquiry ? (
-        <div className="support-inquiry-modal" role="dialog" aria-modal="true" aria-labelledby="support-inquiry-modal-title" onMouseDown={(event) => event.target === event.currentTarget && setSelectedInquiry(null)}>
-          <section className="support-inquiry-modal__panel">
-            <header className="support-inquiry-modal__head">
-              <div>
-                <span>{categoryLabel(selectedInquiry.category)}</span>
-                <h2 id="support-inquiry-modal-title">{selectedInquiry.title}</h2>
-                <p>{formatSupportTime(selectedInquiry.created_at)} · {STATUS_LABELS[selectedInquiry.status] || "접수중"}</p>
-              </div>
-              <button type="button" onClick={() => setSelectedInquiry(null)} aria-label="닫기">
-                <X size={18} />
-              </button>
-            </header>
-
-            <div className="support-inquiry-modal__body">
-              <section>
-                <h3>문의 내용</h3>
-                <p>{selectedInquiry.content}</p>
-                {selectedInquiry.attachment_url ? (
-                  <figure className="support-inquiry-modal__attachment">
-                    <img src={selectedInquiry.attachment_url} alt={selectedInquiry.attachment_name || "문의 첨부 이미지"} />
-                    <figcaption>{selectedInquiry.attachment_name || "첨부 이미지"}</figcaption>
-                  </figure>
-                ) : null}
-              </section>
-
-              <section className={selectedInquiry.admin_response ? "has-answer" : ""}>
-                <h3>관리자 답변</h3>
-                {selectedInquiry.admin_response ? (
-                  <p>{selectedInquiry.admin_response}</p>
-                ) : (
-                  <p className="support-inquiry-modal__empty">아직 등록된 답변이 없습니다. 답변이 등록되면 이 화면과 알림에서 확인할 수 있습니다.</p>
-                )}
-              </section>
-            </div>
-          </section>
-        </div>
-      ) : null}
     </section>
   );
 
