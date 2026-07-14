@@ -111,7 +111,7 @@ function MobileAdminReportsPage() {
 
   return (
     <>
-      <MobileHeader title="리포트 관리" />
+      <MobileHeader title="신고 관리" />
 
       <section className="mobile-admin-hero" style={{ padding: '16px', background: 'linear-gradient(135deg, #450a0a 0%, #1e1b4b 100%)', color: '#fff', textAlign: 'center' }}>
         <span style={{ fontSize: '11px', fontWeight: '900', color: '#fca5a5', letterSpacing: '1px' }}>SPORTSMATE REPORTS</span>

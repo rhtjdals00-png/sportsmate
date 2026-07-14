@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Outlet, NavLink, useLocation, Link } from "react-router-dom";
 import { 
   Home, 
@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useResponsive } from "../hooks/useResponsive";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import { adminApi } from "../api/adminApi";
 import MobileBottomNavigation from "../components/layout/mobile/MobileBottomNavigation.jsx";
 
 function AdminLayout() {
@@ -21,6 +22,44 @@ function AdminLayout() {
   const { isMobile } = useResponsive();
   const { user } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
+  const [pendingReportsCount, setPendingReportsCount] = useState(0);
+  const [pendingInquiriesCount, setPendingInquiriesCount] = useState(0);
+
+  useEffect(() => {
+    async function fetchCounts() {
+      try {
+        const reportsData = await adminApi.reports();
+        if (reportsData && reportsData.items) {
+          const count = reportsData.items.filter(item => item.status === "pending" || item.status === "대기 중").length;
+          setPendingReportsCount(count);
+        }
+      } catch (err) {
+        console.error("Failed to fetch reports count:", err);
+      }
+
+      try {
+        const inquiriesData = await adminApi.supportInquiries({ status: "pending" });
+        if (inquiriesData && inquiriesData.items) {
+          setPendingInquiriesCount(inquiriesData.items.length);
+        }
+      } catch (err) {
+        console.error("Failed to fetch inquiries count:", err);
+      }
+    }
+    fetchCounts();
+
+    const handleUpdate = () => fetchCounts();
+    window.addEventListener("inquiries_updated", handleUpdate);
+    window.addEventListener("reports_updated", handleUpdate);
+
+    const interval = setInterval(fetchCounts, 10000);
+
+    return () => {
+      window.removeEventListener("inquiries_updated", handleUpdate);
+      window.removeEventListener("reports_updated", handleUpdate);
+      clearInterval(interval);
+    };
+  }, []);
 
   const handleNavItemClick = (e, path) => {
     if (location.pathname === path) {
@@ -130,6 +169,23 @@ function AdminLayout() {
           >
             <AlertTriangle size={18} />
             <span>신고 관리</span>
+            {pendingReportsCount > 0 && (
+              <span className="admin-sidebar__badge">{pendingReportsCount}</span>
+            )}
+          </NavLink>
+
+          <NavLink 
+            to="/admin/support" 
+            onClick={(e) => handleNavItemClick(e, "/admin/support")}
+            className={({ isActive }) => 
+              `admin-sidebar__nav-item${isActive ? " active" : ""}`
+            }
+          >
+            <Headphones size={18} />
+            <span>고객 문의 관리</span>
+            {pendingInquiriesCount > 0 && (
+              <span className="admin-sidebar__badge">{pendingInquiriesCount}</span>
+            )}
           </NavLink>
 
           <NavLink 
@@ -163,17 +219,6 @@ function AdminLayout() {
           >
             <ClipboardList size={18} />
             <span>작업 이력 로그</span>
-          </NavLink>
-
-          <NavLink 
-            to="/admin/support" 
-            onClick={(e) => handleNavItemClick(e, "/admin/support")}
-            className={({ isActive }) => 
-              `admin-sidebar__nav-item${isActive ? " active" : ""}`
-            }
-          >
-            <Headphones size={18} />
-            <span>고객 문의</span>
           </NavLink>
 
           <NavLink 

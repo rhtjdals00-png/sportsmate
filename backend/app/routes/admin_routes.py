@@ -924,7 +924,12 @@ def list_support_inquiries():
     category = request.args.get("category")
     query = SupportInquiry.query.options(joinedload(SupportInquiry.user), joinedload(SupportInquiry.admin))
     if status and status != "all":
-        query = query.filter(SupportInquiry.status == status)
+        if status == "pending":
+            query = query.filter(SupportInquiry.status.in_(["pending", "in_progress"]))
+        elif status == "resolved":
+            query = query.filter(SupportInquiry.status.in_(["resolved", "closed"]))
+        else:
+            query = query.filter(SupportInquiry.status == status)
     if category and category != "all":
         query = query.filter(SupportInquiry.category == category)
 
@@ -970,6 +975,24 @@ def update_support_inquiry(inquiry_id):
         inquiry.internal_note = (data.get("internal_note") or "").strip()
 
     inquiry.admin_id = admin_user.id
+
+    import json
+    from app.utils.timezone import to_kst_iso, kst_now
+    try:
+        history_list = json.loads(inquiry.reply_history or "[]")
+    except Exception:
+        history_list = []
+
+    new_entry = {
+        "admin_name": admin_user.nickname or admin_user.name or admin_user.email,
+        "admin_email": admin_user.email,
+        "admin_response": inquiry.admin_response or "",
+        "internal_note": inquiry.internal_note or "",
+        "status": inquiry.status,
+        "updated_at": to_kst_iso(kst_now())
+    }
+    history_list.insert(0, new_entry)
+    inquiry.reply_history = json.dumps(history_list, ensure_ascii=False)
 
     should_notify = previous_status != inquiry.status or previous_response != (inquiry.admin_response or "")
     if should_notify and inquiry.user_id:

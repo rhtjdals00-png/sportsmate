@@ -22,6 +22,7 @@ class SupportInquiry(db.Model, TimestampMixin):
     admin_response = db.Column(db.Text, default="", nullable=False)
     internal_note = db.Column(db.Text, default="", nullable=False)
     resolved_at = db.Column(db.DateTime)
+    reply_history = db.Column(db.Text, default="[]", nullable=False)
 
     user = db.relationship("User", foreign_keys=[user_id], backref=db.backref("support_inquiries", lazy="dynamic"))
     admin = db.relationship("User", foreign_keys=[admin_id])
@@ -37,14 +38,27 @@ class SupportInquiry(db.Model, TimestampMixin):
                 "nickname": user.nickname,
                 "user_tag": user.user_tag,
                 "display_name": user.nickname or user.name or user.email,
+                "is_active": user.is_active,
+                "role": user.role,
             }
+
+        from app.models.users import User
+        matched_user = self.user
+        if not matched_user and self.requester_email:
+            matched_user = User.query.filter_by(email=self.requester_email).first()
+
+        import json
+        try:
+            history_data = json.loads(self.reply_history or "[]")
+        except Exception:
+            history_data = []
 
         data = {
             "id": self.id,
-            "user_id": self.user_id,
+            "user_id": self.user_id or (matched_user.id if matched_user else None),
             "requester_email": self.requester_email or "",
             "requester_name": self.requester_name or "",
-            "requester_display_name": (self.user.nickname or self.user.name or self.user.email) if self.user else (self.requester_name or self.requester_email or "비회원"),
+            "requester_display_name": (matched_user.nickname or matched_user.name or matched_user.email) if matched_user else (self.requester_name or self.requester_email or "비회원"),
             "source": self.source or "member",
             "category": self.category,
             "title": self.title,
@@ -58,8 +72,9 @@ class SupportInquiry(db.Model, TimestampMixin):
             "resolved_at": to_kst_iso(self.resolved_at),
             "created_at": to_kst_iso(self.created_at),
             "updated_at": to_kst_iso(self.updated_at),
-            "user": user_summary(self.user),
+            "user": user_summary(matched_user),
             "admin": user_summary(self.admin),
+            "reply_history": history_data,
         }
         if include_internal:
             data["internal_note"] = self.internal_note or ""

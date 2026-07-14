@@ -1,4 +1,4 @@
-﻿from sqlalchemy import inspect, text
+from sqlalchemy import inspect, text
 
 from app.extensions import db
 
@@ -94,6 +94,7 @@ SUPPORT_INQUIRY_COLUMNS = {
     "admin_response": "TEXT NOT NULL DEFAULT ''",
     "internal_note": "TEXT NOT NULL DEFAULT ''",
     "resolved_at": "TIMESTAMP",
+    "reply_history": "TEXT NOT NULL DEFAULT '[]'",
     "created_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
     "updated_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
 }
@@ -163,6 +164,7 @@ def ensure_support_schema(app):
                     admin_response TEXT NOT NULL DEFAULT '',
                     internal_note TEXT NOT NULL DEFAULT '',
                     resolved_at TIMESTAMP,
+                    reply_history TEXT NOT NULL DEFAULT '[]',
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
