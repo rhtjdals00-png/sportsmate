@@ -39,6 +39,7 @@ import AdminSettingsPage from "../pages/AdminSettingsPage.jsx";
 import AdminBroadcastPage from "../pages/AdminBroadcastPage.jsx";
 import AdminAuditLogsPage from "../pages/AdminAuditLogsPage.jsx";
 import AdminSupportPage from "../pages/AdminSupportPage.jsx";
+import AdminNoticesPage from "../pages/AdminNoticesPage.jsx";
 import NotFoundPage from "../pages/NotFoundPage.jsx";
 import NotificationsPage from "../pages/NotificationsPage.jsx";
 import MapPage from "../pages/MapPage.jsx";
@@ -102,6 +103,7 @@ function AppRouter() {
         <Route path="analytics" element={<AdminAnalyticsPage />} />
         <Route path="audit-logs" element={<AdminAuditLogsPage />} />
         <Route path="support" element={<AdminSupportPage />} />
+        <Route path="notices" element={<AdminNoticesPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />
       </Route>
     </Routes>

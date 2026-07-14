@@ -63,7 +63,7 @@ function getDisplayStartAt(meeting) {
 }
 
 function getMeetingTypeLabel(type) {
-  return type === "regular" ? "정기 모임" : "일회성 모임";
+  return type === "regular" ? "정기모임" : "일회성";
 }
 
 function isHostMeeting(meeting) {
@@ -71,14 +71,15 @@ function isHostMeeting(meeting) {
 }
 
 function getStatusLabel(status) {
-  if (status === "full") return "모집 마감";
+  if (status === "full") return "모집마감";
   if (status === "closed") return "모집종료";
   if (status === "cancelled") return "취소됨";
   return "모집중";
 }
 
 function getStatusClass(status) {
-  if (status === "closed" || status === "full" || status === "cancelled") return "is-closed";
+  if (status === "full") return "is-full";
+  if (status === "closed" || status === "cancelled") return "is-closed";
   return "is-open";
 }
 
@@ -397,8 +398,8 @@ function DesktopMeetingRow({ meeting }) {
             </em>
           )}
           <em className={`desktop-meeting-status ${getStatusClass(meeting.status)}`}>{getStatusLabel(meeting.status)}</em>
-          <em>{getSportName(meeting)}</em>
-          <em>{getMeetingTypeLabel(meeting.meeting_type)}</em>
+          <em className="desktop-meeting-sport-badge">{getSportName(meeting)}</em>
+          <em className="desktop-meeting-type-badge">{getMeetingTypeLabel(meeting.meeting_type)}</em>
           {distanceLabel ? <em className="desktop-meeting-distance-badge">{distanceLabel}</em> : null}
         </span>
         <strong>{meeting.title}</strong>

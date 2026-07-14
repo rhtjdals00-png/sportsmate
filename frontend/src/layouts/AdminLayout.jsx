@@ -10,7 +10,8 @@ import {
   BarChart3,
   Bell,
   ClipboardList,
-  Headphones
+  Headphones,
+  Megaphone
 } from "lucide-react";
 import { useResponsive } from "../hooks/useResponsive";
 import { useAuth } from "../contexts/AuthContext.jsx";
@@ -186,6 +187,17 @@ function AdminLayout() {
             {pendingInquiriesCount > 0 && (
               <span className="admin-sidebar__badge">{pendingInquiriesCount}</span>
             )}
+          </NavLink>
+
+          <NavLink 
+            to="/admin/notices" 
+            onClick={(e) => handleNavItemClick(e, "/admin/notices")}
+            className={({ isActive }) => 
+              `admin-sidebar__nav-item${isActive ? " active" : ""}`
+            }
+          >
+            <Megaphone size={18} />
+            <span>공지사항 관리</span>
           </NavLink>
 
           <NavLink 

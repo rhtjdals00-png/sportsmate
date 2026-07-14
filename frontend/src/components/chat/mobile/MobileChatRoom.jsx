@@ -12,6 +12,7 @@ import { meetingApi } from "../../../api/meetingApi";
 import { voteApi } from "../../../api/voteApi";
 import { userApi } from "../../../api/userApi";
 import { locationApi } from "../../../api/locationApi";
+import { reportApi } from "../../../api/reportApi";
 let naverMapClientIdPromise = null;
 const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
 
@@ -282,6 +283,13 @@ function MobileChatRoom() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [directRefreshKey, setDirectRefreshKey] = useState(0);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("sportsmate_blocked_users") || "[]");
+    } catch {
+      return [];
+    }
+  });
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [voteOpen, setVoteOpen] = useState(false);
   const [voteMode, setVoteMode] = useState("list");
@@ -316,6 +324,11 @@ function MobileChatRoom() {
   const [replyTarget, setReplyTarget] = useState(null);
   const [optionsMenuMessageId, setOptionsMenuMessageId] = useState(null);
   const [focusedMessageId, setFocusedMessageId] = useState(null);
+  /* Report Form */
+  const [reportTarget, setReportTarget] = useState(null);
+  const [reportForm, setReportForm] = useState({ reason: "abuse", reason_detail: "" });
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportMessage, setReportMessage] = useState("");
   /* Notice form */
   const [noticeFormOpen, setNoticeFormOpen] = useState(false);
   const [noticeForm, setNoticeForm] = useState({ title: "", content: "", is_pinned: true });
@@ -361,7 +374,14 @@ function MobileChatRoom() {
     const items = notices.data?.items || [];
     return items.find((item) => item.is_pinned) || items[0] || null;
   })();
-  const renderedMessages = activeMessages.data?.items || [];
+  const rawMessages = activeMessages.data?.items || [];
+  const renderedMessages = useMemo(() => {
+    return rawMessages.filter(msg => {
+      const isSystem = msg.message_type === "system";
+      if (isSystem) return true;
+      return !blockedUsers.includes(String(msg.sender_id || msg.user_id));
+    });
+  }, [rawMessages, blockedUsers]);
 
   const isSystemMessage = (msg) => {
     return ["notice", "system"].includes(msg?.message_type);
@@ -657,48 +677,26 @@ function MobileChatRoom() {
 
   const handlePlaceSearch = async (e) => {
     e.preventDefault();
-    if (!placeSearchKeyword.trim()) return;
+    const keyword = placeSearchKeyword.trim();
+    if (!keyword) return;
     setPlaceSearchLoading(true);
     setPlaceSearchError("");
     setPlaceSearchResults([]);
     try {
-      let items = [];
-      try {
-        const res = await locationApi.searchPlaces({ keyword: placeSearchKeyword.trim() });
-        items = res.items || [];
-      } catch (backendErr) {
-        console.warn("Backend search failed, using OSM fallback:", backendErr);
-      }
-
-      if (items.length === 0) {
-        const osmRes = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-            placeSearchKeyword.trim()
-          )}&limit=15`,
-          {
-            headers: {
-              "Accept-Language": "ko,en-US;q=0.9,en;q=0.8"
-            }
-          }
-        );
-        if (osmRes.ok) {
-          const data = await osmRes.json();
-          items = data.map((item) => {
-            const parts = item.display_name.split(",");
-            const title = parts[0]?.trim() || "장소";
-            const address = parts.slice(1).map(p => p.trim()).join(", ") || item.display_name;
-            return {
-              title,
-              address,
-              latitude: parseFloat(item.lat),
-              longitude: parseFloat(item.lon)
-            };
-          });
-        }
-      }
-
-      setPlaceSearchResults(items);
-      if (items.length === 0) {
+      const res = await locationApi.searchPlaces({ keyword, size: 8 });
+      const items = res.items || [];
+      const formattedItems = items.map(place => {
+        const title = String(place.title || place.address || "장소").replace(/<[^>]+>/g, "").trim();
+        const address = place.road_address || place.address || "";
+        return {
+          title,
+          address,
+          latitude: Number(place.latitude),
+          longitude: Number(place.longitude)
+        };
+      });
+      setPlaceSearchResults(formattedItems);
+      if (formattedItems.length === 0) {
         setPlaceSearchError("검색 결과가 없습니다.");
       }
     } catch (err) {
@@ -906,22 +904,77 @@ function MobileChatRoom() {
     }
   };
 
-  const blockAndLeave = async (targetUser) => {
-    const targetRoomId = chatRoomId || directRoomId;
-    if (!targetRoomId || leavingRoom) return;
-    if (!window.confirm(`${targetUser?.nickname || "상대방"}님을 차단하고 이 대화방을 나갈까요?`)) return;
-    setLeavingRoom(true);
-    setError("");
+  const openRoomReport = () => {
+    if (!room?.id) return;
+    setReportTarget({
+      target_type: "chat_room",
+      target_id: room.id,
+      title: meeting?.title ? `${meeting.title} 채팅방 신고` : "채팅방 신고"
+    });
+    setReportForm({ reason: "abuse", reason_detail: "" });
+    setReportMessage("");
+    setDrawerOpen(false);
+  };
+
+  const openUserReport = (targetUser) => {
+    if (!targetUser?.id) return;
+    setReportTarget({
+      target_type: "user",
+      target_id: targetUser.id,
+      title: `${senderLabel(targetUser)} 신고`
+    });
+    setReportForm({ reason: "abuse", reason_detail: "" });
+    setReportMessage("");
+    setProfilePreviewUser(null);
+  };
+
+  const blockUser = (targetUser) => {
+    if (!targetUser?.id) return;
+    if (!window.confirm(`${senderLabel(targetUser)}님의 메시지를 차단하시겠습니까? (내 화면에서만 보이지 않습니다)`)) return;
+    const nextBlocked = [...blockedUsers, String(targetUser.id)];
+    setBlockedUsers(nextBlocked);
+    localStorage.setItem("sportsmate_blocked_users", JSON.stringify(nextBlocked));
+    setProfilePreviewUser(null);
+    alert("차단되었습니다.");
+  };
+
+  const unblockUser = (targetUser) => {
+    if (!targetUser?.id) return;
+    const nextBlocked = blockedUsers.filter(id => id !== String(targetUser.id));
+    setBlockedUsers(nextBlocked);
+    localStorage.setItem("sportsmate_blocked_users", JSON.stringify(nextBlocked));
+    setProfilePreviewUser(null);
+    alert("차단이 해제되었습니다.");
+  };
+
+  const submitReport = async (event) => {
+    event.preventDefault();
+    if (!reportTarget) return;
+    if (reportForm.reason_detail.trim().length < 5) {
+      setReportMessage("신고 사유를 조금 더 자세히 입력해주세요.");
+      return;
+    }
+    setReportSubmitting(true);
+    setReportMessage("");
     try {
-      await chatApi.leave(targetRoomId);
-      setProfilePreviewUser(null);
-      setRefreshKey((value) => value + 1);
-      setRoomRefreshKey((value) => value + 1);
-      navigate("/chats", { replace: true });
-    } catch (blockError) {
-      setError(blockError.response?.data?.message || "사용자 차단에 실패했습니다.");
+      await reportApi.create({
+        ...reportTarget,
+        reason: reportForm.reason,
+        reason_detail: reportForm.reason_detail.trim(),
+        context: JSON.stringify({
+          meeting_id: meeting?.id || null,
+          chat_room_id: room?.id || null
+        })
+      });
+      setReportMessage("신고가 접수되었습니다. 관리자가 확인 후 처리합니다.");
+      window.setTimeout(() => {
+        setReportTarget(null);
+        setReportMessage("");
+      }, 900);
+    } catch (reportError) {
+      setReportMessage(reportError.response?.data?.message || "신고 접수에 실패했습니다.");
     } finally {
-      setLeavingRoom(false);
+      setReportSubmitting(false);
     }
   };
 
@@ -1380,25 +1433,66 @@ function MobileChatRoom() {
                   1:1 톡
                 </button>
               )}
-              {isDirectChat && String(profilePreviewUser.id) !== String(user?.id) && (
-                <button
-                  type="button"
-                  onClick={() => blockAndLeave(profilePreviewUser)}
-                  style={{
-                    flex: 1,
-                    maxWidth: '140px',
-                    minHeight: '38px',
-                    borderRadius: '10px',
-                    background: '#ef4444',
-                    color: '#fff',
-                    border: 0,
-                    fontWeight: '800',
-                    fontSize: '12px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  차단
-                </button>
+              {String(profilePreviewUser.id) !== String(user?.id) && (
+                <>
+                  {blockedUsers.includes(String(profilePreviewUser.id)) ? (
+                    <button
+                      type="button"
+                      onClick={() => unblockUser(profilePreviewUser)}
+                      style={{
+                        flex: 1,
+                        maxWidth: '140px',
+                        minHeight: '38px',
+                        borderRadius: '10px',
+                        background: '#3b82f6',
+                        color: '#fff',
+                        border: 0,
+                        fontWeight: '800',
+                        fontSize: '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      차단 해제
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => blockUser(profilePreviewUser)}
+                      style={{
+                        flex: 1,
+                        maxWidth: '140px',
+                        minHeight: '38px',
+                        borderRadius: '10px',
+                        background: '#94a3b8',
+                        color: '#fff',
+                        border: 0,
+                        fontWeight: '800',
+                        fontSize: '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      차단
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => openUserReport(profilePreviewUser)}
+                    style={{
+                      flex: 1,
+                      maxWidth: '140px',
+                      minHeight: '38px',
+                      borderRadius: '10px',
+                      background: '#ef4444',
+                      color: '#fff',
+                      border: 0,
+                      fontWeight: '800',
+                      fontSize: '12px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    신고
+                  </button>
+                </>
               )}
               {isRoomHost && String(profilePreviewUser.id) !== String(user?.id) && (
                 <button
@@ -1976,30 +2070,28 @@ function MobileChatRoom() {
             {/* Drawer Footer Actions */}
             <div style={{ padding: '16px', borderTop: '1px solid #f1f5f9', background: '#f8fafc', display: 'grid', gap: '8px' }}>
               {isDirectChat ? (
-                <button
-                  type="button"
-                  onClick={leaveRoom}
-                  style={{
-                    width: '100%',
-                    minHeight: '42px',
-                    borderRadius: '10px',
-                    border: '1px solid #e2e8f0',
-                    background: '#fff',
-                    color: '#ef4444',
-                    fontSize: '13px',
-                    fontWeight: '800',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <LogOut size={16} />
-                  <span>대화방 나가기</span>
-                </button>
-              ) : (
                 <>
+                  <button
+                    type="button"
+                    onClick={openRoomReport}
+                    style={{
+                      width: '100%',
+                      minHeight: '42px',
+                      borderRadius: '10px',
+                      border: '1px solid #e2e8f0',
+                      background: '#fff',
+                      color: '#ef4444',
+                      fontSize: '13px',
+                      fontWeight: '800',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span>이 채팅방 신고하기</span>
+                  </button>
                   <button
                     type="button"
                     onClick={leaveRoom}
@@ -2009,7 +2101,53 @@ function MobileChatRoom() {
                       borderRadius: '10px',
                       border: '1px solid #e2e8f0',
                       background: '#fff',
+                      color: '#64748b',
+                      fontSize: '13px',
+                      fontWeight: '800',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <LogOut size={16} />
+                    <span>대화방 나가기</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={openRoomReport}
+                    style={{
+                      width: '100%',
+                      minHeight: '42px',
+                      borderRadius: '10px',
+                      border: '1px solid #e2e8f0',
+                      background: '#fff',
                       color: '#ef4444',
+                      fontSize: '13px',
+                      fontWeight: '800',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span>이 모임 채팅방 신고하기</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={leaveRoom}
+                    style={{
+                      width: '100%',
+                      minHeight: '42px',
+                      borderRadius: '10px',
+                      border: '1px solid #e2e8f0',
+                      background: '#fff',
+                      color: '#64748b',
                       fontSize: '13px',
                       fontWeight: '800',
                       display: 'flex',
@@ -2052,6 +2190,131 @@ function MobileChatRoom() {
           </section>
         </div>
       ) : null}
+
+      {/* Report Modal */}
+      {reportTarget && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0, 0, 0, 0.6)',
+          zIndex: 99999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '24px'
+        }} onClick={() => setReportTarget(null)}>
+          <div style={{
+            background: '#fff',
+            borderRadius: '20px',
+            width: '100%',
+            maxWidth: '360px',
+            padding: '24px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+            position: 'relative'
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#1e293b' }}>
+                {reportTarget.title}
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setReportTarget(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#64748b' }}
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={submitReport}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#475569', marginBottom: '8px' }}>신고 사유</label>
+                <select
+                  value={reportForm.reason}
+                  onChange={(e) => setReportForm({ ...reportForm, reason: e.target.value })}
+                  style={{
+                    width: '100%',
+                    height: '48px',
+                    borderRadius: '12px',
+                    border: '1px solid #cbd5e1',
+                    padding: '0 16px',
+                    fontSize: '15px',
+                    color: '#1e293b',
+                    background: '#f8fafc',
+                    outline: 'none'
+                  }}
+                >
+                  <option value="abuse">욕설/비방</option>
+                  <option value="spam">광고/도배</option>
+                  <option value="inappropriate">부적절한 내용</option>
+                  <option value="other">기타</option>
+                </select>
+              </div>
+              
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#475569', marginBottom: '8px' }}>상세 내용</label>
+                <textarea
+                  rows={4}
+                  placeholder="신고 사유를 자세히 적어주세요. (최소 5자)"
+                  value={reportForm.reason_detail}
+                  onChange={(e) => setReportForm({ ...reportForm, reason_detail: e.target.value })}
+                  style={{
+                    width: '100%',
+                    borderRadius: '12px',
+                    border: '1px solid #cbd5e1',
+                    padding: '16px',
+                    fontSize: '15px',
+                    color: '#1e293b',
+                    background: '#f8fafc',
+                    outline: 'none',
+                    resize: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+              
+              {reportMessage && (
+                <p style={{ color: '#ef4444', fontSize: '13px', marginTop: '-8px', marginBottom: '16px', fontWeight: '600' }}>
+                  {reportMessage}
+                </p>
+              )}
+              
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setReportTarget(null)}
+                  style={{
+                    flex: 1,
+                    height: '52px',
+                    borderRadius: '14px',
+                    background: '#f1f5f9',
+                    color: '#475569',
+                    border: 'none',
+                    fontWeight: '800',
+                    fontSize: '15px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={reportSubmitting || reportForm.reason_detail.trim().length < 5}
+                  style={{
+                    flex: 1,
+                    height: '52px',
+                    borderRadius: '14px',
+                    background: (reportSubmitting || reportForm.reason_detail.trim().length < 5) ? '#cbd5e1' : '#ef4444',
+                    color: '#fff',
+                    border: 'none',
+                    fontWeight: '800',
+                    fontSize: '15px',
+                    cursor: (reportSubmitting || reportForm.reason_detail.trim().length < 5) ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {reportSubmitting ? "접수 중..." : "신고 접수"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }

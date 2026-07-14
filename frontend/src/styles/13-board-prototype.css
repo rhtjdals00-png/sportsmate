@@ -656,14 +656,16 @@
   min-height: 24px;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
   overflow: hidden;
   border-radius: 999px;
   background: #eef2ff;
-  color: #2563eb;
+  color: #3730a3;
   padding: 0 9px;
-  font-size: 11px;
+  font-size: 12px;
   font-style: normal;
-  font-weight: 950;
+  font-weight: 600;
+  line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -673,6 +675,16 @@
   gap: 4px;
   background: #fef3c7;
   color: #92400e;
+}
+
+.desktop-meeting-row__badges .desktop-meeting-sport-badge {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.desktop-meeting-row__badges .desktop-meeting-type-badge {
+  background: #eef2ff;
+  color: #3730a3;
 }
 
 .desktop-meeting-row__badges .desktop-meeting-distance-badge {
@@ -686,8 +698,13 @@
 }
 
 .desktop-meeting-status.is-open {
-  background: #ecfdf5;
-  color: #047857;
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.desktop-meeting-status.is-full {
+  background: #fef3c7;
+  color: #b45309;
 }
 
 .desktop-meeting-status.is-joined {
@@ -937,14 +954,37 @@
 
 .desktop-meeting-detail__chips > span {
   display: inline-flex;
-  min-height: 28px;
+  min-height: 24px;
   align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   border-radius: 999px;
   background: #f1f5f9;
   color: #475569;
-  padding: 0 11px;
+  padding: 0 9px;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.desktop-meeting-detail__chips > .desktop-meeting-status.is-open {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.desktop-meeting-detail__chips > .desktop-meeting-status.is-full {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.desktop-meeting-detail__chips > .desktop-meeting-status.is-closed {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.desktop-meeting-detail__chips > .desktop-meeting-relation-badge {
+  background: #fef3c7;
+  color: #92400e;
 }
 
 .desktop-meeting-location-card {
@@ -1357,6 +1397,22 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.desktop-meeting-detail__info .desktop-meeting-detail__info-row--stacked {
+  align-items: flex-start;
+  min-height: 44px;
+}
+
+.desktop-meeting-detail__info .desktop-meeting-detail__info-row--stacked span {
+  display: grid;
+  gap: 2px;
+}
+
+.desktop-meeting-detail__info .desktop-meeting-detail__info-row--stacked small {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 850;
 }
 
 .desktop-meeting-detail__message {

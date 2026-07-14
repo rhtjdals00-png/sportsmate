@@ -24,13 +24,13 @@ function MeetingCard({ meeting, compact = false }) {
         </div>
         <div>
           <div className="meeting-card__top">
-            <Badge tone={actualStatus === "open" ? "success" : "slate"}>
+            <Badge tone={actualStatus === "open" ? "success" : actualStatus === "full" ? "warning" : "slate"}>
               {statusLabel}
             </Badge>
             <Badge tone="sky" className="meeting-card__sport-badge">
               {meeting.sport?.name || meeting.sport_name}
             </Badge>
-            <span>{formatMeetingType(meeting.meeting_type)}</span>
+            <span className="badge badge--type">{formatMeetingType(meeting.meeting_type)}</span>
           </div>
           <span className="meeting-card__title">
             {meeting.title}
@@ -64,7 +64,7 @@ function MeetingCard({ meeting, compact = false }) {
 
 function getStatusLabel(status) {
   if (status === "open") return "모집중";
-  if (status === "full") return "모집 마감";
+  if (status === "full") return "모집마감";
   if (status === "closed") return "모집종료";
   if (status === "cancelled") return "취소됨";
   return "마감";

@@ -25,6 +25,7 @@ function AdminBroadcastPage() {
   const [logsLoading, setLogsLoading] = useState(false);
   const [logs, setLogs] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [view, setView] = useState("form"); // 'form' or 'logs'
   
   // Form states
   const [title, setTitle] = useState("");
@@ -132,22 +133,48 @@ function AdminBroadcastPage() {
   const currentLogs = reversedLogs.slice(indexOfFirstItem, indexOfLastItem);
 
   return (
-    <div style={{ width: "100%", maxWidth: "100%", padding: "0 24px", boxSizing: "border-box" }}>
-      
-      <div className="admin-broadcast-grid">
-        
-        {/* Form Card */}
-        <div className="admin-panel-card" style={{ padding: "30px", borderRadius: "16px", backgroundColor: "#ffffff", display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
+    <div style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
+
+      {view === "form" ? (
+        /* Form Card */
+        <div className="admin-panel-card" style={{ padding: "30px", borderRadius: "16px", backgroundColor: "#ffffff", display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
           <form onSubmit={handleSend} style={{ display: "flex", flexDirection: "column", gap: "16px", height: "100%", flex: 1 }}>
             
             {/* Target Select */}
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <label style={{ fontSize: "14px", fontWeight: 700, color: "#1e293b", display: "flex", alignItems: "center", gap: "6px" }}>
-                <Layers size={16} style={{ color: "#3b82f6" }} />
-                알림 대상 지정
-              </label>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <label style={{ fontSize: "14px", fontWeight: 700, color: "#1e293b", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Layers size={16} style={{ color: "#3b82f6" }} />
+                  알림 대상 지정
+                </label>
+                {/* 발송 이력 보기 버튼 */}
+                <button
+                  type="button"
+                  onClick={() => setView("logs")}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    border: "none",
+                    backgroundColor: "#2563eb",
+                    color: "#ffffff",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    boxShadow: "0 2px 8px rgba(37, 99, 235, 0.25)"
+                  }}
+                  onMouseOver={(e) => { e.currentTarget.style.backgroundColor = "#1d4ed8"; }}
+                  onMouseOut={(e) => { e.currentTarget.style.backgroundColor = "#2563eb"; }}
+                >
+                  <Bell size={14} />
+                  {`발송 이력 (${logs.length}건) →`}
+                </button>
+              </div>
               
-              <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", padding: "12px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+              <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", padding: "8px 12px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
                 <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", color: "#334155", cursor: "pointer", fontWeight: targetType === "all" ? 600 : 400 }}>
                   <input
                     type="radio"
@@ -360,9 +387,35 @@ function AdminBroadcastPage() {
 
           </form>
         </div>
-
-        {/* Broadcast logs history */}
-        <div className="admin-panel-card" style={{ padding: "30px", borderRadius: "16px", backgroundColor: "#ffffff", display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
+      ) : (
+        /* Broadcast logs history */
+        <div className="admin-panel-card" style={{ padding: "30px", borderRadius: "16px", backgroundColor: "#ffffff", display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
+          {/* 뒤로가기 버튼 */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
+            <button
+              type="button"
+              onClick={() => setView("form")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "8px 16px",
+                borderRadius: "8px",
+                border: "none",
+                backgroundColor: "#2563eb",
+                color: "#ffffff",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+                boxShadow: "0 2px 8px rgba(37, 99, 235, 0.25)"
+              }}
+              onMouseOver={(e) => { e.currentTarget.style.backgroundColor = "#1d4ed8"; }}
+              onMouseOut={(e) => { e.currentTarget.style.backgroundColor = "#2563eb"; }}
+            >
+              ← 알림 발송하기
+            </button>
+          </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
             <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
               <Bell size={18} style={{ color: "#3b82f6" }} />
@@ -512,19 +565,10 @@ function AdminBroadcastPage() {
             </>
           )}
         </div>
-
-      </div>
+      )}
 
       {/* Animation Style helper */}
       <style>{`
-        .admin-broadcast-grid {
-          display: grid;
-          grid-template-columns: 1.15fr 0.85fr;
-          gap: 24px;
-          align-items: stretch;
-          height: calc(100vh - 160px);
-          box-sizing: border-box;
-        }
         @media (max-width: 900px) {
           .admin-broadcast-grid {
             grid-template-columns: 1fr;

@@ -23,19 +23,17 @@ import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { useAsync } from "../../../hooks/useAsync";
 import { markProfileEditVerified } from "../../../utils/profileEditAccess";
 import { getMeetingCoverImage } from "../../../utils/sportThumbnails";
+import { formatRegularMeetingSchedule } from "../../../utils/formatters";
 
 const PROFILE_INTRO_MAX_LENGTH = 30;
 const PROFILE_INTRO_EMPTY_TEXT = "아직 한 줄 소개가 없습니다.";
 const FALLBACK_PROFILE_IMAGE = "/images/logo.png";
-const REPEAT_DAY_LABELS = {
-  MO: "월",
-  TU: "화",
-  WE: "수",
-  TH: "목",
-  FR: "금",
-  SA: "토",
-  SU: "일"
-};
+const MEETING_FILTERS = [
+  { key: "all", label: "전체" },
+  { key: "regular", label: "정기모임" },
+  { key: "one_time", label: "일회성" },
+  { key: "ended", label: "종료됨" }
+];
 
 const levelLabels = {
   // 2026-07-01: 모바일 프로필 기준과 동일하게 운동 수준 명칭을 통일.
@@ -77,26 +75,6 @@ function validDate(value) {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function formatTime(value) {
-  const date = validDate(value);
-  if (!date) return "";
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
-}
-
-function formatRepeatRule(repeatRule, startAt, endAt) {
-  const byDay = String(repeatRule || "").match(/BYDAY=([^;]+)/)?.[1];
-  if (!byDay) return "";
-  const days = byDay
-    .split(",")
-    .map((day) => REPEAT_DAY_LABELS[day.trim()])
-    .filter(Boolean);
-  if (!days.length) return "";
-  const timeRange = [formatTime(startAt), formatTime(endAt)].filter(Boolean).join("~");
-  return `매주 ${days.join("·")}${timeRange ? ` ${timeRange}` : ""}`;
 }
 
 function getDday(value) {
@@ -161,13 +139,24 @@ function isPastByDay(value) {
   return date < today;
 }
 
+function isPastDateTime(value) {
+  const date = validDate(value);
+  return date ? date < new Date() : false;
+}
+
 function isMeetingEnded(item) {
+  if (["closed", "completed", "cancelled", "suspended"].includes(item.status)) return true;
   if (item.meetingType === "regular") {
-    if (item.nextSession) return false;
-    if (!item.sessions.length) return false;
-    return item.sessions.every((session) => isPastByDay(session.end_at || session.start_at));
+    return item.operationEndAt ? isPastDateTime(item.operationEndAt) : false;
   }
   return isPastByDay(item.endTime || item.rawTime);
+}
+
+function filterMeetingItems(items, filter) {
+  if (filter === "regular") return items.filter((item) => item.meetingType === "regular");
+  if (filter === "one_time") return items.filter((item) => item.meetingType === "one_time");
+  if (filter === "ended") return items.filter(isMeetingEnded);
+  return items;
 }
 
 function tagLabel(user) {
@@ -198,13 +187,15 @@ function normalizeMeeting(meeting, state) {
     place: meeting.location_name || meeting.address || "장소 미정",
     meetingType: meeting.meeting_type || "one_time",
     meetingTypeLabel: meetingTypeLabel(meeting.meeting_type),
+    status: meeting.status || "",
     sportName: sportNameOf(meeting),
     nextSession,
     repeatRule: meeting.repeat_rule || "",
-    repeatLabel: isRegular ? formatRepeatRule(meeting.repeat_rule, scheduleStart, scheduleEnd) : "",
+    repeatLabel: isRegular ? formatRegularMeetingSchedule({ ...meeting, next_session: nextSession, sessions: scheduledSessions }, "") : "",
     time: formatDateTime(scheduleStart),
     rawTime: scheduleStart || null,
     endTime: scheduleEnd || null,
+    operationEndAt: meeting.end_at || null,
     sessions: scheduledSessions,
     member: meetingMemberText(meeting),
     state,
@@ -269,10 +260,27 @@ function ScheduleTag({ children, tone = "sport" }) {
   return <span className={`profile-schedule-tag is-${tone}`}>{children}</span>;
 }
 
+function MeetingFilterChips({ value, onChange }) {
+  return (
+    <div className="profile-meeting-filters" aria-label="모임 유형 필터">
+      {MEETING_FILTERS.map((filter) => (
+        <button
+          key={filter.key}
+          type="button"
+          className={value === filter.key ? "is-active" : ""}
+          aria-pressed={value === filter.key}
+          onClick={() => onChange(filter.key)}
+        >
+          {filter.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ScheduleItem({ item, variant = "schedule" }) {
   const isHost = item.state === "host";
-  const showHostTag = variant === "schedule" && isHost;
-  const showTypeTag = variant !== "schedule" && item.meetingTypeLabel;
+  const showTypeTag = Boolean(item.meetingTypeLabel);
   const isEnded = isMeetingEnded(item);
   return (
     <article className={`proto-schedule-item proto-schedule-item--profile ${isHost ? "proto-schedule-item--host" : ""}`}>
@@ -284,9 +292,8 @@ function ScheduleItem({ item, variant = "schedule" }) {
       )}
       <img src={item.img} alt={item.title} />
       <div>
-        {(showHostTag || showTypeTag || item.sportName) && (
+        {(showTypeTag || item.sportName) && (
           <div className="profile-schedule-tags">
-            {showHostTag && <ScheduleTag tone="host"><Crown size={13} />내가 방장</ScheduleTag>}
             {showTypeTag && <ScheduleTag tone={item.meetingType === "regular" ? "regular" : "one-time"}>{item.meetingTypeLabel}</ScheduleTag>}
             {item.sportName && <ScheduleTag tone="sport">{item.sportName}</ScheduleTag>}
           </div>
@@ -514,6 +521,8 @@ function DesktopMyPage() {
   const [calendarMeetings, setCalendarMeetings] = useState(null);
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [calendarError, setCalendarError] = useState("");
+  const [createdMeetingFilter, setCreatedMeetingFilter] = useState("all");
+  const [joinedMeetingFilter, setJoinedMeetingFilter] = useState("all");
 
   const [reviewSubTab, setReviewSubTab] = useState("written"); // "written" | "received"
   const [writingReview, setWritingReview] = useState(null); // { meetingId, peerId, peerNickname, meetingTitle }
@@ -595,6 +604,14 @@ function DesktopMyPage() {
   const savedIntro = profile.bio || "";
   const hostedMeetings = (meetingsState.data?.hosted || []).map((meeting) => normalizeMeeting(meeting, "host"));
   const joinedMeetings = (meetingsState.data?.joined || []).map((meeting) => normalizeMeeting(meeting, "joined"));
+  const filteredHostedMeetings = useMemo(
+    () => filterMeetingItems(hostedMeetings, createdMeetingFilter),
+    [createdMeetingFilter, hostedMeetings]
+  );
+  const filteredJoinedMeetings = useMemo(
+    () => filterMeetingItems(joinedMeetings, joinedMeetingFilter),
+    [joinedMeetingFilter, joinedMeetings]
+  );
   const calendarHostedMeetings = (calendarMeetings?.hosted || []).map((meeting) => normalizeMeeting(meeting, "host"));
   const calendarJoinedMeetings = (calendarMeetings?.joined || []).map((meeting) => normalizeMeeting(meeting, "joined"));
   const scheduled = useMemo(
@@ -637,15 +654,15 @@ function DesktopMyPage() {
 
   const activityPanels = {
     schedule: { label: "다가오는 일정", count: scheduled.length, items: scheduled },
-    hosted: { label: "내가 만든 모임", count: hostedMeetings.length, items: hostedMeetings },
-    joined: { label: "참여 중인 모임", count: joinedMeetings.length, items: joinedMeetings },
+    hosted: { label: "내가 만든 모임", count: filteredHostedMeetings.length, items: filteredHostedMeetings, sourceCount: hostedMeetings.length, filter: createdMeetingFilter, setFilter: setCreatedMeetingFilter },
+    joined: { label: "참여한 모임", count: filteredJoinedMeetings.length, items: filteredJoinedMeetings, sourceCount: joinedMeetings.length, filter: joinedMeetingFilter, setFilter: setJoinedMeetingFilter },
     favorite: { label: "관심 모임", count: 0, items: [] },
     reviews: { label: "후기 관리", count: writtenReviews.length + receivedReviews.length, items: [] }
   };
   const activityMenu = [
     { key: "schedule", label: "다가오는 일정", icon: CalendarDays },
     { key: "hosted", label: "내가 만든 모임", icon: Crown },
-    { key: "joined", label: "참여 중인 모임", icon: Users },
+    { key: "joined", label: "참여한 모임", icon: Users },
     { key: "favorite", label: "관심 모임", icon: CircleDot },
     { key: "reviews", label: "후기 관리", icon: FileText }
   ];
@@ -860,8 +877,10 @@ function DesktopMyPage() {
             <div>
               <h2>{activePanel.label} <span className="schedule-count-inline">{activePanel.count}개</span></h2>
             </div>
-            <div className={`profile-schedule-actions ${activeActivity !== "schedule" ? "is-placeholder" : ""}`}>
-              {activeActivity === "schedule" ? (
+            <div className={`profile-schedule-actions ${!["schedule", "hosted", "joined"].includes(activeActivity) ? "is-placeholder" : ""}`}>
+              {["hosted", "joined"].includes(activeActivity) ? (
+                <MeetingFilterChips value={activePanel.filter} onChange={activePanel.setFilter} />
+              ) : activeActivity === "schedule" ? (
                 <button className="calendar-expand-btn" type="button" onClick={() => { setCalendarHighlight((current) => ({ ...current, source: "", autoOpen: false })); setCalendarOpen(true); }}><CalendarDays size={15} />달력으로 보기</button>
               ) : (
                 <span aria-hidden="true">달력으로 보기</span>
@@ -1013,7 +1032,15 @@ function DesktopMyPage() {
             {!meetingsState.loading && !reviewsLoading && !["reviews", "favorite"].includes(activeActivity) && (
               activePanel.items.length
                 ? activePanel.items.map((item) => <ScheduleItem key={`${item.state}-${item.id}`} item={item} variant={activeActivity} />)
-                : <p className="empty-schedule">표시할 항목이 없습니다.</p>
+                : <p className="empty-schedule">
+                    {["hosted", "joined"].includes(activeActivity) && activePanel.sourceCount > 0
+                      ? "해당 조건의 모임이 없습니다."
+                      : activeActivity === "hosted"
+                        ? "아직 만든 모임이 없습니다."
+                        : activeActivity === "joined"
+                          ? "아직 참여한 모임이 없습니다."
+                          : "표시할 항목이 없습니다."}
+                  </p>
             )}
           </div>
         </section>

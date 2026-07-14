@@ -1,91 +1,23 @@
 [
   {
-    "timestamp": "2026-07-14 09:47:15",
+    "timestamp": "2026-07-14 15:39:04",
     "admin": "ms",
-    "action_type": "회원 관리",
-    "description": "회원 고성민(ID 22)의 권한을 admin(으)로 변경, 회원 개인 정보 수정 작업을 수행했습니다.",
-    "target_id": 22
-  },
-  {
-    "timestamp": "2026-07-14 10:17:52",
-    "admin": "ms",
-    "action_type": "고객 문의 처리",
-    "description": "문의 #6 '사진 업로드 되나 확인용도입니다' 상태를 답변 완료(으)로 저장했습니다.",
+    "action_type": "공지사항 등록",
+    "description": "공지사항 'ㅇㅇㅇ'을 등록했습니다.",
     "target_id": null
   },
   {
-    "timestamp": "2026-07-14 10:17:55",
+    "timestamp": "2026-07-14 16:01:18",
     "admin": "ms",
     "action_type": "고객 문의 처리",
-    "description": "문의 #6 '사진 업로드 되나 확인용도입니다' 상태를 답변 완료(으)로 저장했습니다.",
+    "description": "문의 #8 '점메추' 상태를 답변 완료(으)로 저장했습니다.",
     "target_id": null
   },
   {
-    "timestamp": "2026-07-14 10:18:00",
+    "timestamp": "2026-07-14 16:55:27",
     "admin": "ms",
-    "action_type": "고객 문의 처리",
-    "description": "문의 #6 '사진 업로드 되나 확인용도입니다' 상태를 답변 완료(으)로 저장했습니다.",
-    "target_id": null
-  },
-  {
-    "timestamp": "2026-07-14 10:21:39",
-    "admin": "ms",
-    "action_type": "고객 문의 처리",
-    "description": "문의 #6 '사진 업로드 되나 확인용도입니다' 상태를 답변 완료(으)로 저장했습니다.",
-    "target_id": null
-  },
-  {
-    "timestamp": "2026-07-14 10:31:20",
-    "admin": "ms",
-    "action_type": "고객 문의 처리",
-    "description": "문의 #6 '사진 업로드 되나 확인용도입니다' 상태를 답변 완료(으)로 저장했습니다.",
-    "target_id": null
-  },
-  {
-    "timestamp": "2026-07-14 11:02:34",
-    "admin": "임승찬",
-    "action_type": "단체 알림 발송",
-    "description": "대상 [전체 회원]에게 단체 공지 알림을 발송했습니다. 수신 대상: 13명, 제목: '님들 ㅎㅇㅋㅋ'",
-    "target_id": null
-    "timestamp": "2026-07-14 09:40:04",
-    "admin": "test01",
-    "action_type": "회원 관리",
-    "description": "회원 m s(ID 23)의 권한을 superadmin(으)로 변경, 회원 개인 정보 수정 작업을 수행했습니다.",
-    "target_id": 23
-  },
-  {
-    "timestamp": "2026-07-14 10:47:13",
-    "admin": "test01",
     "action_type": "신고 처리",
-    "description": "신고 #1 (6분 페이스 이상은 들어오지 말 것) 상태를 resolved(으)로 저장했습니다.",
-    "target_id": 1
-  },
-  {
-    "timestamp": "2026-07-14 11:16:10",
-    "admin": "test01",
-    "action_type": "신고 처리",
-    "description": "신고 #2 (jh sㅇㅇㅇㅇ) 상태를 in_progress(으)로 저장했습니다.",
-    "target_id": 2
-  },
-  {
-    "timestamp": "2026-07-14 11:39:04",
-    "admin": "test01",
-    "action_type": "모임 폐쇄",
-    "description": "모임 ID 3 (송파 풋살 6대6 용병 모집)을(를) 강제 폐쇄(정지)했습니다.",
-    "target_id": 3
-  },
-  {
-    "timestamp": "2026-07-14 11:39:15",
-    "admin": "test01",
-    "action_type": "신고 처리",
-    "description": "신고 #3 (송파 풋살 6대6 용병 모집 채팅방) 상태를 resolved(으)로 저장했습니다.",
-    "target_id": 3
-  },
-  {
-    "timestamp": "2026-07-14 12:45:27",
-    "admin": "test01",
-    "action_type": "신고 처리",
-    "description": "신고 #2 (jh sㅇㅇㅇㅇ) 상태를 dismissed(으)로 저장했습니다.",
-    "target_id": 2
+    "description": "신고 #4 (ms) 상태를 dismissed(으)로 저장했습니다.",
+    "target_id": 4
   }
 ]

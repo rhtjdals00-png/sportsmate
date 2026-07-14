@@ -6,50 +6,70 @@ import LoadingCards from "../../common/LoadingCards.jsx";
 import { meetingApi } from "../../../api/meetingApi";
 import { sportApi } from "../../../api/sportApi";
 import { useAsync } from "../../../hooks/useAsync";
-import { formatDateTime, formatMeetingType } from "../../../utils/formatters";
+import { formatMeetingSchedule, formatMeetingType } from "../../../utils/formatters";
+import { getMeetingCoverImage, isUsingSportThumbnail } from "../../../utils/sportThumbnails";
 import { getSportVisualAsset, HOME_SPORT_SHORTCUT_LABELS } from "../../../utils/sportVisualAssets";
 
 function HomeRecommendedCard({ meeting }) {
   const sportName = meeting.sport?.name || meeting.sport_name;
+  const coverImage = getMeetingCoverImage(meeting);
+  const isSportThumb = isUsingSportThumbnail(meeting);
+  const statusLabel = getMeetingStatusLabel(meeting.status);
+  const statusTone = getMeetingStatusTone(meeting.status);
 
   return (
     <article className="meeting-card meeting-card--compact home-recommend-card" aria-label={meeting.title}>
-      <div className="meeting-card__body">
-        <div className="meeting-card__thumb" style={meeting.cover_image_url ? { backgroundImage: `url(${meeting.cover_image_url})` } : undefined}>
-          {!meeting.cover_image_url && <span>{sportName}</span>}
-        </div>
-        <div>
-          <div className="meeting-card__top">
-            <span className={`badge ${meeting.status === "open" ? "badge--success" : "badge--slate"}`}>
-              {meeting.status === "open" ? "모집중" : "모집마감"}
+      <div className="home-recommend-card__top">
+        <div
+          className={`meeting-card__thumb ${isSportThumb ? "is-sport-thumbnail" : ""}`}
+          style={coverImage ? { backgroundImage: `url(${coverImage})` } : undefined}
+        />
+        <div className="home-recommend-card__summary">
+          <div className="meeting-card__top home-recommend-card__tags">
+            <span className={`badge ${statusTone}`}>
+              {statusLabel}
             </span>
             <span className="badge badge--sky">{sportName}</span>
-            <span>{formatMeetingType(meeting.meeting_type)}</span>
+            <span className="badge badge--type">{formatMeetingType(meeting.meeting_type)}</span>
           </div>
-          <span className="meeting-card__title">{meeting.title}</span>
-          <p>{meeting.description}</p>
+          <span className="meeting-card__title home-recommend-card__title">{meeting.title}</span>
         </div>
       </div>
-      <dl className="meeting-card__meta">
-        <div>
+      <div className="home-recommend-card__content">
+        <p className="home-recommend-card__description">{meeting.description || ""}</p>
+      </div>
+      <dl className="meeting-card__meta home-recommend-card__footer">
+        <div className="home-recommend-card__location">
           <MapPin size={16} />
           <span>{meeting.location_name || meeting.address}</span>
         </div>
-        <div>
+        <div className="home-recommend-card__meta-item">
           <CalendarClock size={16} />
-          <span>{formatDateTime(meeting.start_at)}</span>
+          <span>{formatMeetingSchedule(meeting)}</span>
         </div>
-        <div>
+        <div className="home-recommend-card__meta-item">
           <Users size={16} />
           <span>{meeting.current_participants}/{meeting.max_participants}명</span>
         </div>
-        <div>
+        <div className="home-recommend-card__meta-item">
           <Star size={16} />
           <span>4.{meeting.id % 5 + 5}</span>
         </div>
       </dl>
     </article>
   );
+}
+
+function getMeetingStatusLabel(status) {
+  if (status === "full") return "모집마감";
+  if (status === "closed") return "모집종료";
+  return "모집중";
+}
+
+function getMeetingStatusTone(status) {
+  if (status === "full") return "badge--warning";
+  if (status === "closed" || status === "cancelled") return "badge--slate";
+  return "badge--success";
 }
 
 function DesktopHome() {

@@ -127,13 +127,16 @@
 
 .board-badge {
   display: inline-flex;
+  min-height: 24px;
   width: fit-content;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
   border-radius: 999px;
-  padding: 6px 11px;
+  padding: 0 9px;
   font-size: 12px;
-  font-weight: 950;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .board-badge.open {
@@ -141,9 +144,19 @@
   color: #15803d;
 }
 
+.board-badge.host {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .board-badge.joined {
   background: #e0e7ff;
   color: #3730a3;
+}
+
+.board-badge.recruiting {
+  background: #dcfce7;
+  color: #15803d;
 }
 
 .detail-grid,

@@ -637,10 +637,14 @@ button {
 .badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  box-sizing: border-box;
   border-radius: 999px;
-  padding: 5px 9px;
+  padding: 0 9px;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -673,6 +677,11 @@ button {
 .badge--warning {
   background: #fef3c7;
   color: #b45309;
+}
+
+.badge--type {
+  background: #eef2ff;
+  color: #3730a3;
 }
 
 .detail-page {
