@@ -36,13 +36,16 @@ function AdminLayout() {
     if (location.pathname.startsWith("/admin/meetings/")) {
       return "모임 상세 정보";
     }
+    if (location.pathname.startsWith("/admin/reports/")) {
+      return "신고 상세 처리";
+    }
     switch (location.pathname) {
       case "/admin/users":
         return "회원 관리";
       case "/admin/meetings":
         return "모임 관리";
       case "/admin/reports":
-        return "신고 및 제재 리포트 관리";
+        return "신고 관리";
       case "/admin/broadcast":
         return "전체 공지 및 알림 발송";
       case "/admin/analytics":
@@ -124,7 +127,7 @@ function AdminLayout() {
             }
           >
             <AlertTriangle size={18} />
-            <span>리포트 관리</span>
+            <span>신고 관리</span>
           </NavLink>
 
           <NavLink 

@@ -7,6 +7,7 @@ from sqlalchemy.orm import joinedload
 from app.extensions import db
 from app.models import ChatMessage, ChatMessageRead, ChatRoom, DirectChatMessage, DirectChatRoom, Meeting, Participant, Sport, User
 from app.services.notification_service import create_notification, send_web_push
+from app.utils.meeting_state import meeting_chat_is_read_only
 from app.utils.timezone import kst_now
 
 
@@ -29,8 +30,6 @@ def _room_options(include_messages=False):
 
 def ensure_chat_access(room_id, user_id, include_messages=False):
     room = ChatRoom.query.options(*_room_options(include_messages)).get_or_404(room_id)
-    if room.meeting and room.meeting.status in {"cancelled", "suspended"}:
-        raise PermissionError("종료된 모임의 채팅방입니다.")
     if room.meeting and room.meeting.host_id == user_id:
         return room
     participant = Participant.query.filter_by(meeting_id=room.meeting_id, user_id=user_id, status="approved").first()
@@ -66,6 +65,8 @@ def reply_preview(message):
 
 def send_message(room_id, user_id, data):
     room = ensure_chat_access(room_id, user_id)
+    if meeting_chat_is_read_only(room.meeting):
+        raise PermissionError("마감된 모임의 채팅방은 읽기만 가능합니다.")
     sender = User.query.options(joinedload(User.profile)).get(user_id)
     if not isinstance(data, dict):
         data = {"content": str(data or "")}

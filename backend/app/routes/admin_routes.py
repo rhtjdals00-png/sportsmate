@@ -3,7 +3,7 @@ from flask_jwt_extended import jwt_required
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import Meeting, Report, User, Participant, Sport
+from app.models import ChatMessage, ChatRoom, DirectChatMessage, DirectChatRoom, Meeting, Report, User, Participant, Sport
 from app.utils.timezone import kst_now, parse_client_datetime
 
 admin_bp = Blueprint("admin", __name__)
@@ -145,20 +145,193 @@ def meeting_detail(meeting_id):
 
 
 @admin_bp.get("/reports")
+@jwt_required()
 def reports():
+    admin_user = _require_admin_user()
+    if not admin_user:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+
+    status = request.args.get("status")
+    query = Report.query.options(joinedload(Report.reporter), joinedload(Report.admin))
+    if status and status != "all":
+        query = query.filter(Report.status == status)
     return jsonify({
         "items": [
-            {
-                "id": item.id,
-                "target_type": item.target_type,
-                "target_id": item.target_id,
-                "reason": item.reason,
-                "status": item.status,
-                "created_at": item.created_at.isoformat() if item.created_at else None
-            }
-            for item in Report.query.order_by(Report.created_at.desc()).limit(admin_limit()).all()
+            item.to_dict(include_internal=True)
+            for item in query.order_by(Report.created_at.desc(), Report.id.desc()).limit(admin_limit()).all()
         ]
     })
+
+
+def _report_user_summary(user):
+    if not user:
+        return None
+    received_total = Report.query.filter_by(target_type="user", target_id=user.id).count()
+    received_pending = Report.query.filter_by(target_type="user", target_id=user.id, status="pending").count()
+    made_total = Report.query.filter_by(reporter_id=user.id).count()
+    made_dismissed = Report.query.filter_by(reporter_id=user.id, status="dismissed").count()
+    hosted_count = Meeting.query.filter_by(host_id=user.id).count()
+    joined_count = Participant.query.filter_by(user_id=user.id, status="approved").count()
+    data = user.to_dict()
+    data["report_stats"] = {
+        "received_total": received_total,
+        "received_pending": received_pending,
+        "made_total": made_total,
+        "made_dismissed": made_dismissed,
+        "hosted_meetings": hosted_count,
+        "joined_meetings": joined_count,
+    }
+    return data
+
+
+def _message_log_item(message):
+    data = message.to_dict()
+    data["room_type"] = "meeting"
+    if message.room and message.room.meeting:
+        data["meeting"] = {
+            "id": message.room.meeting.id,
+            "title": message.room.meeting.title,
+            "location_name": message.room.meeting.location_name,
+        }
+    return data
+
+
+def _direct_message_log_item(message):
+    data = message.to_dict()
+    data["room_type"] = "direct"
+    if message.room:
+        data["direct_room"] = {
+            "id": message.room.id,
+            "user_a": message.room.user_a.to_dict() if message.room.user_a else None,
+            "user_b": message.room.user_b.to_dict() if message.room.user_b else None,
+        }
+    return data
+
+
+@admin_bp.get("/reports/<int:report_id>")
+@jwt_required()
+def report_detail(report_id):
+    admin_user = _require_admin_user()
+    if not admin_user:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+
+    report = Report.query.options(joinedload(Report.reporter), joinedload(Report.admin)).get_or_404(report_id)
+    target_user = User.query.get(report.target_id) if report.target_type == "user" else None
+    target_meeting = Meeting.query.options(*ADMIN_MEETING_OPTIONS).get(report.target_id) if report.target_type == "meeting" else None
+    target_room = ChatRoom.query.options(
+        joinedload(ChatRoom.meeting),
+        joinedload(ChatRoom.messages).joinedload(ChatMessage.sender).joinedload(User.profile),
+    ).get(report.target_id) if report.target_type == "chat_room" else None
+
+    room_logs = []
+    user_logs = []
+    direct_logs = []
+    if target_room:
+        ordered = sorted(target_room.messages, key=lambda message: (message.created_at, message.id))
+        room_logs = [_message_log_item(message) for message in ordered[-250:]]
+    if target_user:
+        user_messages = (
+            ChatMessage.query
+            .options(
+                joinedload(ChatMessage.sender).joinedload(User.profile),
+                joinedload(ChatMessage.room).joinedload(ChatRoom.meeting),
+            )
+            .filter(ChatMessage.user_id == target_user.id)
+            .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
+            .limit(200)
+            .all()
+        )
+        user_logs = [_message_log_item(message) for message in reversed(user_messages)]
+        direct_messages = (
+            DirectChatMessage.query
+            .options(
+                joinedload(DirectChatMessage.sender).joinedload(User.profile),
+                joinedload(DirectChatMessage.room).joinedload(DirectChatRoom.user_a).joinedload(User.profile),
+                joinedload(DirectChatMessage.room).joinedload(DirectChatRoom.user_b).joinedload(User.profile),
+            )
+            .filter(DirectChatMessage.sender_id == target_user.id)
+            .order_by(DirectChatMessage.created_at.desc(), DirectChatMessage.id.desc())
+            .limit(100)
+            .all()
+        )
+        direct_logs = [_direct_message_log_item(message) for message in reversed(direct_messages)]
+
+    related_reports = []
+    if target_user:
+        related_reports = [
+            item.to_dict(include_internal=True)
+            for item in Report.query
+            .options(joinedload(Report.reporter), joinedload(Report.admin))
+            .filter(Report.target_type == "user", Report.target_id == target_user.id, Report.id != report.id)
+            .order_by(Report.created_at.desc(), Report.id.desc())
+            .limit(20)
+            .all()
+        ]
+
+    return jsonify({
+        "report": report.to_dict(include_internal=True),
+        "reporter": _report_user_summary(report.reporter),
+        "target_user": _report_user_summary(target_user),
+        "target_meeting": target_meeting.to_dict() if target_meeting else None,
+        "target_room": target_room.to_dict() if target_room else None,
+        "chat_logs": room_logs,
+        "user_chat_logs": user_logs,
+        "direct_chat_logs": direct_logs,
+        "related_reports": related_reports,
+    })
+
+
+@admin_bp.patch("/reports/<int:report_id>")
+@jwt_required()
+def update_report(report_id):
+    admin_user = _require_admin_user()
+    if not admin_user:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+
+    report = Report.query.options(joinedload(Report.reporter), joinedload(Report.admin)).get_or_404(report_id)
+    data = request.get_json() or {}
+    status = data.get("status") or report.status
+    if status not in {"pending", "in_progress", "resolved", "dismissed"}:
+        return jsonify({"message": "지원하지 않는 신고 상태입니다."}), 400
+
+    previous_status = report.status
+    report.status = status
+    report.admin_id = admin_user.id
+    if "admin_note" in data:
+        report.admin_note = (data.get("admin_note") or "").strip()
+    if status in {"resolved", "dismissed"} and not report.resolved_at:
+        report.resolved_at = kst_now()
+    if status in {"pending", "in_progress"}:
+        report.resolved_at = None
+
+    if previous_status != status and status in {"resolved", "dismissed"}:
+        from app.services.notification_service import create_notification
+        if status == "resolved":
+            title = "신고 검토가 완료되었습니다"
+            message = "접수하신 신고를 검토했으며, 운영 정책에 따라 필요한 조치를 진행했습니다."
+        else:
+            title = "신고 검토 결과 안내"
+            message = "접수하신 신고를 검토했으나, 현재 제공된 내용만으로는 추가 조치가 어렵습니다."
+        create_notification(
+            report.reporter_id,
+            "report_result",
+            title,
+            message,
+            "/notifications",
+            send_push=True
+        )
+
+    db.session.commit()
+
+    from app.utils.audit import log_admin_action
+    log_admin_action(
+        admin_name=admin_user.nickname or admin_user.name or admin_user.email,
+        action_type="신고 처리",
+        description=f"신고 #{report.id} ({report.target_label()}) 상태를 {status}(으)로 저장했습니다.",
+        target_id=report.id
+    )
+
+    return jsonify({"item": report.to_dict(include_internal=True), "message": "신고 처리 내용이 저장되었습니다."})
 
 
 @admin_bp.patch("/meetings/<int:meeting_id>")

@@ -14,6 +14,7 @@ from app.services.chat_service import (
     send_direct_message,
     send_message,
 )
+from app.utils.meeting_state import meeting_chat_is_read_only
 
 chat_bp = Blueprint("chat", __name__)
 
@@ -110,6 +111,12 @@ def rooms():
     room_items = []
     for room in items:
         data = room.to_list_dict(latest_by_room.get(room.id))
+        read_only = meeting_chat_is_read_only(room.meeting)
+        data["is_read_only"] = read_only
+        data["chat_status_label"] = "마감된 모임" if read_only else "진행 중"
+        if data.get("meeting"):
+            data["meeting"]["is_chat_read_only"] = read_only
+            data["meeting"]["chat_status_label"] = data["chat_status_label"]
         data["unread_count"] = unread_by_room.get(room.id, 0)
         room_items.append(data)
     return jsonify({"items": room_items})

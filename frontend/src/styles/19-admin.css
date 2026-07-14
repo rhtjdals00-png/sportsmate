@@ -728,22 +728,44 @@
   border-radius: 50%;
 }
 
-.admin-state-indicator__dot--waiting {
+.admin-state-indicator__dot--waiting,
+.admin-state-indicator__dot--pending {
   background-color: #f97316;
 }
 
-.admin-state-indicator__dot--done {
-  background-color: #94a3b8;
+.admin-state-indicator__dot--progress {
+  background-color: #2563eb;
 }
 
-.admin-state-indicator__text--waiting {
+.admin-state-indicator__dot--done,
+.admin-state-indicator__dot--resolved {
+  background-color: #10b981;
+}
+
+.admin-state-indicator__dot--dismissed {
+  background-color: #ef4444;
+}
+
+.admin-state-indicator__text--waiting,
+.admin-state-indicator__text--pending {
   color: #f97316;
   font-weight: 600;
 }
 
-.admin-state-indicator__text--done {
-  color: #64748b;
-  font-weight: 400;
+.admin-state-indicator__text--progress {
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.admin-state-indicator__text--done,
+.admin-state-indicator__text--resolved {
+  color: #059669;
+  font-weight: 700;
+}
+
+.admin-state-indicator__text--dismissed {
+  color: #dc2626;
+  font-weight: 700;
 }
 
 /* Table Actions */
@@ -1510,6 +1532,355 @@
   color: #64748b;
   max-width: 380px;
   line-height: 1.5;
+}
+
+.admin-report-detail {
+  display: grid;
+  gap: 18px;
+}
+
+button.admin-stat-card {
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.admin-report-detail__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-report-detail__top button,
+.admin-report-detail__top span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #dbe5f3;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.admin-report-detail__top button {
+  cursor: pointer;
+}
+
+.admin-report-hero,
+.admin-report-detail-card,
+.admin-report-log-panel,
+.admin-report-quick-actions,
+.admin-report-process-card {
+  border: 1px solid #dbe5f3;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.06);
+}
+
+.admin-report-hero {
+  padding: 22px 24px;
+}
+
+.admin-report-hero span,
+.admin-report-process-card header,
+.admin-report-log-panel header span,
+.admin-report-detail-card header span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.admin-report-hero h2 {
+  margin: 10px 0 8px;
+  color: #0f172a;
+  font-size: 26px;
+  line-height: 1.25;
+}
+
+.admin-report-hero p {
+  margin: 0;
+  color: #334155;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.admin-report-hero small {
+  display: block;
+  margin-top: 12px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-report-quick-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+}
+
+.admin-report-quick-actions > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-report-quick-actions span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.admin-report-quick-actions p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-report-quick-actions > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.admin-report-quick-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.admin-report-quick-actions a.is-danger {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.admin-report-detail-grid,
+.admin-report-log-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.admin-report-detail-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+
+.admin-report-detail-card.is-danger {
+  border-color: #fecaca;
+}
+
+.admin-report-detail-card header,
+.admin-report-log-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-report-detail-card header a,
+.admin-report-detail-card header b,
+.admin-report-log-panel header b {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.admin-report-detail-card > strong {
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.admin-report-detail-card > p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-report-risk-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.admin-report-risk-grid div {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.admin-report-risk-grid b,
+.admin-report-risk-grid span {
+  display: block;
+}
+
+.admin-report-risk-grid b {
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.admin-report-risk-grid span {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.admin-report-log-panel {
+  overflow: hidden;
+}
+
+.admin-report-log-panel header {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 15px 18px;
+}
+
+.admin-report-log-panel > div {
+  display: grid;
+  gap: 8px;
+  max-height: 520px;
+  overflow: auto;
+  padding: 14px 18px 18px;
+}
+
+.admin-report-log-panel article {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.admin-report-log-panel article div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-report-log-panel article strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.admin-report-log-panel time,
+.admin-report-log-panel small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.admin-report-log-panel p {
+  margin: 7px 0 0;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.admin-report-empty {
+  margin: 0;
+  color: #94a3b8 !important;
+  text-align: center;
+}
+
+.admin-report-related-list {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-report-related-list a {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #334155;
+  padding: 12px;
+  text-decoration: none;
+}
+
+.admin-report-related-list span,
+.admin-report-related-list small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-report-process-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.admin-report-process-card > p {
+  margin: 0;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.admin-report-process-card label {
+  display: grid;
+  gap: 8px;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.admin-report-process-card select,
+.admin-report-process-card textarea {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #0f172a;
+  font: inherit;
+  padding: 11px 12px;
+}
+
+.admin-report-process-card textarea {
+  resize: vertical;
+}
+
+.admin-report-process-card button {
+  justify-self: end;
+  border: 0;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #ffffff;
+  padding: 11px 16px;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
 }
 
 /* 14. Responsive Styles for Admin Panel */

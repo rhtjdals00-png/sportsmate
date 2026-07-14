@@ -105,6 +105,9 @@ function ResponsiveLayout() {
       {!hideChatbotFloating ? (
         <Link className="desktop-chatbot-floating" to="/chatbot" aria-label="AI 챗봇 열기">
           <span className="desktop-chatbot-floating__logo"><img src="/img/sportsmate_bot.png" alt="" /></span>
+          <span className="desktop-chatbot-floating__text">
+            <strong>AI 챗봇</strong>
+          </span>
         </Link>
       ) : null}
       {permissionGuideOpen ? (

@@ -54,7 +54,8 @@ function isNoticeType(type) {
     "admin",
     "system",
     "support_inquiry",
-    "support_reply"
+    "support_reply",
+    "report_result"
   ].includes(type);
 }
 
@@ -71,6 +72,7 @@ function notificationTypeLabel(type) {
   if (type === "vote") return "투표";
   if (type === "support_reply") return "문의 답변";
   if (type === "support_inquiry") return "고객 문의";
+  if (type === "report_result") return "신고 처리";
   if (isNoticeType(type)) return "운영 안내";
   return "알림";
 }

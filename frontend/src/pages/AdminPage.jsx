@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { 
   Users, 
   Trophy, 
@@ -37,8 +37,20 @@ const mockNewUsers = [
   { id: 4, name: "최현우", time: "1일 전", sport: "농구", emoji: "🏀", initial: "CH" }
 ];
 
+const reportStatusTone = {
+  pending: "pending",
+  "대기 중": "pending",
+  in_progress: "progress",
+  "처리 중": "progress",
+  resolved: "resolved",
+  "처리 완료": "resolved",
+  dismissed: "dismissed",
+  "반려": "dismissed"
+};
+
 function AdminPage() {
   const { isMobile } = useResponsive();
+  const navigate = useNavigate();
   const [reports, setReports] = useState([]);
   const [newUsers, setNewUsers] = useState([]);
   const [stats, setStats] = useState({
@@ -163,12 +175,9 @@ function AdminPage() {
               status: r.status === "pending" || r.status === "대기 중" ? "대기 중" : "처리 완료"
             }));
             
-            // API 데이터가 부족하면 기본 데이터로 빈 영역을 채웁니다.
-            for (let i = formatted.length; i < 4; i++) {
-              if (mockReports[i]) formatted.push(mockReports[i]);
-            }
-            
             setReports(formatted);
+          } else {
+            setReports([]);
           }
  // 26.07.01 충돌 지점 검증필요
 //          const formatted = apiReports.slice(0, 4).map((r, index) => ({
@@ -196,14 +205,8 @@ function AdminPage() {
     fetchAdminData();
   }, []);
 
-  const handleAction = (reportId, currentStatus) => {
-    if (currentStatus === "대기 중") {
-      alert(`신고 번호 #${reportId} 처리를 시작합니다.`);
-      // 화면에서 먼저 처리 완료 상태로 반영합니다.
-      setReports(prev => prev.map(r => r.id === reportId ? { ...r, status: "처리 완료" } : r));
-    } else {
-      alert(`신고 번호 #${reportId} 상세 내역을 조회합니다.`);
-    }
+  const handleAction = (reportId) => {
+    navigate("/admin/reports");
   };
 
   if (isMobile) {
@@ -272,7 +275,7 @@ function AdminPage() {
         </div>
 
         {/* 대기 중인 신고 카드입니다. */}
-        <div className="admin-stat-card admin-stat-card--danger">
+        <button type="button" className="admin-stat-card admin-stat-card--danger" onClick={() => navigate("/admin/reports")} style={{ textAlign: "left" }}>
           <div className="admin-stat-card__main">
             <span className="admin-stat-card__title">대기 중인 신고</span>
             <div className="admin-stat-card__value">
@@ -286,7 +289,7 @@ function AdminPage() {
           <div className="admin-stat-card__icon-box admin-stat-card__icon-box--red">
             <AlertTriangle size={22} />
           </div>
-        </div>
+        </button>
       </section>
 
       {/* 관리자 주요 분석 영역입니다. */}
@@ -314,7 +317,8 @@ function AdminPage() {
                 </thead>
                 <tbody>
                   {reports.map((report) => {
-                    const isWaiting = report.status === "대기 중" || report.status === "pending";
+                    const isActionable = ["대기 중", "처리 중", "pending", "in_progress"].includes(report.status);
+                    const stateTone = reportStatusTone[report.status] || "resolved";
                     const badgeType = 
                       report.type === "욕설" 
                         ? "red" 
@@ -334,8 +338,8 @@ function AdminPage() {
                         <td style={{ color: "#64748b" }}>{report.date}</td>
                         <td>
                           <div className="admin-state-indicator">
-                            <span className={`admin-state-indicator__dot admin-state-indicator__dot--${isWaiting ? "waiting" : "done"}`}></span>
-                            <span className={`admin-state-indicator__text--${isWaiting ? "waiting" : "done"}`}>
+                            <span className={`admin-state-indicator__dot admin-state-indicator__dot--${stateTone}`}></span>
+                            <span className={`admin-state-indicator__text--${stateTone}`}>
                               {report.status}
                             </span>
                           </div>
@@ -343,10 +347,10 @@ function AdminPage() {
                         <td style={{ textAlign: "center" }}>
                           <button
                             type="button"
-                            onClick={() => handleAction(report.id, report.status)}
-                            className={`admin-table-action-btn admin-table-action-btn--${isWaiting ? "primary" : "outline"}`}
+                            onClick={() => handleAction(report.id)}
+                            className={`admin-table-action-btn admin-table-action-btn--${isActionable ? "primary" : "outline"}`}
                           >
-                            {isWaiting ? "처리하기" : "상세 보기"}
+                            {isActionable ? "처리하기" : "처리 내역"}
                           </button>
                         </td>
                       </tr>

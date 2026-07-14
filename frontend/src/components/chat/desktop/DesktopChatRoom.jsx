@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Eye,
   EyeOff,
+  Flag,
   FileText,
   LocateFixed,
   LogOut,
@@ -33,6 +34,7 @@ import LoadingCards from "../../common/LoadingCards.jsx";
 import { chatApi } from "../../../api/chatApi";
 import { locationApi } from "../../../api/locationApi";
 import { meetingApi } from "../../../api/meetingApi";
+import { reportApi } from "../../../api/reportApi";
 import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { voteApi } from "../../../api/voteApi";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
@@ -134,6 +136,18 @@ function replyContent(message) {
 
 function isSystemMessage(message) {
   return ["notice", "system"].includes(message?.message_type);
+}
+
+function isReadOnlyRoomItem(item) {
+  if (item?.is_read_only || item?.meeting?.is_chat_read_only) return true;
+  const meeting = item?.meeting || {};
+  if (["closed", "cancelled", "suspended"].includes(String(meeting.status || ""))) return true;
+  const labelText = `${item?.chat_status_label || ""} ${meeting.chat_status_label || ""} ${meeting.status_label || ""}`;
+  if (/마감|종료|취소|폐쇄/.test(labelText)) return true;
+  const endValue = meeting.end_at || meeting.start_at;
+  if (!endValue) return false;
+  const endTime = new Date(endValue).getTime();
+  return Number.isFinite(endTime) && endTime <= Date.now();
 }
 
 function mapUrl(message) {
@@ -489,6 +503,10 @@ function DesktopChatRoom() {
   const [voteConfirm, setVoteConfirm] = useState(null);
   const [voteSubmitting, setVoteSubmitting] = useState(false);
   const [voteError, setVoteError] = useState("");
+  const [reportTarget, setReportTarget] = useState(null);
+  const [reportForm, setReportForm] = useState({ reason: "abuse", reason_detail: "" });
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportMessage, setReportMessage] = useState("");
   const messageListRef = useRef(null);
   const messageRefs = useRef({});
   const messageInputRef = useRef(null);
@@ -530,6 +548,7 @@ function DesktopChatRoom() {
   const firstUnreadMessageId = room?.first_unread_message_id;
   const directOtherUser = isDirectChat ? room?.other_user : null;
   const meeting = room?.meeting;
+  const chatReadOnly = !isDirectChat && Boolean(room?.is_read_only);
   const renderedMessages = activeMessages.data?.items || [];
   const roomItems = rooms.data?.items || [];
   const directRoomItems = directRooms.data?.items || [];
@@ -629,6 +648,14 @@ function DesktopChatRoom() {
   }, [voteOpen, meeting?.id]);
 
   useEffect(() => {
+    if (!chatReadOnly) return;
+    setReplyTarget(null);
+    setActionMenuOpen(false);
+    if (voteMode === "create") setVoteMode("list");
+    if (noticeFormOpen) setNoticeFormOpen(false);
+  }, [chatReadOnly, noticeFormOpen, voteMode]);
+
+  useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !chatRoomId) {
       return undefined;
     }
@@ -710,6 +737,11 @@ function DesktopChatRoom() {
   const send = async (event) => {
     event.preventDefault();
     if (!content.trim()) return;
+    if (chatReadOnly) {
+      setError("마감된 모임의 채팅방은 읽기만 가능합니다.");
+      setActionNotice("");
+      return;
+    }
     setError("");
     setActionNotice("");
     setSending(true);
@@ -737,6 +769,10 @@ function DesktopChatRoom() {
   };
 
   const openPhotoPicker = () => {
+    if (chatReadOnly) {
+      setActionNotice("마감된 모임에서는 사진을 보낼 수 없습니다.");
+      return;
+    }
     setActionNotice("");
     setError("");
     fileInputRef.current?.click();
@@ -794,6 +830,11 @@ function DesktopChatRoom() {
     const resetInput = () => {
       event.target.value = "";
     };
+    if (chatReadOnly) {
+      setActionNotice("마감된 모임에서는 사진을 보낼 수 없습니다.");
+      resetInput();
+      return;
+    }
     if (!file.type.startsWith("image/")) {
       setActionNotice("이미지 파일만 전송할 수 있습니다.");
       resetInput();
@@ -843,6 +884,10 @@ function DesktopChatRoom() {
   };
 
   const sendLocationPayload = async ({ latitude, longitude, label }) => {
+    if (chatReadOnly) {
+      setLocationPickerMessage("마감된 모임에서는 위치를 공유할 수 없습니다.");
+      return;
+    }
     const payload = {
       content: "위치를 공유했습니다.",
       message_type: "location",
@@ -871,6 +916,10 @@ function DesktopChatRoom() {
   };
 
   const openLocationPicker = () => {
+    if (chatReadOnly) {
+      setActionNotice("마감된 모임에서는 위치를 공유할 수 없습니다.");
+      return;
+    }
     setActionNotice("");
     setError("");
     setActionMenuOpen(false);
@@ -964,6 +1013,12 @@ function DesktopChatRoom() {
   };
 
   const openVoteCreate = () => {
+    if (chatReadOnly) {
+      setVoteMode("list");
+      setVoteError("마감된 모임에서는 투표를 새로 만들 수 없습니다.");
+      setVoteOpen(true);
+      return;
+    }
     setActionMenuOpen(false);
     setVoteMode("create");
     setVoteError("");
@@ -1019,6 +1074,10 @@ function DesktopChatRoom() {
   const createVote = async (event) => {
     event.preventDefault();
     if (!meeting?.id) return;
+    if (chatReadOnly) {
+      setVoteError("마감된 모임에서는 투표를 새로 만들 수 없습니다.");
+      return;
+    }
     const options = voteForm.options.map((option) => option.trim()).filter(Boolean);
     if (!voteForm.title.trim() || options.length < 2) {
       setVoteError("투표 제목과 선택지 2개 이상을 입력해주세요.");
@@ -1047,6 +1106,10 @@ function DesktopChatRoom() {
   };
 
   const toggleVoteSelection = (vote, optionId) => {
+    if (chatReadOnly) {
+      setVoteError("마감된 모임에서는 투표 참여를 변경할 수 없습니다.");
+      return;
+    }
     if (!vote.allow_multiple) {
       const option = vote.options.find((item) => Number(item.id) === Number(optionId));
       setVoteConfirm({ vote, optionIds: [optionId], label: option?.text || "선택지" });
@@ -1063,6 +1126,10 @@ function DesktopChatRoom() {
   };
 
   const confirmMultipleVote = (vote) => {
+    if (chatReadOnly) {
+      setVoteError("마감된 모임에서는 투표 참여를 변경할 수 없습니다.");
+      return;
+    }
     const optionIds = voteSelections[vote.id] || selectedIdsOf(vote);
     if (!optionIds.length) {
       setVoteError("투표 선택지를 선택해주세요.");
@@ -1073,6 +1140,11 @@ function DesktopChatRoom() {
 
   const submitConfirmedVote = async () => {
     if (!voteConfirm) return;
+    if (chatReadOnly) {
+      setVoteConfirm(null);
+      setVoteError("마감된 모임에서는 투표 참여를 변경할 수 없습니다.");
+      return;
+    }
     setVoteError("");
     try {
       await voteApi.participate(voteConfirm.vote.id, { option_ids: voteConfirm.optionIds });
@@ -1090,6 +1162,11 @@ function DesktopChatRoom() {
   };
 
   const openNoticeForm = (draft = {}) => {
+    if (chatReadOnly) {
+      setNoticeError("마감된 모임에서는 공지를 새로 등록할 수 없습니다.");
+      setActionNotice("마감된 모임에서는 공지를 새로 등록할 수 없습니다.");
+      return;
+    }
     setNoticeError("");
     setNoticeForm({
       title: draft.title || "",
@@ -1102,6 +1179,10 @@ function DesktopChatRoom() {
   const createNotice = async (event) => {
     event.preventDefault();
     if (!meeting?.id) return;
+    if (chatReadOnly) {
+      setNoticeError("마감된 모임에서는 공지를 새로 등록할 수 없습니다.");
+      return;
+    }
     if (!noticeForm.title.trim() || !noticeForm.content.trim()) {
       setNoticeError("공지 제목과 내용을 입력해주세요.");
       return;
@@ -1137,6 +1218,11 @@ function DesktopChatRoom() {
   };
 
   const startReplyToMessage = (message) => {
+    if (chatReadOnly) {
+      setMessageMenu(null);
+      setActionNotice("마감된 모임에서는 답장을 보낼 수 없습니다.");
+      return;
+    }
     setMessageMenu(null);
     setReplyTarget(message);
     window.setTimeout(() => messageInputRef.current?.focus(), 0);
@@ -1154,9 +1240,64 @@ function DesktopChatRoom() {
     });
   };
 
-  const canReplyToMessage = (message) => !isSystemMessage(message);
-  const canNoticeMessage = (message) => canManageRoom && !isSystemMessage(message);
+  const canReplyToMessage = (message) => !chatReadOnly && !isSystemMessage(message);
+  const canNoticeMessage = (message) => !chatReadOnly && canManageRoom && !isSystemMessage(message);
   const canUseMessageMenu = (message) => canReplyToMessage(message) || canNoticeMessage(message);
+
+  const openRoomReport = () => {
+    if (!room?.id) return;
+    setReportTarget({
+      target_type: "chat_room",
+      target_id: room.id,
+      title: meeting?.title ? `${meeting.title} 채팅방 신고` : "채팅방 신고"
+    });
+    setReportForm({ reason: "abuse", reason_detail: "" });
+    setReportMessage("");
+    setMenuExpanded(false);
+  };
+
+  const openUserReport = (targetUser) => {
+    if (!targetUser?.id) return;
+    setReportTarget({
+      target_type: "user",
+      target_id: targetUser.id,
+      title: `${senderLabel(targetUser)} 신고`
+    });
+    setReportForm({ reason: "abuse", reason_detail: "" });
+    setReportMessage("");
+    setProfilePreviewUser(null);
+  };
+
+  const submitReport = async (event) => {
+    event.preventDefault();
+    if (!reportTarget) return;
+    if (reportForm.reason_detail.trim().length < 5) {
+      setReportMessage("신고 사유를 조금 더 자세히 입력해주세요.");
+      return;
+    }
+    setReportSubmitting(true);
+    setReportMessage("");
+    try {
+      await reportApi.create({
+        ...reportTarget,
+        reason: reportForm.reason,
+        reason_detail: reportForm.reason_detail.trim(),
+        context: JSON.stringify({
+          meeting_id: meeting?.id || null,
+          chat_room_id: room?.id || null
+        })
+      });
+      setReportMessage("신고가 접수되었습니다. 관리자가 확인 후 처리합니다.");
+      window.setTimeout(() => {
+        setReportTarget(null);
+        setReportMessage("");
+      }, 900);
+    } catch (reportError) {
+      setReportMessage(reportError.response?.data?.message || "신고 접수에 실패했습니다.");
+    } finally {
+      setReportSubmitting(false);
+    }
+  };
 
   const openMessageMenu = (event, message) => {
     if (!canReplyToMessage(message)) return;
@@ -1322,8 +1463,9 @@ function DesktopChatRoom() {
             <div className="talk-list-items">
               {roomItems.map((item) => {
                 const itemMeeting = item.meeting || {};
+                const itemReadOnly = isReadOnlyRoomItem(item);
                 return (
-                  <div key={item.id} className={`proto-talk-room-item ${String(item.id) === String(chatRoomId) ? "selected" : ""}`}>
+                  <div key={item.id} className={`proto-talk-room-item ${String(item.id) === String(chatRoomId) ? "selected" : ""} ${itemReadOnly ? "is-read-only" : ""}`}>
                     {(() => {
                       const isMuted = mutedRooms.some(r => String(r.room_id) === String(item.id) && r.room_type === "meeting");
                       return (
@@ -1333,6 +1475,7 @@ function DesktopChatRoom() {
                             <span>
                               <b>{itemMeeting.title || "모임 채팅방"}</b>
                               <small>{itemMeeting.location_name || "장소 미정"} · {itemMeeting.current_participants || 0}/{itemMeeting.max_participants || 0}명</small>
+                              {itemReadOnly ? <small className="talk-room-ended-label">마감된 모임</small> : null}
                             </span>
                             <em>
                               {isMuted ? <BellOff size={11} style={{ marginRight: '3px', color: '#94a3b8', verticalAlign: 'middle' }} /> : null}
@@ -1421,7 +1564,7 @@ function DesktopChatRoom() {
             <EmptyState title="채팅방을 불러오지 못했습니다." description={isDirectChat ? "1:1 톡방 접근 상태를 확인하거나 잠시 후 다시 시도해주세요." : "참여 승인 상태를 확인하거나 잠시 후 다시 시도해주세요."} actionLabel="채팅 목록" actionTo="/chats" />
           </section>
         ) : (
-          <section className="page-card talk-room talk-room-open">
+          <section className={`page-card talk-room talk-room-open ${chatReadOnly ? "is-read-only" : ""}`}>
             <div className="talk-room-top">
               <div>
                 <strong>{isDirectChat ? senderLabel(directOtherUser) : (meeting?.title || "채팅방")}</strong>
@@ -1446,6 +1589,10 @@ function DesktopChatRoom() {
                       <button className="talk-tool-btn" type="button" onClick={() => { setMemberPanelOpen((v) => !v); setTalkInfoOpen(false); }}>
                         <UsersRound size={15} />
                         <b>멤버</b>
+                      </button>
+                      <button className="talk-tool-btn is-danger-text" type="button" onClick={openRoomReport}>
+                        <Flag size={15} />
+                        <b>방 신고</b>
                       </button>
                       {canManageRoom && meeting?.id ? (
                         <>
@@ -1501,7 +1648,7 @@ function DesktopChatRoom() {
                 <CalendarDays size={15} />
                 <span>내 모임 일정 보기</span>
               </Link>
-              {canManageRoom && meeting?.id ? (
+              {canManageRoom && meeting?.id && !chatReadOnly ? (
                 <button type="button" onClick={() => openNoticeForm()}>
                   <Pin size={15} />
                   <span>공지 작성</span>
@@ -1538,6 +1685,16 @@ function DesktopChatRoom() {
                 <strong>공지사항</strong>
                 <span>{pinnedNoticeText}</span>
               </button>
+            ) : null}
+
+            {!isDirectChat && chatReadOnly ? (
+              <div className="talk-readonly-banner">
+                <Megaphone size={18} />
+                <span>
+                  <strong>마감된 모임입니다.</strong>
+                  <small>채팅 입력과 기능 사용은 종료되었고, 이전 대화와 공지 기록만 확인할 수 있어요.</small>
+                </span>
+              </div>
             ) : null}
 
             <div className="talk-messages" ref={messageListRef} onScroll={handleMessageScroll}>
@@ -1613,7 +1770,7 @@ function DesktopChatRoom() {
                             <span />
                           </button>
                         ) : null}
-                        {!isDirectChat && canManageRoom && !isSystemMessage(message) ? (
+                        {!isDirectChat && !chatReadOnly && canManageRoom && !isSystemMessage(message) ? (
                           <button className="talk-message-notice-btn" type="button" onClick={() => openMessageNoticeDraft(message)}>공지로</button>
                         ) : null}
                       </div>
@@ -1641,36 +1798,46 @@ function DesktopChatRoom() {
               </button>
             ) : null}
 
-            <form className="talk-input" onSubmit={send}>
-              {!isDirectChat && replyTarget ? (
-                <div className="talk-reply-preview">
-                  <Reply size={15} />
-                  <span>
-                    <b>{messagePreview(replyTarget)}</b>
-                    <small>{senderLabel(replyTarget.sender)}에게 답장</small>
-                  </span>
-                  <button type="button" onClick={() => setReplyTarget(null)} aria-label="답장 취소">
-                    <X size={14} />
-                  </button>
-                </div>
-              ) : null}
-              {error ? <p className="talk-input-error">{error}</p> : null}
-              {actionNotice ? <p className="talk-input-notice">{actionNotice}</p> : null}
-              {actionMenuOpen ? (
-                <div className="chat-action-menu" role="menu">
-                  <button type="button" role="menuitem" onClick={openPhotoPicker}><Camera size={17} />사진 전송</button>
-                  {!isDirectChat && canManageRoom ? <button type="button" role="menuitem" onClick={openVoteCreate}><Vote size={17} />투표 생성</button> : null}
-                  {!isDirectChat && canManageRoom ? <button type="button" role="menuitem" onClick={() => openNoticeForm()}><Pin size={17} />공지 작성</button> : null}
-                  <button type="button" role="menuitem" onClick={shareLocation}><MapPin size={17} />위치 공유</button>
-                </div>
-              ) : null}
-              <input ref={fileInputRef} className="chat-file-input" type="file" accept="image/*" onChange={handlePhotoSelected} />
-              <button className="talk-input-more" type="button" onClick={() => setActionMenuOpen((value) => !value)} aria-label="채팅 기능 더보기" aria-expanded={actionMenuOpen}>
-                <Plus size={20} />
-              </button>
-              <input ref={messageInputRef} value={content} onChange={(event) => setContent(event.target.value)} placeholder="메시지를 입력하세요." aria-label="메시지 입력" />
-              <button type="submit" disabled={sending || !content.trim()} aria-label="메시지 전송"><Send size={18} /></button>
-            </form>
+            {chatReadOnly ? (
+              <div className="talk-input talk-input--readonly">
+                <Megaphone size={18} />
+                <span>
+                  <strong>마감된 모임의 채팅방입니다.</strong>
+                  <small>채팅 기록과 공지만 확인할 수 있습니다.</small>
+                </span>
+              </div>
+            ) : (
+              <form className="talk-input" onSubmit={send}>
+                {!isDirectChat && replyTarget ? (
+                  <div className="talk-reply-preview">
+                    <Reply size={15} />
+                    <span>
+                      <b>{messagePreview(replyTarget)}</b>
+                      <small>{senderLabel(replyTarget.sender)}에게 답장</small>
+                    </span>
+                    <button type="button" onClick={() => setReplyTarget(null)} aria-label="답장 취소">
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : null}
+                {error ? <p className="talk-input-error">{error}</p> : null}
+                {actionNotice ? <p className="talk-input-notice">{actionNotice}</p> : null}
+                {actionMenuOpen ? (
+                  <div className="chat-action-menu" role="menu">
+                    <button type="button" role="menuitem" onClick={openPhotoPicker}><Camera size={17} />사진 전송</button>
+                    {!isDirectChat && canManageRoom ? <button type="button" role="menuitem" onClick={openVoteCreate}><Vote size={17} />투표 생성</button> : null}
+                    {!isDirectChat && canManageRoom ? <button type="button" role="menuitem" onClick={() => openNoticeForm()}><Pin size={17} />공지 작성</button> : null}
+                    <button type="button" role="menuitem" onClick={shareLocation}><MapPin size={17} />위치 공유</button>
+                  </div>
+                ) : null}
+                <input ref={fileInputRef} className="chat-file-input" type="file" accept="image/*" onChange={handlePhotoSelected} />
+                <button className="talk-input-more" type="button" onClick={() => setActionMenuOpen((value) => !value)} aria-label="채팅 기능 더보기" aria-expanded={actionMenuOpen}>
+                  <Plus size={20} />
+                </button>
+                <input ref={messageInputRef} value={content} onChange={(event) => setContent(event.target.value)} placeholder="메시지를 입력하세요." aria-label="메시지 입력" />
+                <button type="submit" disabled={sending || !content.trim()} aria-label="메시지 전송"><Send size={18} /></button>
+              </form>
+            )}
           </section>
         )}
       </div>
@@ -1718,8 +1885,55 @@ function DesktopChatRoom() {
                   <button className="is-danger" type="button" onClick={() => kickParticipant(previewParticipant)}>추방</button>
                 ) : null;
               })()}
+              {String(profilePreviewUser.id ?? "") !== String(user?.id ?? "") ? (
+                <button className="is-danger" type="button" onClick={() => openUserReport(profilePreviewUser)}>
+                  <Flag size={14} />
+                  신고
+                </button>
+              ) : null}
               <button type="button">차단</button>
             </div>
+          </section>
+        </div>
+      ) : null}
+
+      {reportTarget ? (
+        <div className="chat-report-modal" role="dialog" aria-modal="true" aria-label="신고하기">
+          <button className="chat-vote-modal__backdrop" type="button" onClick={() => setReportTarget(null)} aria-label="닫기" />
+          <section>
+            <header>
+              <div>
+                <span>신고하기</span>
+                <p>{reportTarget.title}</p>
+              </div>
+              <button type="button" onClick={() => setReportTarget(null)} aria-label="닫기"><X size={18} /></button>
+            </header>
+            <form onSubmit={submitReport}>
+              <label>
+                신고 유형
+                <select value={reportForm.reason} onChange={(event) => setReportForm((current) => ({ ...current, reason: event.target.value }))}>
+                  <option value="abuse">욕설/비방</option>
+                  <option value="spam">스팸/광고</option>
+                  <option value="no_show">노쇼/운영 방해</option>
+                  <option value="inappropriate">부적절한 내용</option>
+                  <option value="etc">기타</option>
+                </select>
+              </label>
+              <label>
+                상세 사유
+                <textarea
+                  rows={5}
+                  value={reportForm.reason_detail}
+                  onChange={(event) => setReportForm((current) => ({ ...current, reason_detail: event.target.value }))}
+                  placeholder="관리자가 확인할 수 있도록 상황을 적어주세요."
+                />
+              </label>
+              {reportMessage ? <p className="chat-report-modal__message">{reportMessage}</p> : null}
+              <div>
+                <button type="button" onClick={() => setReportTarget(null)}>취소</button>
+                <button type="submit" disabled={reportSubmitting}>{reportSubmitting ? "접수 중..." : "신고 접수"}</button>
+              </div>
+            </form>
           </section>
         </div>
       ) : null}
@@ -1878,9 +2092,10 @@ function DesktopChatRoom() {
             {canManageRoom ? (
               <div className="chat-vote-modal__tabs">
                 <button type="button" className={voteMode === "list" ? "active" : ""} onClick={() => setVoteMode("list")}>진행중인 투표</button>
-                <button type="button" className={voteMode === "create" ? "active" : ""} onClick={() => setVoteMode("create")}>투표 만들기</button>
+                {!chatReadOnly ? <button type="button" className={voteMode === "create" ? "active" : ""} onClick={() => setVoteMode("create")}>투표 만들기</button> : null}
               </div>
             ) : null}
+            {chatReadOnly ? <p className="chat-vote-modal__notice">마감된 모임에서는 투표 현황만 확인할 수 있습니다.</p> : null}
             {voteError ? <p className="chat-vote-modal__error">{voteError}</p> : null}
             {voteMode === "create" ? (
               <form className="chat-vote-create" onSubmit={createVote}>
@@ -1930,7 +2145,7 @@ function DesktopChatRoom() {
                         </div>
                         <span className="chat-vote-header-actions">
                           {vote.is_anonymous ? <EyeOff size={15} /> : <Eye size={15} />}
-                          {canManageRoom ? <button type="button" onClick={() => openVoteNoticeDraft(vote)}>공지로</button> : null}
+                          {canManageRoom && !chatReadOnly ? <button type="button" onClick={() => openVoteNoticeDraft(vote)}>공지로</button> : null}
                         </span>
                       </header>
                       <div>
@@ -1939,7 +2154,7 @@ function DesktopChatRoom() {
                           const percent = totalResponses ? Math.round((count / totalResponses) * 100) : 0;
                           const selected = currentSelection.some((id) => Number(id) === Number(option.id));
                           return (
-                            <button type="button" key={option.id} className={selected ? "selected" : ""} onClick={() => toggleVoteSelection(vote, option.id)}>
+                            <button type="button" key={option.id} className={selected ? "selected" : ""} onClick={() => toggleVoteSelection(vote, option.id)} disabled={chatReadOnly}>
                               <span>{option.text}</span>
                               <i><b style={{ width: `${percent}%` }} /></i>
                               <em>{count}표 · {percent}%</em>
@@ -1948,7 +2163,7 @@ function DesktopChatRoom() {
                           );
                         })}
                       </div>
-                      {vote.allow_multiple ? <button className="chat-vote-submit-selection" type="button" onClick={() => confirmMultipleVote(vote)}>선택 반영</button> : null}
+                      {vote.allow_multiple && !chatReadOnly ? <button className="chat-vote-submit-selection" type="button" onClick={() => confirmMultipleVote(vote)}>선택 반영</button> : null}
                     </article>
                   );
                 })}

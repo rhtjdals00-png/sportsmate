@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { 
   DollarSign, 
   UserPlus, 
@@ -47,6 +47,7 @@ const systemLogs = [
 
 function AdminAnalyticsPage() {
   const { isMobile } = useResponsive();
+  const navigate = useNavigate();
 
   if (isMobile) {
     return <MobileAdminAnalyticsPage />;
@@ -783,7 +784,7 @@ function AdminAnalyticsPage() {
         </div>
 
         {/* Card 4: Issues Warning Card */}
-        <div className="admin-stat-card">
+        <button type="button" className="admin-stat-card" onClick={() => navigate("/admin/reports")} style={{ textAlign: "left" }}>
           <div className="admin-stat-card__main">
             <span className="admin-stat-card__title">신고/이슈 현황</span>
             <div style={{ display: "flex", gap: "20px", marginTop: "4px" }}>
@@ -804,7 +805,7 @@ function AdminAnalyticsPage() {
           <div className="admin-stat-card__icon-box admin-stat-card__icon-box--red">
             <AlertCircle size={20} />
           </div>
-        </div>
+        </button>
       </section>
 
       {/* 2. Analytical Graphs Section (Line chart & Doughnut chart) */}
