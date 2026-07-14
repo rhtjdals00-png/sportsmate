@@ -1,4 +1,4 @@
-﻿* {
+* {
   box-sizing: border-box;
 }
 
@@ -402,7 +402,7 @@ button {
   align-items: center;
   align-content: flex-start;
   gap: 6px;
-  min-height: 54px;
+  margin-bottom: 6px;
   color: #64748b;
   font-size: 12px;
 }
@@ -412,6 +412,10 @@ button {
   grid-template-columns: 88px 1fr;
   gap: 12px;
   align-items: start;
+}
+
+.meeting-card__body > div:nth-child(2) {
+  min-width: 0;
 }
 
 .meeting-card__thumb {
@@ -431,7 +435,11 @@ button {
 }
 
 .meeting-card .meeting-card__title {
-  display: block;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
   margin-top: 0;
   font-size: 17px;
   font-weight: 800;
@@ -633,6 +641,8 @@ button {
   padding: 5px 9px;
   font-size: 12px;
   font-weight: 800;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .badge--success {

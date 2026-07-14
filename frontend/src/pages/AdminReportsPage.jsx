@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { adminApi } from "../api/adminApi";
 import { CheckCircle, AlertTriangle } from "lucide-react";
 import { useResponsive } from "../hooks/useResponsive";
@@ -12,8 +13,44 @@ const mockReports = [
   { id: 4, type: "욕설", target: "화난사람", reporter: "테니스킹", date: "2023.10.24", reason: "댓글란에 비속어 작성 및 시비조 댓글 반복 작성", status: "처리 완료" }
 ];
 
+const reportTypeLabel = {
+  user: "회원 신고",
+  meeting: "모임 신고",
+  chat_room: "채팅방 신고"
+};
+
+const statusLabel = {
+  pending: "대기 중",
+  in_progress: "처리 중",
+  resolved: "처리 완료",
+  dismissed: "반려"
+};
+
+const statusTone = {
+  pending: "pending",
+  in_progress: "progress",
+  resolved: "resolved",
+  dismissed: "dismissed"
+};
+
+function formatReportRow(r, index = 0) {
+  return {
+    id: r.id || index + 1,
+    type: reportTypeLabel[r.target_type] || r.reason || "기타",
+    target: r.target_name || r.target_type || `대상 #${r.target_id || ""}`,
+    reporter: r.reporter_name || "신고자",
+    reason: r.reason_detail || r.reason || "상세 사유가 제공되지 않았습니다.",
+    date: r.created_at ? new Date(r.created_at).toLocaleDateString().replace(/\s/g, "").replace(/\.$/, "") : "2023.10.27",
+    status: statusLabel[r.status] || r.status || "대기 중",
+    rawStatus: r.status || "pending",
+    adminNote: r.admin_note || ""
+  };
+}
+
 function AdminReportsPage() {
   const { isMobile } = useResponsive();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   if (isMobile) {
     return <MobileAdminReportsPage />;
@@ -26,6 +63,7 @@ function AdminReportsPage() {
   const [activeSearchField, setActiveSearchField] = useState("all");
   const [activeSearchQuery, setActiveSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [feedback, setFeedback] = useState(location.state?.notice || "");
   const itemsPerPage = 10;
 
   const handleSearch = () => {
@@ -54,16 +92,7 @@ function AdminReportsPage() {
         setLoading(true);
         const res = await adminApi.reports();
         if (res && res.items) {
-          const formatted = res.items.map((r, index) => ({
-            id: r.id || index + 1,
-            type: r.reason || "기타",
-            target: r.target_name || r.target_type || `대상 #${r.target_id || ""}`,
-            reporter: r.reporter_name || "신고자",
-            reason: r.reason_detail || "상세 사유가 제공되지 않았습니다.",
-            date: r.created_at ? new Date(r.created_at).toLocaleDateString().replace(/\s/g, "").replace(/\.$/, "") : "2023.10.27",
-            status: r.status === "pending" || r.status === "대기 중" ? "대기 중" : "처리 완료"
-          }));
-          setReports(formatted);
+          setReports(res.items.map(formatReportRow));
         }
       } catch (err) {
         console.error("API error while loading reports, showing mock defaults", err);
@@ -80,17 +109,7 @@ function AdminReportsPage() {
   }, [activeSearchQuery, activeSearchField]);
 
   const handleProcess = (reportId) => {
-    setReports(prev => prev.map(r => {
-      if (r.id === reportId) {
-        if (r.status === "처리 완료") {
-          alert(`신고 번호 #${reportId}은 이미 처리 완료된 건입니다.`);
-          return r;
-        }
-        alert(`신고 번호 #${reportId}을(를) 처리 완료 상태로 업데이트했습니다.`);
-        return { ...r, status: "처리 완료" };
-      }
-      return r;
-    }));
+    navigate(`/admin/reports/${reportId}`);
   };
 
   const filteredReports = reports.filter(r => {
@@ -217,6 +236,11 @@ function AdminReportsPage() {
         </div>
       </div>
       <div className="admin-panel-card__body">
+        {feedback ? (
+          <div className="admin-inline-feedback" style={{ marginBottom: "14px", padding: "10px 12px", borderRadius: "8px", background: "#eff6ff", color: "#1d4ed8", fontWeight: 700 }}>
+            {feedback}
+          </div>
+        ) : null}
         <div className="admin-table-wrapper">
           <table className="admin-data-table">
             <thead>
@@ -262,7 +286,8 @@ function AdminReportsPage() {
                 </tr>
               ) : (
                 paginatedReports.map((r) => {
-                  const isWaiting = r.status === "대기 중";
+                  const isActionable = ["pending", "in_progress"].includes(r.rawStatus) || ["대기 중", "처리 중"].includes(r.status);
+                  const stateTone = statusTone[r.rawStatus] || (r.status === "대기 중" ? "pending" : r.status === "처리 중" ? "progress" : r.status === "반려" ? "dismissed" : "resolved");
                   const badgeType = 
                     r.type === "욕설" 
                       ? "red" 
@@ -286,8 +311,8 @@ function AdminReportsPage() {
                       <td style={{ color: "#64748b" }}>{r.date}</td>
                       <td>
                         <div className="admin-state-indicator">
-                          <span className={`admin-state-indicator__dot admin-state-indicator__dot--${isWaiting ? "waiting" : "done"}`}></span>
-                          <span className={`admin-state-indicator__text--${isWaiting ? "waiting" : "done"}`}>
+                          <span className={`admin-state-indicator__dot admin-state-indicator__dot--${stateTone}`}></span>
+                          <span className={`admin-state-indicator__text--${stateTone}`}>
                             {r.status}
                           </span>
                         </div>
@@ -296,17 +321,16 @@ function AdminReportsPage() {
                         <button
                           type="button"
                           onClick={() => handleProcess(r.id)}
-                          disabled={!isWaiting}
-                          className={`admin-table-action-btn admin-table-action-btn--${isWaiting ? "primary" : "outline"}`}
-                          style={{ opacity: isWaiting ? 1 : 0.6, cursor: isWaiting ? "pointer" : "default" }}
+                          className={`admin-table-action-btn admin-table-action-btn--${isActionable ? "primary" : "outline"}`}
+                          style={{ opacity: 1, cursor: "pointer" }}
                         >
-                          {isWaiting ? (
+                          {isActionable ? (
                             <>
                               <AlertTriangle size={13} style={{ marginRight: "4px" }} /> 처리하기
                             </>
                           ) : (
                             <>
-                              <CheckCircle size={13} style={{ marginRight: "4px" }} /> 처리 완료됨
+                              <CheckCircle size={13} style={{ marginRight: "4px" }} /> 처리 내역
                             </>
                           )}
                         </button>

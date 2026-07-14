@@ -125,6 +125,7 @@ class Meeting(db.Model, TimestampMixin):
             "location_name": self.location_name,
             "address": self.address,
             "start_at": self.start_at.isoformat() if self.start_at else None,
+            "end_at": self.end_at.isoformat() if self.end_at else None,
             "max_participants": self.max_participants,
             "current_participants": self.current_participants,
             "status": self.status,

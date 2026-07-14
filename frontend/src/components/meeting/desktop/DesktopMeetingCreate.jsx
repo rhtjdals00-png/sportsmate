@@ -539,6 +539,8 @@ function DesktopMeetingCreate() {
         ...prev,
         meeting_type: "one_time",
         repeat_days: [],
+        end_date: "",
+        end_time: "",
       };
     });
     if (meetingType === "regular") {
@@ -546,6 +548,7 @@ function DesktopMeetingCreate() {
       setHasEndSchedule(false);
     } else {
       setHasStartSchedule(true);
+      setHasEndSchedule(false);
     }
   };
 
@@ -590,20 +593,19 @@ function DesktopMeetingCreate() {
   const toggleEndSchedule = (checked) => {
     setHasEndSchedule(checked);
     if (!checked) {
-      setForm((prev) => ({ ...prev, end_date: "", end_time: "" }));
+      setForm((prev) => ({ ...prev, end_date: "" }));
       return;
     }
     setForm((prev) => {
       const nextStartDate = prev.start_date || today;
       const nextStartTime = prev.start_time || defaultStartTimeForDate(nextStartDate, today);
       const nextEndDate = prev.end_date || nextStartDate;
-      const baseEndTime = prev.end_time || addMinutesToTime(nextStartTime, 60);
       return {
         ...prev,
         start_date: nextStartDate,
         start_time: nextStartTime,
         end_date: nextEndDate,
-        end_time: nextEndDate === nextStartDate ? clampTimeAfterMin(baseEndTime, nextStartTime) : baseEndTime
+        end_time: prev.end_time || addMinutesToTime(nextStartTime, 60)
       };
     });
   };
@@ -632,17 +634,14 @@ function DesktopMeetingCreate() {
       const minEndDate = prev.start_date || today;
       const nextEndDate = value && value < minEndDate ? minEndDate : value;
       const nextStartTime = prev.start_time || defaultStartTimeForDate(minEndDate, today);
-      const baseEndTime = prev.end_time || addMinutesToTime(nextStartTime, 60);
-      const next = { ...prev, start_time: prev.start_time || nextStartTime, end_date: nextEndDate, end_time: baseEndTime };
-      if (nextEndDate === prev.start_date && nextStartTime && next.end_time) next.end_time = clampTimeAfterMin(next.end_time, nextStartTime);
-      return next;
+      return { ...prev, start_time: prev.start_time || nextStartTime, end_date: nextEndDate };
     });
   };
 
   const updateEndTime = (value) => {
     setForm((prev) => ({
       ...prev,
-      end_time: prev.end_date === prev.start_date ? clampTimeAfterMin(value, prev.start_time) : value
+      end_time: prev.meeting_type === "regular" || prev.end_date === prev.start_date ? clampTimeAfterMin(value, prev.start_time) : value
     }));
   };
 
@@ -656,15 +655,10 @@ function DesktopMeetingCreate() {
     if (form.meeting_type === "one_time") {
       if (!form.start_date) return alert("모임 시작 날짜를 선택해 주세요.");
       if (!form.start_time) return alert("모임 시작 시간을 선택해 주세요.");
-      if (hasEndSchedule && (!form.end_date || !form.end_time)) return alert("종료 일정을 모두 입력해 주세요.");
-      if (hasEndSchedule && form.end_date < form.start_date) return alert("종료 시간은 시작 시간 이후여야 합니다.");
-      if (hasEndSchedule) {
-        const startAt = new Date(combineDateTime(form.start_date, form.start_time));
-        const endAt = new Date(combineDateTime(form.end_date, form.end_time));
-        if (endAt <= startAt) return alert("종료 시간은 시작 시간 이후여야 합니다.");
-      }
     } else {
       if (!form.start_date) return alert("반복 일정 시작일을 선택해 주세요.");
+      if (hasEndSchedule && !form.end_date) return alert("모임 종료일을 선택해 주세요.");
+      if (hasEndSchedule && form.end_date < form.start_date) return alert("모임 종료일은 시작일보다 빠를 수 없습니다.");
       if (!form.start_time) return alert("시작 시간을 선택해 주세요.");
       if (!form.end_time) return alert("종료 시간을 선택해 주세요.");
       if (!form.repeat_days.length) return alert("반복 요일을 하나 이상 선택해 주세요.");
@@ -696,6 +690,7 @@ function DesktopMeetingCreate() {
           ...basePayload,
           meeting_type: "regular",
           schedule_start_date: form.start_date,
+          schedule_end_date: hasEndSchedule ? form.end_date : null,
           start_time: form.start_time,
           end_time: form.end_time,
           repeat_days: form.repeat_days,
@@ -704,7 +699,6 @@ function DesktopMeetingCreate() {
           ...basePayload,
           meeting_type: "one_time",
           start_at: combineDateTime(form.start_date, form.start_time),
-          end_at: hasEndSchedule ? combineDateTime(form.end_date, form.end_time) : null,
         };
 
     const data = await meetingApi.create(payload);
@@ -745,20 +739,20 @@ function DesktopMeetingCreate() {
 
         <section>
           <h2>일정 및 장소</h2>
-          {form.meeting_type === "one_time" && (
-            <div className="desktop-schedule-toggles">
-              <label><input type="checkbox" checked={hasEndSchedule} onChange={(event) => toggleEndSchedule(event.target.checked)} /> 종료 일정 있음</label>
-            </div>
-          )}
           <div className="desktop-form-grid desktop-meeting-schedule-grid">
             {form.meeting_type === "regular" && (
               <fieldset className="desktop-regular-schedule desktop-form-full">
                 <legend>반복 일정</legend>
-                <p>선택한 요일을 기준으로 최초 12회 일정이 생성됩니다.</p>
+                <p>선택한 기간 동안 지정한 요일에 일정이 반복됩니다.</p>
+                <p>종료일을 설정하지 않으면 이번 달부터 다다음 달까지 일정이 미리 생성됩니다.</p>
+                <div className="desktop-schedule-toggles">
+                  <label><input type="checkbox" checked={hasEndSchedule} onChange={(event) => toggleEndSchedule(event.target.checked)} /> 모임 종료일 설정</label>
+                </div>
                 <div className="desktop-regular-schedule__grid">
-                  <label>반복 일정 시작일<CalendarSelect label={"\ubc18\ubcf5 \uc77c\uc815 \uc2dc\uc791\uc77c"} min={today} value={form.start_date} onChange={updateStartDate} icon={<CalendarClock size={18} />} /></label>
-                  <label>시작 시간<span className="desktop-icon-input"><AlarmClock size={18} /><TimeSelect required value={form.start_time} onChange={updateStartTime} /></span></label>
-                  <label>종료 시간<span className="desktop-icon-input"><AlarmClock size={18} /><TimeSelect required min={form.start_time} value={form.end_time} onChange={updateEndTime} /></span></label>
+                  <label>모임 시작일<CalendarSelect label={"\ubaa8\uc784 \uc2dc\uc791\uc77c"} min={today} value={form.start_date} onChange={updateStartDate} icon={<CalendarClock size={18} />} /></label>
+                  {hasEndSchedule && <label>모임 종료일<CalendarSelect label={"\ubaa8\uc784 \uc885\ub8cc\uc77c"} min={form.start_date || today} value={form.end_date} onChange={updateEndDate} icon={<CalendarClock size={18} />} /></label>}
+                  <label>회차 시작 시간<span className="desktop-icon-input"><AlarmClock size={18} /><TimeSelect required value={form.start_time} onChange={updateStartTime} /></span></label>
+                  <label>회차 종료 시간<span className="desktop-icon-input"><AlarmClock size={18} /><TimeSelect required min={form.start_time} value={form.end_time} onChange={updateEndTime} /></span></label>
                 </div>
                 <div className="desktop-repeat-days" role="group" aria-label="반복 요일">
                   {REPEAT_DAY_OPTIONS.map((day) => {
@@ -777,13 +771,6 @@ function DesktopMeetingCreate() {
                 <legend>시작 일정</legend>
                 <label>시작일<CalendarSelect label={"\uc2dc\uc791\uc77c"} min={today} value={form.start_date} onChange={updateStartDate} icon={<CalendarClock size={18} />} /></label>
                 <label>시작 시간<span className="desktop-icon-input"><AlarmClock size={18} /><TimeSelect required value={form.start_time} onChange={updateStartTime} /></span></label>
-              </fieldset>
-            )}
-            {form.meeting_type === "one_time" && hasEndSchedule && (
-              <fieldset className="desktop-date-time-pair">
-                <legend>종료 일정</legend>
-                <label>종료일<CalendarSelect label={"\uc885\ub8cc\uc77c"} min={form.start_date || today} value={form.end_date} onChange={updateEndDate} icon={<CalendarClock size={18} />} /></label>
-                <label>종료 시간<span className="desktop-icon-input"><AlarmClock size={18} /><TimeSelect required min={form.end_date === form.start_date ? form.start_time : undefined} value={form.end_time} onChange={updateEndTime} /></span></label>
               </fieldset>
             )}
             <div className="desktop-location-picker desktop-form-full">

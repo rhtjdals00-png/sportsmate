@@ -1,4 +1,5 @@
 from app.extensions import db
+from app.utils.meeting_state import meeting_chat_is_read_only
 from app.utils.timezone import kst_now, to_kst_iso
 from .common import TimestampMixin
 
@@ -22,6 +23,7 @@ class ChatRoom(db.Model, TimestampMixin):
         return {
             "id": self.id,
             "meeting": self.meeting.to_dict(current_user_id=current_user_id) if self.meeting else None,
+            "is_read_only": meeting_chat_is_read_only(self.meeting),
             "last_message": last_message,
             "unread_count": 0
         }
@@ -40,6 +42,7 @@ class ChatRoom(db.Model, TimestampMixin):
         return {
             "id": self.id,
             "meeting": meeting.to_list_dict() if meeting else None,
+            "is_read_only": meeting_chat_is_read_only(meeting),
             "last_message": last_message.to_dict() if last_message else None,
             "unread_count": 0
         }

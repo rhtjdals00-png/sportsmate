@@ -875,6 +875,18 @@ function MobileChatRoom() {
     }
   };
 
+  const kickMember = async (targetUser) => {
+    if (!meeting?.id) return;
+    if (!window.confirm(`${targetUser.nickname || '이 유저'}님을 강퇴하시겠습니까?`)) return;
+    try {
+      await meetingApi.kickMember(meeting.id, targetUser.id);
+      alert("강퇴 처리되었습니다.");
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      alert(err.response?.data?.message || "강퇴 처리에 실패했습니다.");
+    }
+  };
+
   const leaveRoom = async () => {
     const targetRoomId = chatRoomId || directRoomId;
     if (!targetRoomId || leavingRoom) return;
@@ -1894,24 +1906,32 @@ function MobileChatRoom() {
                       const pUser = participant.user || {};
                       const isMe = String(pUser.id || participant.user_id) === String(user?.id);
                       return (
-                        <button
+                        <div
                           key={participant.id || participant.user_id}
-                          type="button"
-                          onClick={() => { setDrawerOpen(false); openUserProfile(pUser); }}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
                             width: '100%',
                             padding: '8px 10px',
-                            border: 0,
                             background: 'none',
                             borderRadius: '10px',
-                            textAlign: 'left',
-                            cursor: 'pointer'
                           }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <button
+                            type="button"
+                            onClick={() => { setDrawerOpen(false); openUserProfile(pUser); }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '10px',
+                              border: 0,
+                              background: 'none',
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              flex: 1
+                            }}
+                          >
                             <div style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               {pUser.profile_image_url ? (
                                 <img src={pUser.profile_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -1922,11 +1942,30 @@ function MobileChatRoom() {
                             <span style={{ fontSize: '13px', color: '#1e293b', fontWeight: isMe ? '800' : '600' }}>
                               {pUser.nickname || "참여자"}{isMe ? " (나)" : ""}
                             </span>
-                          </div>
-                          <small style={{ fontSize: '11px', fontWeight: '800', color: participant.role === "host" ? '#f59e0b' : '#94a3b8', background: participant.role === "host" ? '#fef3c7' : '#f1f5f9', padding: '2px 6px', borderRadius: '6px' }}>
-                            {participant.role === "host" ? "방장" : participant.role || "멤버"}
-                          </small>
-                        </button>
+                            <small style={{ fontSize: '11px', fontWeight: '800', color: participant.role === "host" ? '#f59e0b' : '#94a3b8', background: participant.role === "host" ? '#fef3c7' : '#f1f5f9', padding: '2px 6px', borderRadius: '6px' }}>
+                              {participant.role === "host" ? "방장" : participant.role || "멤버"}
+                            </small>
+                          </button>
+                          
+                          {isRoomHost && !isMe && participant.role !== "host" && (
+                            <button
+                              type="button"
+                              onClick={() => kickMember(pUser)}
+                              style={{
+                                border: '1px solid #ef4444',
+                                background: '#fff',
+                                color: '#ef4444',
+                                fontSize: '11px',
+                                fontWeight: '700',
+                                padding: '4px 8px',
+                                borderRadius: '6px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              강퇴
+                            </button>
+                          )}
+                        </div>
                       );
                     })
                   )}

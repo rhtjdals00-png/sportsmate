@@ -494,7 +494,7 @@
 
 .mobile-shell .meeting-card .meeting-card__top {
   gap: 5px;
-  min-height: 50px;
+  margin-bottom: 4px;
 }
 
 .mobile-shell .meeting-card .meeting-card__top > span:not(.badge) {

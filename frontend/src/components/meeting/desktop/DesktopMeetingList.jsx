@@ -58,6 +58,10 @@ function getDateLabel(value) {
   }).format(date);
 }
 
+function getDisplayStartAt(meeting) {
+  return meeting.meeting_type === "regular" ? meeting.next_session?.start_at || meeting.start_at : meeting.start_at;
+}
+
 function getMeetingTypeLabel(type) {
   return type === "regular" ? "정기 모임" : "일회성 모임";
 }
@@ -407,7 +411,7 @@ function DesktopMeetingRow({ meeting }) {
         </span>
         <span>
           <CalendarClock size={16} />
-          <b>{getDateLabel(meeting.start_at)}</b>
+          <b>{getDateLabel(getDisplayStartAt(meeting))}</b>
         </span>
       </span>
       <span className="desktop-meeting-row__people">

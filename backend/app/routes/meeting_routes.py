@@ -5,7 +5,8 @@ from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models import Attendance, ChatMessage, ChatRoom, Meeting, Notice, Participant, Review, Sport, User, Vote, VoteOption, VoteResponse
-from app.services.meeting_service import close_expired_one_time_meetings, create_meeting, create_review, join_meeting, list_meeting_sessions, list_meetings, update_application, update_meeting
+from app.services.meeting_service import close_expired_one_time_meetings, create_meeting, create_review, get_next_meeting_session, join_meeting, list_meeting_sessions, list_meetings, update_application, update_meeting
+from app.utils.meeting_state import meeting_chat_is_read_only
 from app.utils.timezone import parse_client_datetime
 
 meeting_bp = Blueprint("meetings", __name__)
@@ -78,7 +79,13 @@ def host_summary(host):
 def index():
     current_user_id = current_user_id_optional()
     items = list_meetings(request.args, current_user_id)
-    return jsonify({"items": [meeting.to_list_dict(current_user_id=current_user_id) for meeting in items]})
+    response_items = []
+    for meeting in items:
+        data = meeting.to_list_dict(current_user_id=current_user_id)
+        next_session = get_next_meeting_session(meeting.id) if meeting.meeting_type == "regular" else None
+        data["next_session"] = next_session.to_dict() if next_session else None
+        response_items.append(data)
+    return jsonify({"items": response_items})
 
 
 @meeting_bp.post("")
@@ -104,6 +111,8 @@ def show(meeting_id):
     meeting.view_count += 1
     db.session.commit()
     data = meeting.to_dict(current_user_id=current_user_id)
+    next_session = get_next_meeting_session(meeting.id) if meeting.meeting_type == "regular" else None
+    data["next_session"] = next_session.to_dict() if next_session else None
     if meeting.host:
         data["host_summary"] = host_summary(meeting.host)
     return jsonify({"meeting": data})
@@ -233,6 +242,8 @@ def notices(meeting_id):
 def post_notice(meeting_id):
     meeting = Meeting.query.get_or_404(meeting_id)
     user_id = int(get_jwt_identity())
+    if meeting_chat_is_read_only(meeting):
+        return jsonify({"message": "마감된 모임에서는 공지를 새로 등록할 수 없습니다."}), 403
     if meeting.status == "suspended":
         return jsonify({"message": "폐쇄(비활성화) 처리된 모임입니다."}), 400
     if meeting.host_id != user_id and not can_manage_meeting_tools(meeting_id, user_id):
@@ -333,6 +344,8 @@ def votes(meeting_id):
 @jwt_required()
 def post_vote(meeting_id):
     meeting = Meeting.query.get_or_404(meeting_id)
+    if meeting_chat_is_read_only(meeting):
+        return jsonify({"message": "마감된 모임에서는 투표를 새로 만들 수 없습니다."}), 403
     if meeting.status == "suspended":
         return jsonify({"message": "폐쇄(비활성화) 처리된 모임입니다."}), 400
     user_id = int(get_jwt_identity())
@@ -429,6 +442,8 @@ def check_attendance(meeting_id):
 def delete_notice(meeting_id, notice_id):
     meeting = Meeting.query.get_or_404(meeting_id)
     user_id = int(get_jwt_identity())
+    if meeting_chat_is_read_only(meeting):
+        return jsonify({"message": "마감된 모임에서는 공지를 삭제할 수 없습니다."}), 403
     if meeting.status == "suspended":
         return jsonify({"message": "폐쇄(비활성화) 처리된 모임입니다."}), 400
     if meeting.host_id != user_id and not can_manage_meeting_tools(meeting_id, user_id):
@@ -454,6 +469,8 @@ def delete_notice(meeting_id, notice_id):
 def delete_vote(meeting_id, vote_id):
     meeting = Meeting.query.get_or_404(meeting_id)
     user_id = int(get_jwt_identity())
+    if meeting_chat_is_read_only(meeting):
+        return jsonify({"message": "마감된 모임에서는 투표를 삭제할 수 없습니다."}), 403
     if meeting.status == "suspended":
         return jsonify({"message": "폐쇄(비활성화) 처리된 모임입니다."}), 400
     if meeting.host_id != user_id and not can_manage_meeting_tools(meeting_id, user_id):

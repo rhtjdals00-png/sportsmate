@@ -2,7 +2,8 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
-from app.models import Participant, Vote, VoteOption, VoteResponse
+from app.models import Meeting, Participant, Vote, VoteOption, VoteResponse
+from app.utils.meeting_state import meeting_chat_is_read_only
 from app.utils.timezone import kst_now
 
 vote_bp = Blueprint("votes", __name__)
@@ -12,6 +13,9 @@ vote_bp = Blueprint("votes", __name__)
 @jwt_required()
 def participate(vote_id):
     vote = Vote.query.get_or_404(vote_id)
+    meeting = Meeting.query.get(vote.meeting_id)
+    if meeting_chat_is_read_only(meeting):
+        return jsonify({"message": "마감된 모임에서는 투표 참여를 변경할 수 없습니다."}), 403
     user_id = int(get_jwt_identity())
     participant = Participant.query.filter_by(meeting_id=vote.meeting_id, user_id=user_id, status="approved").first()
     if not participant:

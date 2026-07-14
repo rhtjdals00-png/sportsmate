@@ -291,11 +291,11 @@ function MobileAdminBroadcastPage() {
             <div style={{ padding: '30px 0', textAlign: 'center', color: '#94a3b8', fontSize: '12px' }}>발송된 내역이 없습니다.</div>
           ) : (
             <div style={{ display: 'grid', gap: '8px' }}>
-              {currentLogs.map((log) => {
+              {currentLogs.map((log, index) => {
                 const targetLabel = log.target_type === "all" ? "전체 회원" : log.target_type === "region" ? `지역: ${log.target_value}` : `등급: ${log.target_value}`;
                 return (
                   <div 
-                    key={log.id} 
+                    key={log.id || `log-${index}`} 
                     style={{
                       padding: '12px',
                       backgroundColor: '#f8fafc',

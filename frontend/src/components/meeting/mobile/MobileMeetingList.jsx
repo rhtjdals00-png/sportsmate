@@ -2,6 +2,7 @@ import { SlidersHorizontal } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
+import MobilePullToRefresh from "../../layout/mobile/MobilePullToRefresh.jsx";
 import MeetingCard from "../shared/MeetingCard.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import EmptyState from "../../common/EmptyState.jsx";
@@ -171,7 +172,7 @@ function MobileMeetingList() {
   };
 
   return (
-    <>
+    <MobilePullToRefresh onRefresh={async () => { await meetings.execute(); }}>
       <MobileHeader title="모임 게시판" />
       <section className="search-panel">
         <input
@@ -268,7 +269,7 @@ function MobileMeetingList() {
           actionTo="/meetings/create"
         />
       )}
-    </>
+    </MobilePullToRefresh>
   );
 }
 

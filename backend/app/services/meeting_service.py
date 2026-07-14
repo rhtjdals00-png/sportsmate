@@ -1,3 +1,4 @@
+import calendar
 import math
 from datetime import date, datetime, time, timedelta
 
@@ -56,21 +57,149 @@ def _build_repeat_rule(repeat_days):
     return f"FREQ=WEEKLY;BYDAY={','.join(repeat_days)}"
 
 
-def _build_regular_sessions(schedule_start_date, start_time, end_time, repeat_days, count=12):
+def _start_of_day(value):
+    return datetime.combine(value, time.min)
+
+
+def _end_of_day(value):
+    return datetime.combine(value, time(23, 59, 59))
+
+
+def _add_months(value, months):
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def _last_day_of_month(value):
+    return date(value.year, value.month, calendar.monthrange(value.year, value.month)[1])
+
+
+def _rolling_session_target_end(now=None):
+    current_date = (now or kst_now()).date()
+    target_month = _add_months(date(current_date.year, current_date.month, 1), 2)
+    return _last_day_of_month(target_month)
+
+
+def _effective_session_target_end(schedule_end_date=None, now=None):
+    target_end = _rolling_session_target_end(now)
+    return min(target_end, schedule_end_date) if schedule_end_date else target_end
+
+
+def _repeat_days_from_rule(repeat_rule):
+    if not repeat_rule:
+        return []
+    for part in str(repeat_rule).split(";"):
+        if part.startswith("BYDAY="):
+            return _normalize_repeat_days(part.replace("BYDAY=", "", 1).split(","))
+    return []
+
+
+def _build_regular_sessions(schedule_start_date, start_time, end_time, repeat_days, target_end_date, session_number_start=1, existing_start_dates=None):
     sessions = []
     current_date = schedule_start_date
     selected_weekdays = {WEEKDAY_INDEX[day] for day in repeat_days}
+    existing_start_dates = existing_start_dates or set()
 
-    while len(sessions) < count:
+    while current_date <= target_end_date:
         if current_date.weekday() in selected_weekdays:
-            sessions.append({
-                "session_number": len(sessions) + 1,
-                "start_at": datetime.combine(current_date, start_time),
-                "end_at": datetime.combine(current_date, end_time),
-            })
+            start_at = datetime.combine(current_date, start_time)
+            if start_at not in existing_start_dates:
+                sessions.append({
+                    "session_number": session_number_start + len(sessions),
+                    "start_at": start_at,
+                    "end_at": datetime.combine(current_date, end_time),
+                })
         current_date += timedelta(days=1)
 
     return sessions
+
+
+def ensure_regular_meeting_sessions(meeting, now=None):
+    if not meeting or meeting.meeting_type != "regular":
+        return {"created_count": 0, "target_end": None}
+
+    existing_sessions = (
+        MeetingSession.query
+        .filter_by(meeting_id=meeting.id)
+        .order_by(MeetingSession.start_at.asc())
+        .all()
+    )
+    if not existing_sessions:
+        return {"created_count": 0, "target_end": None, "reason": "missing_time_template"}
+
+    repeat_days = _repeat_days_from_rule(meeting.repeat_rule)
+    if not repeat_days:
+        return {"created_count": 0, "target_end": None, "reason": "missing_repeat_rule"}
+
+    template = next((session for session in existing_sessions if session.end_at), existing_sessions[0])
+    if not template.start_at:
+        return {"created_count": 0, "target_end": None, "reason": "missing_time_template"}
+
+    operation_end_date = meeting.end_at.date() if meeting.end_at else None
+    last_existing_date = max(session.start_at.date() for session in existing_sessions if session.start_at)
+    # 2026-07-14: 기존 legacy regular는 Meeting.end_at이 첫 회차 종료시간일 수 있어 회차보다 빠르면 cap으로 쓰지 않는다.
+    if operation_end_date and operation_end_date < last_existing_date:
+        operation_end_date = None
+
+    target_end = _effective_session_target_end(operation_end_date, now)
+    if target_end < last_existing_date:
+        return {"created_count": 0, "target_end": target_end.isoformat()}
+
+    range_start = last_existing_date + timedelta(days=1)
+    existing_starts = {session.start_at for session in existing_sessions if session.start_at}
+    next_session_number = max((session.session_number or 0) for session in existing_sessions) + 1
+    new_sessions = _build_regular_sessions(
+        range_start,
+        template.start_at.time(),
+        template.end_at.time() if template.end_at else template.start_at.time(),
+        repeat_days,
+        target_end,
+        session_number_start=next_session_number,
+        existing_start_dates=existing_starts,
+    )
+    for session in new_sessions:
+        db.session.add(MeetingSession(
+            meeting_id=meeting.id,
+            session_number=session["session_number"],
+            start_at=session["start_at"],
+            end_at=session["end_at"],
+            status="scheduled",
+        ))
+    return {
+        "created_count": len(new_sessions),
+        "range_start": range_start.isoformat(),
+        "target_end": target_end.isoformat(),
+    }
+
+
+def ensure_all_regular_meeting_sessions(now=None):
+    regular_meetings = (
+        Meeting.query
+        .filter(Meeting.meeting_type == "regular")
+        .filter(Meeting.status.in_(["open", "full"]))
+        .order_by(Meeting.id.asc())
+        .all()
+    )
+    results = []
+    total_created = 0
+    try:
+        for meeting in regular_meetings:
+            result = ensure_regular_meeting_sessions(meeting, now=now)
+            created_count = result.get("created_count", 0)
+            total_created += created_count
+            results.append({
+                "meeting_id": meeting.id,
+                **result,
+            })
+        if total_created:
+            db.session.commit()
+        return {"created_count": total_created, "items": results}
+    except Exception:
+        db.session.rollback()
+        raise
 
 
 def close_expired_one_time_meetings(now=None):
@@ -333,15 +462,15 @@ def create_meeting(data, host_id):
 
         meeting_type = data.get("meeting_type", "one_time")
         start_at = parse_datetime(data.get("start_at"))
-        end_at = parse_datetime(data.get("end_at"))
+        end_at = None
         repeat_rule = None
         regular_sessions = []
 
         if meeting_type == "one_time":
             if not start_at:
                 raise ValueError("일회성 모임은 시작 시간이 필요합니다.")
-            if end_at and end_at <= start_at:
-                raise ValueError("종료 시간은 시작 시간 이후여야 합니다.")
+            # 2026-07-14: 일회성 모임은 종료 입력 없이 같은 날 23:59:59까지 운영되는 것으로 저장한다.
+            end_at = _end_of_day(start_at.date())
 
         elif meeting_type == "regular":
             if not data.get("schedule_start_date"):
@@ -350,6 +479,9 @@ def create_meeting(data, host_id):
                 raise ValueError("정기모임은 시작 시간과 종료 시간이 필요합니다.")
 
             schedule_start_date = _parse_schedule_date(data.get("schedule_start_date"))
+            schedule_end_date = _parse_schedule_date(data.get("schedule_end_date")) if data.get("schedule_end_date") else None
+            if schedule_end_date and schedule_end_date < schedule_start_date:
+                raise ValueError("모임 종료일은 시작일보다 빠를 수 없습니다.")
             schedule_start_time = _parse_schedule_time(data.get("start_time"), "시작 시간")
             schedule_end_time = _parse_schedule_time(data.get("end_time"), "종료 시간")
             if schedule_end_time <= schedule_start_time:
@@ -357,16 +489,19 @@ def create_meeting(data, host_id):
 
             repeat_days = _normalize_repeat_days(data.get("repeat_days"))
             repeat_rule = _build_repeat_rule(repeat_days)
+            target_end_date = _effective_session_target_end(schedule_end_date)
             regular_sessions = _build_regular_sessions(
                 schedule_start_date,
                 schedule_start_time,
                 schedule_end_time,
                 repeat_days,
+                target_end_date,
             )
             if not regular_sessions:
                 raise ValueError("생성할 정기모임 회차가 없습니다.")
-            start_at = regular_sessions[0]["start_at"]
-            end_at = regular_sessions[0]["end_at"]
+            # 2026-07-14: 정기모임의 Meeting 시간은 운영 기간, MeetingSession 시간은 실제 회차를 뜻한다.
+            start_at = _start_of_day(schedule_start_date)
+            end_at = _end_of_day(schedule_end_date) if schedule_end_date else None
 
         meeting = Meeting(
             host_id=host_id,
@@ -395,7 +530,7 @@ def create_meeting(data, host_id):
                 meeting_id=meeting.id,
                 session_number=1,
                 start_at=meeting.start_at,
-                end_at=meeting.end_at,
+                end_at=None,
                 status="scheduled",
             ))
         elif meeting_type == "regular":

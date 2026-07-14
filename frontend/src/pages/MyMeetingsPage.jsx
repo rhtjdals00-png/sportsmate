@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import MeetingCard from "../components/meeting/shared/MeetingCard.jsx";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
+import MobilePullToRefresh from "../components/layout/mobile/MobilePullToRefresh.jsx";
 import EmptyState from "../components/common/EmptyState.jsx";
 import LoadingCards from "../components/common/LoadingCards.jsx";
 import DesktopMyMeetings from "../components/profile/desktop/DesktopMyMeetings.jsx";
@@ -12,7 +14,8 @@ import { useSearchParams } from "react-router-dom";
 function MyMeetingsPage() {
   const { isMobile } = useResponsive();
   const [params, setParams] = useSearchParams();
-  const [hideClosed, setHideClosed] = useState(false);
+  const [hostedExpanded, setHostedExpanded] = useState(false);
+  const [joinedExpanded, setJoinedExpanded] = useState(false);
   const meetings = useAsync(() => userApi.myMeetings(), []);
   const activeTab = params.get("tab") || "all";
   const tabs = [
@@ -52,7 +55,7 @@ function MyMeetingsPage() {
   ].sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
 
   return (
-    <>
+    <MobilePullToRefresh onRefresh={async () => { await meetings.execute(); }}>
       <MobileHeader title="내 모임" />
       {meetings.loading ? (
         <LoadingCards />
@@ -66,14 +69,8 @@ function MyMeetingsPage() {
             ))}
           </div>
           {(activeTab === "all" || activeTab === "hosted") && <section className="section">
-            <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="section-title">
               <h2>내가 만든 모임</h2>
-              {activeTab === "hosted" && (
-                <label style={{ fontSize: '13px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <input type="checkbox" checked={hideClosed} onChange={(e) => setHideClosed(e.target.checked)} />
-                  마감 숨기기
-                </label>
-              )}
             </div>
             {hosted.length === 0 && (
               <EmptyState title="진행 중인 만든 모임이 없습니다." actionLabel="모임 만들기" actionTo="/meetings/create" />
@@ -83,24 +80,27 @@ function MyMeetingsPage() {
                 {hosted.map((meeting) => <MeetingCard key={meeting.id} meeting={meeting} compact />)}
               </div>
             )}
-            {!hideClosed && closedHosted.length > 0 && (
+            {activeTab === "hosted" && closedHosted.length > 0 && (
               <div style={{ marginTop: '24px' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 'bold', color: '#64748b', marginBottom: '12px', paddingLeft: '4px' }}>모집 종료된 모임</h3>
-                <div className="card-list">
-                  {closedHosted.map((meeting) => <MeetingCard key={meeting.id} meeting={meeting} compact />)}
-                </div>
+                <button 
+                  type="button" 
+                  onClick={() => setHostedExpanded(!hostedExpanded)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', padding: '0 0 12px 4px', cursor: 'pointer', width: '100%', textAlign: 'left' }}
+                >
+                  <h3 style={{ fontSize: '15px', fontWeight: 'bold', color: '#64748b', margin: 0 }}>모집 종료된 모임</h3>
+                  {hostedExpanded ? <ChevronUp size={16} color="#64748b" /> : <ChevronDown size={16} color="#64748b" />}
+                </button>
+                {hostedExpanded && (
+                  <div className="card-list">
+                    {closedHosted.map((meeting) => <MeetingCard key={meeting.id} meeting={meeting} compact />)}
+                  </div>
+                )}
               </div>
             )}
           </section>}
           {(activeTab === "all" || activeTab === "joined") && <section className="section">
-            <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="section-title">
               <h2>참여 중인 모임</h2>
-              {activeTab === "joined" && (
-                <label style={{ fontSize: '13px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <input type="checkbox" checked={hideClosed} onChange={(e) => setHideClosed(e.target.checked)} />
-                  마감 숨기기
-                </label>
-              )}
             </div>
             {joined.length === 0 && (
               <EmptyState title="진행 중인 참여 모임이 없습니다." actionLabel="모임 찾기" actionTo="/meetings" />
@@ -110,12 +110,21 @@ function MyMeetingsPage() {
                 {joined.map((meeting) => <MeetingCard key={meeting.id} meeting={meeting} compact />)}
               </div>
             )}
-            {!hideClosed && closedJoined.length > 0 && (
+            {activeTab === "joined" && closedJoined.length > 0 && (
               <div style={{ marginTop: '24px' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 'bold', color: '#64748b', marginBottom: '12px', paddingLeft: '4px' }}>모집 종료된 모임</h3>
-                <div className="card-list">
-                  {closedJoined.map((meeting) => <MeetingCard key={meeting.id} meeting={meeting} compact />)}
-                </div>
+                <button 
+                  type="button" 
+                  onClick={() => setJoinedExpanded(!joinedExpanded)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', padding: '0 0 12px 4px', cursor: 'pointer', width: '100%', textAlign: 'left' }}
+                >
+                  <h3 style={{ fontSize: '15px', fontWeight: 'bold', color: '#64748b', margin: 0 }}>모집 종료된 모임</h3>
+                  {joinedExpanded ? <ChevronUp size={16} color="#64748b" /> : <ChevronDown size={16} color="#64748b" />}
+                </button>
+                {joinedExpanded && (
+                  <div className="card-list">
+                    {closedJoined.map((meeting) => <MeetingCard key={meeting.id} meeting={meeting} compact />)}
+                  </div>
+                )}
               </div>
             )}
           </section>}
@@ -127,7 +136,7 @@ function MyMeetingsPage() {
               <p className="subtle-text">승인 대기 중인 모임이 없습니다.</p>
             )}
           </section>}
-          {(activeTab === "all" || activeTab === "closed") && <section className="section">
+          {activeTab === "closed" && <section className="section">
             <div className="section-title"><h2>모집 종료된 모임</h2></div>
             {closed.length ? (
               <div className="card-list">{closed.map((meeting) => <MeetingCard key={meeting.id} meeting={meeting} compact />)}</div>
@@ -137,7 +146,7 @@ function MyMeetingsPage() {
           </section>}
         </div>
       )}
-    </>
+    </MobilePullToRefresh>
   );
 }
 

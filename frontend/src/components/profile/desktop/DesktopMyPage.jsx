@@ -364,7 +364,7 @@ function buildCalendarCells(monthDate, items) {
   });
 }
 
-function CalendarModal({ open, items, onClose, highlightMeetingId, highlightChatRoomId, highlightSource, autoOpenHighlightedDay }) {
+function CalendarModal({ open, items, loading, error, onClose, highlightMeetingId, highlightChatRoomId, highlightSource, autoOpenHighlightedDay }) {
   const [monthDate, setMonthDate] = useState(() => calendarBaseDate(items));
   const [selectedDay, setSelectedDay] = useState(null);
   const cells = useMemo(() => buildCalendarCells(monthDate, items), [monthDate, items]);
@@ -451,7 +451,9 @@ function CalendarModal({ open, items, onClose, highlightMeetingId, highlightChat
                     </button>
                   ))}
                 </div>
-                {!items.length && <p className="empty-schedule profile-calendar-empty">표시할 일정이 없습니다.</p>}
+                {loading && <p className="empty-schedule profile-calendar-empty">달력 일정을 불러오는 중입니다.</p>}
+                {error && !loading && <p className="empty-schedule profile-calendar-empty">{error}</p>}
+                {!loading && !items.length && <p className="empty-schedule profile-calendar-empty">표시할 일정이 없습니다.</p>}
               </section>
             </div>
           </div>
@@ -509,6 +511,9 @@ function DesktopMyPage() {
   const [savingIntro, setSavingIntro] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarHighlight, setCalendarHighlight] = useState({ meetingId: "", chatRoomId: "", source: "", autoOpen: false });
+  const [calendarMeetings, setCalendarMeetings] = useState(null);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [calendarError, setCalendarError] = useState("");
 
   const [reviewSubTab, setReviewSubTab] = useState("written"); // "written" | "received"
   const [writingReview, setWritingReview] = useState(null); // { meetingId, peerId, peerNickname, meetingTitle }
@@ -563,6 +568,26 @@ function DesktopMyPage() {
   );
   const reviewsLoading = writtenReviewsState.loading || receivedReviewsState.loading || pendingReviewsState.loading;
 
+  useEffect(() => {
+    if (!calendarOpen || !canUseProtectedUserApi) return;
+    let cancelled = false;
+    setCalendarLoading(true);
+    setCalendarError("");
+    userApi.myCalendar()
+      .then((data) => {
+        if (!cancelled) setCalendarMeetings(data);
+      })
+      .catch(() => {
+        if (!cancelled) setCalendarError("달력 일정을 불러오지 못했습니다.");
+      })
+      .finally(() => {
+        if (!cancelled) setCalendarLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [calendarOpen, canUseProtectedUserApi, authUser?.id, refreshKey]);
+
   const user = profileState.data?.user || authUser;
   const profile = user?.profile || {};
   const displayTag = tagLabel(user);
@@ -570,6 +595,8 @@ function DesktopMyPage() {
   const savedIntro = profile.bio || "";
   const hostedMeetings = (meetingsState.data?.hosted || []).map((meeting) => normalizeMeeting(meeting, "host"));
   const joinedMeetings = (meetingsState.data?.joined || []).map((meeting) => normalizeMeeting(meeting, "joined"));
+  const calendarHostedMeetings = (calendarMeetings?.hosted || []).map((meeting) => normalizeMeeting(meeting, "host"));
+  const calendarJoinedMeetings = (calendarMeetings?.joined || []).map((meeting) => normalizeMeeting(meeting, "joined"));
   const scheduled = useMemo(
     () => uniqueMeetingsById([...hostedMeetings, ...joinedMeetings])
       .filter((item) => isUpcomingSchedule(item.rawTime))
@@ -577,8 +604,13 @@ function DesktopMyPage() {
     [hostedMeetings, joinedMeetings]
   );
   const calendarItems = useMemo(
-    () => buildCalendarItems(uniqueMeetingsById([...hostedMeetings, ...joinedMeetings])),
-    [hostedMeetings, joinedMeetings]
+    () => {
+      const sourceItems = calendarMeetings
+        ? [...calendarHostedMeetings, ...calendarJoinedMeetings]
+        : [...hostedMeetings, ...joinedMeetings];
+      return buildCalendarItems(uniqueMeetingsById(sourceItems));
+    },
+    [calendarHostedMeetings, calendarJoinedMeetings, calendarMeetings, hostedMeetings, joinedMeetings]
   );
   const writtenReviews = writtenReviewsState.data?.items || [];
   const receivedReviews = receivedReviewsState.data?.items || [];
@@ -1075,6 +1107,8 @@ function DesktopMyPage() {
       <CalendarModal
         open={calendarOpen}
         items={calendarItems}
+        loading={calendarLoading}
+        error={calendarError}
         onClose={() => { setCalendarOpen(false); setCalendarHighlight((current) => ({ ...current, autoOpen: false })); }}
         highlightMeetingId={calendarHighlight.meetingId}
         highlightChatRoomId={calendarHighlight.chatRoomId}

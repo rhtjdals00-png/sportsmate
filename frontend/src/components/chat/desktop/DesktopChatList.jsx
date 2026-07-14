@@ -16,6 +16,18 @@ function formatChatTime(value) {
   }).format(new Date(value));
 }
 
+function isReadOnlyRoom(room) {
+  if (room?.is_read_only || room?.meeting?.is_chat_read_only) return true;
+  const meeting = room?.meeting || {};
+  if (["closed", "cancelled", "suspended"].includes(String(meeting.status || ""))) return true;
+  const labelText = `${room?.chat_status_label || ""} ${meeting.chat_status_label || ""} ${meeting.status_label || ""}`;
+  if (/마감|종료|취소|폐쇄/.test(labelText)) return true;
+  const endValue = meeting.end_at || meeting.start_at;
+  if (!endValue) return false;
+  const endTime = new Date(endValue).getTime();
+  return Number.isFinite(endTime) && endTime <= Date.now();
+}
+
 function DesktopChatList() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [directRefreshKey, setDirectRefreshKey] = useState(0);
@@ -154,13 +166,15 @@ function DesktopChatList() {
               {items.map((room) => {
                 const meeting = room.meeting || {};
                 const isMuted = mutedRooms.some(r => String(r.room_id) === String(room.id) && r.room_type === "meeting");
+                const readOnly = isReadOnlyRoom(room);
                 return (
-                  <div key={room.id} className="proto-talk-room-item">
+                  <div key={room.id} className={`proto-talk-room-item ${readOnly ? "is-read-only" : ""}`}>
                     <Link to={`/chats/${room.id}`}>
                       {meeting.cover_image_url ? <img src={meeting.cover_image_url} alt="" /> : <div className="talk-room-fallback"><MessageCircle size={20} /></div>}
                       <span>
                         <b>{meeting.title || "모임 채팅방"}</b>
                         <small>{meeting.location_name || "장소 미정"} · {meeting.current_participants || 0}/{meeting.max_participants || 0}명</small>
+                        {readOnly ? <small className="talk-room-ended-label">마감된 모임</small> : null}
                       </span>
                       <em>
                         {isMuted ? <BellOff size={11} style={{ marginRight: '3px', color: '#94a3b8', verticalAlign: 'middle' }} /> : null}

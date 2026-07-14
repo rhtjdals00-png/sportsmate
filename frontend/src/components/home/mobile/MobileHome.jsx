@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { CalendarPlus, Dumbbell, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { useMemo } from "react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
+import MobilePullToRefresh from "../../layout/mobile/MobilePullToRefresh.jsx";
 import MeetingCard from "../../meeting/shared/MeetingCard.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import { meetingApi } from "../../../api/meetingApi";
@@ -39,7 +40,7 @@ function MobileHome() {
   const showAdminEntry = isAdminUser(user);
 
   return (
-    <>
+    <MobilePullToRefresh onRefresh={async () => { await meetings.execute(); }}>
       <MobileHeader showLogo />
       <section className="home-hero">
         <div>
@@ -103,7 +104,7 @@ function MobileHome() {
           </div>
         )}
       </section>
-    </>
+    </MobilePullToRefresh>
   );
 }
 

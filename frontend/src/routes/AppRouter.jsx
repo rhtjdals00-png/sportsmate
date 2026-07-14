@@ -33,6 +33,7 @@ import AdminUserDetailPage from "../pages/AdminUserDetailPage.jsx";
 import AdminMeetingsPage from "../pages/AdminMeetingsPage.jsx";
 import AdminMeetingDetailPage from "../pages/AdminMeetingDetailPage.jsx";
 import AdminReportsPage from "../pages/AdminReportsPage.jsx";
+import AdminReportDetailPage from "../pages/AdminReportDetailPage.jsx";
 import AdminAnalyticsPage from "../pages/AdminAnalyticsPage.jsx";
 import AdminSettingsPage from "../pages/AdminSettingsPage.jsx";
 import AdminBroadcastPage from "../pages/AdminBroadcastPage.jsx";
@@ -96,6 +97,7 @@ function AppRouter() {
         <Route path="meetings" element={<AdminMeetingsPage />} />
         <Route path="meetings/:meetingId" element={<AdminMeetingDetailPage />} />
         <Route path="reports" element={<AdminReportsPage />} />
+        <Route path="reports/:reportId" element={<AdminReportDetailPage />} />
         <Route path="broadcast" element={<AdminBroadcastPage />} />
         <Route path="analytics" element={<AdminAnalyticsPage />} />
         <Route path="audit-logs" element={<AdminAuditLogsPage />} />

@@ -1,4 +1,4 @@
-﻿from sqlalchemy import inspect, text
+from sqlalchemy import inspect, text
 
 from app.extensions import db
 
@@ -94,9 +94,52 @@ SUPPORT_INQUIRY_COLUMNS = {
     "admin_response": "TEXT NOT NULL DEFAULT ''",
     "internal_note": "TEXT NOT NULL DEFAULT ''",
     "resolved_at": "TIMESTAMP",
+    "reply_history": "TEXT NOT NULL DEFAULT '[]'",
     "created_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
     "updated_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
 }
+
+
+REPORT_COLUMNS = {
+    "reason_detail": "TEXT NOT NULL DEFAULT ''",
+    "context": "TEXT NOT NULL DEFAULT '{}'",
+    "admin_id": "INTEGER",
+    "admin_note": "TEXT NOT NULL DEFAULT ''",
+    "resolved_at": "TIMESTAMP",
+}
+
+
+def ensure_report_schema(app):
+    try:
+        inspector = inspect(db.engine)
+        with db.engine.begin() as connection:
+            connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS reports (
+                    id SERIAL PRIMARY KEY,
+                    reporter_id INTEGER NOT NULL REFERENCES users(id),
+                    target_type VARCHAR(40) NOT NULL,
+                    target_id INTEGER NOT NULL,
+                    reason VARCHAR(255) NOT NULL,
+                    reason_detail TEXT NOT NULL DEFAULT '',
+                    context TEXT NOT NULL DEFAULT '{}',
+                    status VARCHAR(30) NOT NULL DEFAULT 'pending',
+                    admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    admin_note TEXT NOT NULL DEFAULT '',
+                    resolved_at TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            if inspector.has_table("reports"):
+                existing = {column["name"] for column in inspector.get_columns("reports")}
+                for name, column_type in REPORT_COLUMNS.items():
+                    if name not in existing:
+                        connection.execute(text(f"ALTER TABLE reports ADD COLUMN {name} {column_type}"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_reports_status ON reports(status)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_reports_reporter_id ON reports(reporter_id)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_reports_target ON reports(target_type, target_id)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_reports_admin_id ON reports(admin_id)"))
+    except Exception as error:
+        app.logger.warning("Report schema compatibility check failed: %s", error)
 
 
 def ensure_support_schema(app):
@@ -121,6 +164,7 @@ def ensure_support_schema(app):
                     admin_response TEXT NOT NULL DEFAULT '',
                     internal_note TEXT NOT NULL DEFAULT '',
                     resolved_at TIMESTAMP,
+                    reply_history TEXT NOT NULL DEFAULT '[]',
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
@@ -144,6 +188,7 @@ def ensure_chat_message_columns(app):
     ensure_chat_schema(app)
     ensure_chatbot_schema(app)
     ensure_support_schema(app)
+    ensure_report_schema(app)
 
 CHATBOT_MEMORY_COLUMNS = {
     "preferred_sports": "TEXT NOT NULL DEFAULT ''",

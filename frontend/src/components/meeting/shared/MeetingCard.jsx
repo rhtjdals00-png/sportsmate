@@ -13,7 +13,11 @@ function MeetingCard({ meeting, compact = false }) {
   const isSportThumb = isUsingSportThumbnail(meeting);
 
   return (
-    <Link to={`/meetings/${meeting.id}`} className={`meeting-card ${compact ? "meeting-card--compact" : ""}`}>
+    <Link 
+      to={`/meetings/${meeting.id}`} 
+      className={`meeting-card ${compact ? "meeting-card--compact" : ""}`}
+      style={(actualStatus === "closed" || actualStatus === "cancelled") ? { opacity: 0.6, filter: 'grayscale(0.8)' } : undefined}
+    >
       <div className="meeting-card__body">
         <div className={`meeting-card__thumb ${isSportThumb ? "is-sport-thumbnail" : ""}`} style={coverImage ? { backgroundImage: `url(${coverImage})` } : undefined}>
           {!coverImage && <span>{meeting.sport?.name || meeting.sport_name}</span>}

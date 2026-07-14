@@ -2,10 +2,12 @@ import json
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy.orm import joinedload
+from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models import Meeting, MeetingSession, Participant, Review, Sport, User, UserProfile
 from app.services.auth_service import validate_password
+from app.services.meeting_service import ensure_regular_meeting_sessions
 from app.utils.timezone import kst_now
 
 user_bp = Blueprint("users", __name__)
@@ -217,6 +219,35 @@ def my_meetings():
     joined = [hydrated[meeting.id] for meeting in joined_items]
     pending = [hydrated[meeting.id] for meeting in pending_items]
     return jsonify({"hosted": hosted, "joined": joined, "pending": pending})
+
+
+@user_bp.get("/me/calendar")
+@jwt_required()
+def my_calendar():
+    user_id = int(get_jwt_identity())
+    hosted_items = meetings_for_user(user_id, hosted=True)
+    joined_items = meetings_for_user(user_id, status="approved")
+    unique_items = {meeting.id: meeting for meeting in [*hosted_items, *joined_items]}
+
+    created_count = 0
+    try:
+        for meeting in unique_items.values():
+            if meeting.meeting_type != "regular":
+                continue
+            result = ensure_regular_meeting_sessions(meeting)
+            created_count += result.get("created_count", 0)
+        if created_count:
+            db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+    except Exception:
+        db.session.rollback()
+        raise
+
+    refreshed_items = {item["id"]: item for item in attach_schedule_sessions(unique_items.values())}
+    hosted = [refreshed_items[meeting.id] for meeting in hosted_items]
+    joined = [refreshed_items[meeting.id] for meeting in joined_items]
+    return jsonify({"hosted": hosted, "joined": joined, "created_sessions_count": created_count})
 
 
 @user_bp.get("/me/reviews")

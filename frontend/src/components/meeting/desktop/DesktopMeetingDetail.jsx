@@ -13,6 +13,10 @@ import { getMeetingCoverImage } from "../../../utils/sportThumbnails";
 const DEFAULT_MAP_CENTER = { latitude: 37.5665, longitude: 126.9780 };
 const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
 
+function getDisplayStartAt(meeting) {
+  return meeting?.meeting_type === "regular" ? meeting?.next_session?.start_at || meeting?.start_at : meeting?.start_at;
+}
+
 function loadNaverMapScript(clientId) {
   if (!clientId) return Promise.reject(new Error("missing naver map client id"));
   if (window.naver?.maps) return Promise.resolve(window.naver.maps);
@@ -430,7 +434,7 @@ function DesktopMeetingDetail() {
             )}
 
             <dl className="desktop-meeting-detail__info">
-              <div><CalendarClock size={18} /><span>{formatDateTime(meeting.start_at)}</span></div>
+              <div><CalendarClock size={18} /><span>{formatDateTime(getDisplayStartAt(meeting))}</span></div>
               <div><MapPin size={18} /><span>{meeting.location_name || "장소 미정"}</span></div>
               <div><UsersRound size={18} /><span>{meeting.current_participants}/{meeting.max_participants}명</span></div>
               <div><Eye size={18} /><span>조회 {meeting.view_count || 0}</span></div>

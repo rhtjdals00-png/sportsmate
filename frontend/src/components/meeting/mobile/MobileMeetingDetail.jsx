@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { CalendarClock, Eye, LockKeyhole, MessageCircle, UserRound, Users, ChevronDown, Star, Crown } from "lucide-react";
+import { CalendarClock, Eye, LockKeyhole, MessageCircle, UserRound, Users, ChevronDown, Star, Crown, Share2 } from "lucide-react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import Badge from "../../common/Badge.jsx";
 import Button from "../../common/Button.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
-import StaticMapCard from "../../map/StaticMapCard.jsx";
+import MobileMeetingLocationMap from "./MobileMeetingLocationMap.jsx";
 import { meetingApi } from "../../../api/meetingApi";
 import { useAsync } from "../../../hooks/useAsync";
 import { formatDateTime, formatMeetingType } from "../../../utils/formatters";
@@ -24,6 +24,7 @@ function MobileMeetingDetail() {
   const [review, setReview] = useState({ rating: 5, content: "" });
   const [reportReason, setReportReason] = useState("");
   const [joining, setJoining] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [checkingAttendance, setCheckingAttendance] = useState(false);
@@ -99,18 +100,33 @@ function MobileMeetingDetail() {
 
   const joinMeeting = async () => {
     if (!isAuthenticated) {
-      navigate("/login", { state: { from: `/meetings/${meeting.id}` } });
+      setMessage({ text: "로그인이 필요합니다.", tone: "danger" });
+      navigate("/login", { state: { from: location.pathname } });
       return;
     }
-    setJoining(true);
     try {
-      await meetingApi.join(meeting.id, { join_message: "함께 운동하고 싶습니다." });
-      setMessage({ text: "참여 신청이 완료되었습니다.", tone: "notice" });
-      setRefreshKey((value) => value + 1);
-    } catch (error) {
-      setMessage({ text: error.response?.data?.message || "참여 신청을 처리하지 못했습니다.", tone: "error" });
+      setJoining(true);
+      await meetingApi.join(meetingId);
+      setMessage({ text: "모임 참여를 신청했습니다.", tone: "success" });
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      setMessage({ text: err.response?.data?.message || "신청에 실패했습니다.", tone: "danger" });
     } finally {
       setJoining(false);
+    }
+  };
+
+  const cancelMeetingJoin = async () => {
+    if (!window.confirm(isApprovedParticipant ? "정말 이 모임에서 나가시겠습니까?" : "참여 신청을 취소하시겠습니까?")) return;
+    try {
+      setCancelling(true);
+      await meetingApi.cancelJoin(meetingId);
+      setMessage({ text: isApprovedParticipant ? "모임에서 나갔습니다." : "신청이 취소되었습니다.", tone: "success" });
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      setMessage({ text: err.response?.data?.message || "취소 처리에 실패했습니다.", tone: "danger" });
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -192,9 +208,41 @@ function MobileMeetingDetail() {
     }
   };
 
+  const handleShare = async () => {
+    const shareData = {
+      title: meeting.title,
+      text: `[SportsMate] ${meeting.title} 모임에 함께해요!`,
+      url: window.location.href,
+    };
+    
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        // User cancelled share
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        setMessage({ text: "모임 링크가 클립보드에 복사되었습니다.", tone: "success" });
+      } catch (err) {
+        setMessage({ text: "링크 복사에 실패했습니다.", tone: "danger" });
+      }
+    }
+  };
+
   return (
     <>
-      <MobileHeader title="모임 상세" />
+      <MobileHeader 
+        title="모임 상세" 
+        actions={
+          <div className="mobile-header__actions">
+            <button type="button" onClick={handleShare} style={{ background: 'none', border: 'none', padding: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+              <Share2 size={20} />
+            </button>
+          </div>
+        } 
+      />
       <article className="detail-page">
         <div className={`detail-cover ${isUsingSportThumbnail(meeting) ? "is-sport-thumbnail" : ""}`} style={getMeetingCoverImage(meeting) ? { backgroundImage: `linear-gradient(180deg, rgba(15, 23, 42, 0.14), rgba(15, 23, 42, 0.76)), url(${getMeetingCoverImage(meeting)})` } : undefined}>
           <div>
@@ -384,7 +432,7 @@ function MobileMeetingDetail() {
             )}
           </div>
         </div>
-        <StaticMapCard meeting={meeting} />
+        <MobileMeetingLocationMap meeting={meeting} />
         {canViewMemberContent ? (
           <>
             <section className="detail-card">
@@ -500,14 +548,23 @@ function MobileMeetingDetail() {
             <Link className="button button--primary" to={`/host/meetings/${meeting.id}`}>방장 관리</Link>
           </div>
         ) : isApprovedParticipant && chatRoomId ? (
-          <Link className="button button--primary" to={`/chats/${chatRoomId}`}>
-            <MessageCircle size={18} />
-            채팅방 입장
-          </Link>
+          <div className="sticky-cta__split">
+            <Button onClick={cancelMeetingJoin} disabled={cancelling} variant="danger">
+              모임 나가기
+            </Button>
+            <Link className="button button--primary" to={`/chats/${chatRoomId}`}>
+              <MessageCircle size={18} />
+              채팅방 입장
+            </Link>
+          </div>
         ) : isApprovedParticipant ? (
-          <Button disabled>참가 중</Button>
+          <Button onClick={cancelMeetingJoin} disabled={cancelling} variant="danger">
+            모임 나가기
+          </Button>
         ) : isPendingParticipant ? (
-          <Button disabled>승인 대기 중</Button>
+          <Button onClick={cancelMeetingJoin} disabled={cancelling} variant="secondary">
+            신청 취소
+          </Button>
         ) : (
           <Button onClick={joinMeeting} disabled={!canJoin}>
             {joining ? "신청 중..." : isClosed ? "모집 마감" : isFull ? "정원 마감" : "참여 신청"}
