@@ -326,7 +326,7 @@
 }
 
 .desktop-home-page .home-card-carousel {
-  gap: 24px;
+  gap: 18px;
 }
 
 .desktop-home-page .home-card-carousel .meeting-card {
@@ -382,8 +382,92 @@
   user-select: none;
 }
 
+.desktop-home-page .home-card-drag-target {
+  flex-basis: max(320px, calc((100% - 54px) / 4));
+  min-width: 320px;
+}
+
 .home-recommend-card {
   cursor: inherit;
+  display: flex;
+  flex-direction: column;
+  min-height: 268px;
+  height: 100%;
+  padding: 14px;
+}
+
+.home-recommend-card__top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.home-recommend-card .meeting-card__thumb {
+  width: 88px;
+  flex: 0 0 88px;
+}
+
+.home-recommend-card__summary {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.home-recommend-card__tags {
+  flex-wrap: nowrap;
+  min-height: 26px;
+  overflow: visible;
+  gap: 5px;
+  margin-bottom: 7px;
+}
+
+.home-recommend-card__title {
+  min-height: 46px;
+  -webkit-line-clamp: 2;
+}
+
+.home-recommend-card__content {
+  margin-top: 13px;
+}
+
+.home-recommend-card__description {
+  min-height: 42px;
+  -webkit-line-clamp: 2;
+}
+
+.home-recommend-card__footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px 10px;
+  margin-top: auto;
+  padding-top: 13px;
+}
+
+.home-recommend-card .meeting-card__meta div {
+  min-height: 20px;
+}
+
+.home-recommend-card__location {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.home-recommend-card__location span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-recommend-card__meta-item {
+  min-width: 0;
+}
+
+.home-recommend-card__meta-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .home-card-carousel::-webkit-scrollbar {

@@ -193,9 +193,8 @@
 
 .schedule-modal-status .board-badge {
   gap: 5px;
-  color: #0369a1;
   font-size: 12px;
-  font-weight: 950;
+  font-weight: 600;
 }
 
 .schedule-modal-item span {

@@ -212,6 +212,19 @@ function formatMeetingDate(dateStr) {
   }
 }
 
+function hostMeetingStatusLabel(status) {
+  if (status === "open") return "모집중";
+  if (status === "full") return "모집마감";
+  if (status === "closed") return "모집종료";
+  return "모집마감";
+}
+
+function hostMeetingStatusClass(status) {
+  if (status === "open") return "";
+  if (status === "full") return "is-full";
+  return "closed";
+}
+
 function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading, setNotice, submitNotice, toggleMeetingStatus, deleteMeeting, isDeletingMeeting }) {
   const [activeTab, setActiveTab] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -474,8 +487,8 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
             </button>
           </div>
           <div className="desktop-host-meeting-info">
-            <span className={`host-status-pill ${meeting.status !== "open" ? "closed" : ""}`}>
-              {meeting.status === "open" ? "모집중" : "모집마감"}
+            <span className={`host-status-pill ${hostMeetingStatusClass(meeting.status)}`}>
+              {hostMeetingStatusLabel(meeting.status)}
             </span>
             <h2>{meeting.title}</h2>
             <div className="desktop-host-meeting-details-grid">

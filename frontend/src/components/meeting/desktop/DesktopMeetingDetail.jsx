@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Bike, CalendarClock, CircleDot, Dumbbell, Eye, Footprints, LocateFixed, Map, MapPin, MessageSquareText, Mountain, Navigation, Route, Search, ShieldCheck, Star, Trophy, UserRound, UsersRound } from "lucide-react";
+import { Bike, CalendarClock, CircleDot, Dumbbell, Eye, Footprints, LocateFixed, Map, MapPin, MessageSquareText, Mountain, Navigation, Pin, Route, Search, Star, Trophy, UserRound, UsersRound } from "lucide-react";
 import EmptyState from "../../common/EmptyState.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import { meetingApi } from "../../../api/meetingApi";
 import { locationApi } from "../../../api/locationApi";
 import { useAsync } from "../../../hooks/useAsync";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
-import { formatDateTime, formatMeetingType } from "../../../utils/formatters";
+import { formatDateTime, formatMeetingType, formatRegularMeetingSchedule } from "../../../utils/formatters";
 import { getMeetingCoverImage } from "../../../utils/sportThumbnails";
 
 const DEFAULT_MAP_CENTER = { latitude: 37.5665, longitude: 126.9780 };
@@ -15,6 +15,11 @@ const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
 
 function getDisplayStartAt(meeting) {
   return meeting?.meeting_type === "regular" ? meeting?.next_session?.start_at || meeting?.start_at : meeting?.start_at;
+}
+
+function getNextSessionLabel(meeting) {
+  if (meeting?.meeting_type !== "regular") return formatDateTime(getDisplayStartAt(meeting));
+  return meeting?.next_session?.start_at ? formatDateTime(meeting.next_session.start_at) : "예정된 회차 없음";
 }
 
 function loadNaverMapScript(clientId) {
@@ -376,9 +381,9 @@ function DesktopMeetingDetail() {
             </div>
             <p>{meeting.description || "등록된 모임 설명이 없습니다."}</p>
             <div className="desktop-meeting-detail__chips">
-              <span className={`desktop-meeting-status ${meeting.status === "open" ? "is-open" : "is-closed"}`}>{statusLabel}</span>
-              <span>방장 승인 필요</span>
-              {participantLabel && <span>{participantLabel}</span>}
+              <span className={`desktop-meeting-status ${getStatusClass(meeting.status)}`}>{statusLabel}</span>
+              <span className="desktop-meeting-detail__approval-chip">방장 승인 필요</span>
+              {participantLabel && <span className="desktop-meeting-relation-badge">{participantLabel}</span>}
             </div>
           </section>
 
@@ -434,11 +439,23 @@ function DesktopMeetingDetail() {
             )}
 
             <dl className="desktop-meeting-detail__info">
-              <div><CalendarClock size={18} /><span>{formatDateTime(getDisplayStartAt(meeting))}</span></div>
+              {meeting.meeting_type === "regular" ? (
+                <>
+                  <div>
+                    <Pin size={18} />
+                    <span>{formatRegularMeetingSchedule(meeting)}</span>
+                  </div>
+                  <div className="desktop-meeting-detail__info-row--stacked">
+                    <CalendarClock size={18} />
+                    <span><small>다음 일정</small>{getNextSessionLabel(meeting)}</span>
+                  </div>
+                </>
+              ) : (
+                <div><CalendarClock size={18} /><span>{formatDateTime(getDisplayStartAt(meeting))}</span></div>
+              )}
               <div><MapPin size={18} /><span>{meeting.location_name || "장소 미정"}</span></div>
               <div><UsersRound size={18} /><span>{meeting.current_participants}/{meeting.max_participants}명</span></div>
               <div><Eye size={18} /><span>조회 {meeting.view_count || 0}</span></div>
-              <div><ShieldCheck size={18} /><span>승인제 모임</span></div>
             </dl>
 
             {message.text && <p className={`desktop-meeting-detail__message is-${message.tone}`}>{message.text}</p>}
@@ -465,10 +482,16 @@ function DesktopMeetingDetail() {
 
 function getStatusLabel(status) {
   if (status === "open") return "모집중";
-  if (status === "full") return "모집 마감";
+  if (status === "full") return "모집마감";
   if (status === "closed") return "모집종료";
   if (status === "cancelled") return "취소됨";
   return "마감";
+}
+
+function getStatusClass(status) {
+  if (status === "open") return "is-open";
+  if (status === "full") return "is-full";
+  return "is-closed";
 }
 
 function getParticipantLabel(participant) {
@@ -487,7 +510,7 @@ function getActionLabel({ joining, isClosed, isFull, isHost, myParticipant }) {
   if (myParticipant?.status === "pending") return "승인 대기중";
   if (myParticipant?.status === "approved") return "참여중";
   if (myParticipant?.status === "rejected") return "신청 거절됨";
-  if (isFull) return "모집 마감";
+  if (isFull) return "모집마감";
   if (isClosed) return "모집종료";
   return "참가 신청";
 }
