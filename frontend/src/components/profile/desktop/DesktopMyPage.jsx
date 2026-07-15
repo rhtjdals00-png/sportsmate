@@ -15,7 +15,7 @@ import {
   Users,
   X
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { userApi } from "../../../api/userApi";
 import { meetingApi } from "../../../api/meetingApi";
@@ -337,6 +337,13 @@ function calendarItemTime(value) {
   return `${hours}:${minutes}`;
 }
 
+function isSameCalendarDate(a, b) {
+  return Boolean(a && b)
+    && a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate();
+}
+
 function calendarStateLabel(item) {
   if (item.state === "host") return "방장";
   if (item.state === "joined") return "참여";
@@ -349,6 +356,8 @@ function buildCalendarCells(monthDate, items) {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+  const today = new Date();
 
   return Array.from({ length: 42 }, (_, index) => {
     const currentDay = index - firstDay + 1;
@@ -367,13 +376,14 @@ function buildCalendarCells(monthDate, items) {
         && itemDate.getDate() === day;
     });
 
-    return { key: `${cellDate.toISOString()}-${index}`, date: cellDate, day, outside, items: cellItems };
+    return { key: `${cellDate.toISOString()}-${index}`, date: cellDate, day, outside, isToday: isSameCalendarDate(cellDate, today), items: cellItems };
   });
 }
 
 function CalendarModal({ open, items, loading, error, onClose, highlightMeetingId, highlightChatRoomId, highlightSource, autoOpenHighlightedDay }) {
   const [monthDate, setMonthDate] = useState(() => calendarBaseDate(items));
   const [selectedDay, setSelectedDay] = useState(null);
+  const autoOpenConsumedRef = useRef(false);
   const cells = useMemo(() => buildCalendarCells(monthDate, items), [monthDate, items]);
   const isHighlightedItem = (item) => {
     if (highlightChatRoomId && item.chatRoomId) {
@@ -396,14 +406,21 @@ function CalendarModal({ open, items, loading, error, onClose, highlightMeetingI
     if (open) {
       const highlightedDate = validDate(highlightedItem?.rawTime);
       setMonthDate(highlightedDate ? new Date(highlightedDate.getFullYear(), highlightedDate.getMonth(), 1) : calendarBaseDate(items));
-      setSelectedDay(null);
     }
   }, [open, items, highlightedItem]);
 
   useEffect(() => {
-    if (!open || !highlightedItem || !autoOpenHighlightedDay) return;
+    if (!open) {
+      autoOpenConsumedRef.current = false;
+      setSelectedDay(null);
+      return;
+    }
+    if (!highlightedItem || !autoOpenHighlightedDay || autoOpenConsumedRef.current) return;
     const matchedCell = cells.find((cell) => cell.items.some(isHighlightedItem));
-    if (matchedCell) setSelectedDay(matchedCell);
+    if (matchedCell) {
+      setSelectedDay(matchedCell);
+      autoOpenConsumedRef.current = true;
+    }
   }, [autoOpenHighlightedDay, cells, highlightedItem, open]);
 
   if (!open) return null;
@@ -426,14 +443,14 @@ function CalendarModal({ open, items, loading, error, onClose, highlightMeetingI
             <div className="profile-calendar-expanded">
               <section className="page-card calendar-card">
                 <div className="calendar-head">
-                  <button type="button" aria-label="이전 달" onClick={() => setMonthDate((date) => new Date(date.getFullYear(), date.getMonth() - 1, 1))}>
+                  <button type="button" aria-label="이전 달" onClick={() => { setSelectedDay(null); setMonthDate((date) => new Date(date.getFullYear(), date.getMonth() - 1, 1)); }}>
                     <ChevronLeft size={20} />
                   </button>
                   <div>
                     <p>{calendarTitle(monthDate)}</p>
                     <h2>내 운동 일정</h2>
                   </div>
-                  <button type="button" aria-label="다음 달" onClick={() => setMonthDate((date) => new Date(date.getFullYear(), date.getMonth() + 1, 1))}>
+                  <button type="button" aria-label="다음 달" onClick={() => { setSelectedDay(null); setMonthDate((date) => new Date(date.getFullYear(), date.getMonth() + 1, 1)); }}>
                     <ChevronRight size={20} />
                   </button>
                 </div>
@@ -443,11 +460,11 @@ function CalendarModal({ open, items, loading, error, onClose, highlightMeetingI
                     <button
                       type="button"
                       key={cell.key}
-                      className={`calendar-day profile-calendar-day ${cell.outside ? "is-outside" : ""} ${cell.items.length ? "has-event" : ""} ${cell.items.some((item) => item.state === "host") ? "host-day" : ""} ${cell.items.some(isHighlightedItem) ? "is-highlighted-from-chat" : ""}`}
+                      className={`calendar-day profile-calendar-day ${cell.outside ? "is-outside" : ""} ${cell.isToday ? "is-today" : ""} ${cell.items.length ? "has-event" : ""} ${cell.items.some((item) => item.state === "host") ? "host-day" : ""} ${cell.items.some(isHighlightedItem) ? "is-highlighted-from-chat" : ""}`}
                       disabled={cell.outside || !cell.items.length}
                       onClick={() => cell.items.length && setSelectedDay(cell)}
                     >
-                      <b>{cell.day}</b>
+                      <b>{cell.day}{cell.isToday && !cell.outside ? <span>오늘</span> : null}</b>
                       {cell.items.some(isHighlightedItem) && isChatbotHighlight ? <i>AI 추천</i> : null}
                       {cell.items[0] && (
                         <>
@@ -489,7 +506,7 @@ function CalendarModal({ open, items, loading, error, onClose, highlightMeetingI
                     {item.state !== "host" && <span className={`board-badge ${item.state}`}>{calendarStateLabel(item)}</span>}
                     <footer>
                       <Link className="ghost-btn" to={`/meetings/${item.id}`}>상세 보기</Link>
-                      {isHighlightedItem(item) && highlightChatRoomId && <Link className="ghost-btn is-chat-return" to={`/chats/${highlightChatRoomId}`}>채팅으로 돌아가기</Link>}
+                      {item.chatRoomId && <Link className="ghost-btn is-chat-return" to={`/chats/${item.chatRoomId}`}>채팅으로 이동</Link>}
                       {item.state === "host" && <Link className="ghost-btn" to={`/host/meetings/${item.id}`}>관리</Link>}
                     </footer>
                   </div>
