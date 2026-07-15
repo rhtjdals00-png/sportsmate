@@ -527,9 +527,11 @@
 }
 
 .desktop-meeting-board__quick-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, max-content));
+  align-items: end;
+  column-gap: 18px;
+  row-gap: 12px;
 }
 
 .desktop-meeting-board__quick-filters button,
@@ -539,14 +541,32 @@
   border-radius: 8px;
   background: #ffffff;
   color: #334155;
-  padding: 0 14px;
+  padding: 0 12px;
   font-size: 13px;
   font-weight: 850;
 }
 
+.desktop-meeting-board__filter-group {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+}
+
+.desktop-meeting-board__filter-group > span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.desktop-meeting-board__filter-group > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
 .desktop-meeting-board__quick-filters select {
-  min-width: 126px;
-  max-width: 180px;
+  min-width: 124px;
+  max-width: 168px;
   outline: 0;
 }
 
@@ -560,6 +580,260 @@
   border-color: #2563eb;
   background: #2563eb;
   color: #ffffff;
+}
+
+.desktop-meeting-location-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+}
+
+.desktop-meeting-location-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.desktop-meeting-location-modal__panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: min(1040px, calc(100vw - 56px));
+  max-height: calc(100vh - 56px);
+  gap: 18px;
+  overflow: auto;
+  border: 1px solid #dbe3f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 24px;
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.22);
+}
+
+.desktop-meeting-location-modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.desktop-meeting-location-modal__head h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.desktop-meeting-location-modal__head span {
+  display: block;
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.desktop-meeting-location-modal__head button,
+.desktop-meeting-location-modal__actions button,
+.desktop-meeting-location-modal__search button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  font-weight: 900;
+}
+
+.desktop-meeting-location-modal__head button {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #dbe3f0;
+  background: #ffffff;
+  color: #64748b;
+}
+
+.desktop-meeting-location-modal__search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px 128px;
+  gap: 10px;
+}
+
+.desktop-meeting-location-modal__search label {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 0 14px;
+  color: #94a3b8;
+}
+
+.desktop-meeting-location-modal__search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.desktop-meeting-location-modal__search button,
+.desktop-meeting-location-modal__actions button {
+  min-height: 44px;
+  border: 0;
+  background: #2563eb;
+  color: #ffffff;
+  padding: 0 16px;
+  cursor: pointer;
+}
+
+.desktop-meeting-location-modal__search button.is-ghost,
+.desktop-meeting-location-modal__actions button.is-muted {
+  border: 1px solid #dbe3f0;
+  background: #ffffff;
+  color: #334155;
+}
+
+.desktop-meeting-location-modal__search button:disabled,
+.desktop-meeting-location-modal__actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.desktop-meeting-location-modal__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+}
+
+.desktop-meeting-location-modal__map {
+  position: relative;
+  min-height: 430px;
+  overflow: hidden;
+  border: 1px solid #dbe3f0;
+  border-radius: 8px;
+  background: #e0f2fe;
+}
+
+.desktop-meeting-location-modal__map > span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #475569;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.desktop-meeting-location-modal__side {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.desktop-meeting-location-modal__selected,
+.desktop-meeting-location-modal__message,
+.desktop-meeting-location-modal__results button {
+  border: 1px solid #dbe3f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.desktop-meeting-location-modal__selected {
+  padding: 16px;
+}
+
+.desktop-meeting-location-modal__selected strong {
+  display: block;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.desktop-meeting-location-modal__selected p {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.desktop-meeting-location-modal__selected b,
+.desktop-meeting-location-modal__selected small {
+  display: block;
+}
+
+.desktop-meeting-location-modal__selected b {
+  color: #0f172a;
+}
+
+.desktop-meeting-location-modal__selected small {
+  margin-top: 4px;
+  color: #64748b;
+}
+
+.desktop-meeting-location-modal__message {
+  margin: 0;
+  padding: 12px 14px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.desktop-meeting-location-modal__results {
+  display: grid;
+  gap: 8px;
+  max-height: 290px;
+  overflow: auto;
+}
+
+.desktop-meeting-location-modal__results button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 12px;
+  color: #334155;
+  text-align: left;
+  cursor: pointer;
+}
+
+.desktop-meeting-location-modal__results button.is-selected {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.desktop-meeting-location-modal__results b {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.desktop-meeting-location-modal__results span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.desktop-meeting-location-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.desktop-meeting-board__filter-reset {
+  align-self: end;
+  justify-self: start;
+  white-space: nowrap;
 }
 
 .desktop-meeting-board__results {
@@ -780,6 +1054,7 @@
 }
 
 .desktop-meeting-map__canvas {
+  position: relative;
   display: grid;
   min-height: 430px;
   place-items: center;
@@ -791,6 +1066,29 @@
     #f8fafc;
   background-size: 36px 36px;
   color: #475569;
+}
+
+.desktop-meeting-map__canvas--real {
+  display: block;
+  overflow: hidden;
+  background: #dbeafe;
+}
+
+.desktop-meeting-map__fallback {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  padding: 28px;
+  background:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+    linear-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+    #f8fafc;
+  background-size: 36px 36px;
+  text-align: center;
 }
 
 .desktop-meeting-map__canvas svg {
@@ -854,6 +1152,91 @@
   font-weight: 950;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.desktop-meeting-map-info {
+  display: grid;
+  min-width: 190px;
+  gap: 5px;
+  border: 1px solid #dbe3f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+}
+
+.desktop-meeting-map-info strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.desktop-meeting-map-info span,
+.desktop-meeting-map-info small {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.desktop-meeting-map-info a {
+  width: fit-content;
+  margin-top: 4px;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #ffffff;
+  padding: 6px 9px;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.desktop-meeting-map-marker {
+  position: relative;
+  display: grid;
+  width: 64px;
+  height: 76px;
+  place-items: start center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  filter: drop-shadow(0 12px 18px rgba(15, 23, 42, 0.24));
+}
+
+.desktop-meeting-map-marker__logo {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  overflow: hidden;
+  border: 4px solid #ffffff;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.14);
+}
+
+.desktop-meeting-map-marker__logo img {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.desktop-meeting-map-marker__point {
+  position: absolute;
+  top: 48px;
+  width: 18px;
+  height: 18px;
+  border-right: 4px solid #ffffff;
+  border-bottom: 4px solid #ffffff;
+  border-radius: 0 0 6px 0;
+  background: #ffffff;
+  transform: rotate(45deg);
+}
+
+.desktop-meeting-map-marker:hover .desktop-meeting-map-marker__logo {
+  transform: translateY(-2px) scale(1.04);
+  box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.24), 0 0 0 4px rgba(37, 99, 235, 0.14);
 }
 
 @media (max-width: 1100px) {

@@ -345,6 +345,13 @@ def list_meetings(params, current_user_id=None):
             sport_id = None
         if sport_id:
             query = query.filter(Meeting.sport_id == sport_id)
+    elif params.get("category"):
+        try:
+            category_id = int(params["category"])
+        except (TypeError, ValueError):
+            category_id = None
+        if category_id:
+            query = query.join(Sport, Meeting.sport_id == Sport.id).filter(Sport.category_id == category_id)
 
 ######## 26.07.01 여기 충돌난 부분인데 확인해봐야됨 
 #        sport_value = str(params["sport"]).strip()
@@ -360,10 +367,15 @@ def list_meetings(params, current_user_id=None):
     if params.get("keyword"):
       keyword = f"%{params['keyword']}%"
       query = query.filter(Meeting.title.ilike(keyword) | Meeting.location_name.ilike(keyword) | Meeting.address.ilike(keyword))
-    if params.get("status"):
+    include_all_statuses = params.get("include_all") in {"1", "true", "yes"} or params.get("status") == "all"
+    if params.get("status") and params.get("status") != "all":
         query = query.filter(Meeting.status == params["status"])
+    elif include_all_statuses:
+        query = query.filter(~Meeting.status.in_(["cancelled", "suspended"]))
     else:
         query = query.filter(Meeting.status.in_(["open", "full"]))
+    if params.get("meeting_type") in {"regular", "one_time"}:
+        query = query.filter(Meeting.meeting_type == params["meeting_type"])
     if params.get("mine") == "host" and current_user_id:
         query = query.filter(Meeting.host_id == current_user_id)
     if params.get("mine") == "joined" and current_user_id:
