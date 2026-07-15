@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { CalendarPlus, Dumbbell, Search, ShieldCheck, Sparkles } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import MobilePullToRefresh from "../../layout/mobile/MobilePullToRefresh.jsx";
 import MeetingCard from "../../meeting/shared/MeetingCard.jsx";
@@ -27,8 +27,13 @@ function isAdminUser(user) {
 
 function MobileHome() {
   const { user } = useAuth();
-  const meetings = useAsync(
-    () => meetingApi.list({ limit: 5, status: "open", recommend: true }),
+  const [activeTab, setActiveTab] = useState("one_time"); // "one_time" | "regular"
+  const oneTimeMeetings = useAsync(
+    () => meetingApi.list({ limit: 5, status: "open", recommend: true, meeting_type: "one_time" }),
+    [user?.profile?.preferred_sports, user?.profile?.region]
+  );
+  const regularMeetings = useAsync(
+    () => meetingApi.list({ limit: 5, status: "open", recommend: true, meeting_type: "regular" }),
     [user?.profile?.preferred_sports, user?.profile?.region]
   );
   const preferredSports = useMemo(
@@ -43,7 +48,7 @@ function MobileHome() {
   const showAdminEntry = isAdminUser(user);
 
   return (
-    <MobilePullToRefresh onRefresh={async () => { await meetings.execute(); }}>
+    <MobilePullToRefresh onRefresh={async () => { await Promise.all([oneTimeMeetings.execute(), regularMeetings.execute()]); }}>
       <MobileHeader showLogo />
       <section className="home-hero">
         <div>
@@ -97,16 +102,58 @@ function MobileHome() {
           <h2>추천 모임</h2>
           <Sparkles size={18} />
         </div>
-        {meetings.loading ? (
-          <LoadingCards count={3} />
-        ) : (
-          <div className="card-list">
-            {(meetings.data?.items || [])
-              .filter((meeting) => meeting.status === "open" && new Date(meeting.start_at) >= new Date())
-              .map((meeting) => (
-                <MeetingCard key={meeting.id} meeting={meeting} compact />
-            ))}
-          </div>
+
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          <button 
+            type="button" 
+            onClick={() => setActiveTab("one_time")}
+            style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: '1px solid #e2e8f0', background: activeTab === 'one_time' ? '#4f46e5' : '#fff', color: activeTab === 'one_time' ? '#fff' : '#1e293b', fontWeight: '600', fontSize: '14px', cursor: 'pointer' }}
+          >
+            일회성 모임
+          </button>
+          <button 
+            type="button" 
+            onClick={() => setActiveTab("regular")}
+            style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: '1px solid #e2e8f0', background: activeTab === 'regular' ? '#4f46e5' : '#fff', color: activeTab === 'regular' ? '#fff' : '#1e293b', fontWeight: '600', fontSize: '14px', cursor: 'pointer' }}
+          >
+            정기 모임
+          </button>
+        </div>
+
+        {activeTab === "one_time" && (
+          oneTimeMeetings.loading ? (
+            <LoadingCards count={3} />
+          ) : (
+            <div className="card-list">
+              {(oneTimeMeetings.data?.items || [])
+                .filter((meeting) => 
+                  meeting.status === "open" && 
+                  meeting.current_participants < meeting.max_participants && 
+                  new Date(meeting.start_at) >= new Date()
+                )
+                .map((meeting) => (
+                  <MeetingCard key={meeting.id} meeting={meeting} compact />
+              ))}
+            </div>
+          )
+        )}
+
+        {activeTab === "regular" && (
+          regularMeetings.loading ? (
+            <LoadingCards count={3} />
+          ) : (
+            <div className="card-list">
+              {(regularMeetings.data?.items || [])
+                .filter((meeting) => 
+                  meeting.status === "open" && 
+                  meeting.current_participants < meeting.max_participants && 
+                  new Date(meeting.start_at) >= new Date()
+                )
+                .map((meeting) => (
+                  <MeetingCard key={meeting.id} meeting={meeting} compact />
+              ))}
+            </div>
+          )
         )}
       </section>
     </MobilePullToRefresh>

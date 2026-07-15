@@ -155,6 +155,16 @@ const DEFAULT_PURPOSE_OPTIONS = ["운동 메이트 모집", "팀 모집", "파�
 const TIME_MINUTES = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
 const TIME_HOURS = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0"));
 
+const REPEAT_DAYS = [
+  { label: "월", value: "MO" },
+  { label: "화", value: "TU" },
+  { label: "수", value: "WE" },
+  { label: "목", value: "TH" },
+  { label: "금", value: "FR" },
+  { label: "토", value: "SA" },
+  { label: "일", value: "SU" },
+];
+
 const WEEKDAY_LABELS = ["\uc77c", "\uc6d4", "\ud654", "\uc218", "\ubaa9", "\uae08", "\ud1a0"];
 const padDatePart = (value) => String(value).padStart(2, "0");
 const formatDateValue = (date) => `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
@@ -292,6 +302,7 @@ const initialForm = {
   start_time: "",
   end_date: "",
   end_time: "",
+  repeat_days: [],
   max_participants: 6
 };
 
@@ -574,10 +585,18 @@ function MobileMeetingCreate() {
     if (targetStep === 3) {
       if (!form.address.trim()) return "주소를 입력하거나 검색 결과를 선택해주세요.";
       if (!form.location_name.trim()) return "장소명을 입력해주세요.";
-      if (hasStartSchedule && (!form.start_date || !form.start_time)) return "_HIDDEN_EMPTY_DATE";
-      if (hasEndSchedule && !hasStartSchedule) return "종료 일정은 시작 일정이 있을 때만 설정할 수 있습니다.";
-      if (hasEndSchedule && (!form.end_date || !form.end_time)) return "_HIDDEN_EMPTY_DATE";
-      if (scheduleError) return scheduleError;
+      
+      if (form.meeting_type === "regular") {
+        if (!form.start_date || !form.start_time || !form.end_time) return "정기 모임은 시작일, 시작 시간, 종료 시간이 모두 필요합니다.";
+        if (!form.repeat_days || form.repeat_days.length === 0) return "반복할 요일을 하나 이상 선택해주세요.";
+        if (scheduleError) return scheduleError;
+      } else {
+        if (hasStartSchedule && (!form.start_date || !form.start_time)) return "_HIDDEN_EMPTY_DATE";
+        if (hasEndSchedule && !hasStartSchedule) return "종료 일정은 시작 일정이 있을 때만 설정할 수 있습니다.";
+        if (hasEndSchedule && (!form.end_date || !form.end_time)) return "_HIDDEN_EMPTY_DATE";
+        if (scheduleError) return scheduleError;
+      }
+      
       if (Number(form.max_participants) < 2) return "정원은 최소 2명 이상이어야 합니다.";
       if (Number(form.max_participants) > maxLimit) return `개설 최대 정원은 ${maxLimit}명 이하로만 설정 가능합니다.`;
     }
@@ -598,19 +617,32 @@ function MobileMeetingCreate() {
     setFormMessage("");
     setSubmitting(true);
     try {
-      const data = await meetingApi.create({
+      const isRegular = form.meeting_type === "regular";
+      
+      const payload = {
         ...form,
         title: form.title.trim(),
         description: form.description.trim(),
         purpose: form.purpose.trim(),
         location_name: form.location_name.trim(),
         address: form.address.trim(),
-        start_at: hasStartSchedule ? combineDateTime(form.start_date, form.start_time) : null,
-        end_at: hasEndSchedule ? combineDateTime(form.end_date, form.end_time) : null,
-        meeting_type: hasEndSchedule || !hasStartSchedule ? "regular" : form.meeting_type,
+        meeting_type: form.meeting_type,
         sport_id: Number(form.sport_id),
         max_participants: Number(form.max_participants)
-      });
+      };
+
+      if (isRegular) {
+        payload.schedule_start_date = form.start_date;
+        payload.schedule_end_date = form.end_date || null;
+        payload.start_time = form.start_time;
+        payload.end_time = form.end_time;
+        payload.repeat_days = form.repeat_days;
+      } else {
+        payload.start_at = hasStartSchedule ? combineDateTime(form.start_date, form.start_time) : null;
+        payload.end_at = hasEndSchedule ? combineDateTime(form.end_date, form.end_time) : null;
+      }
+
+      const data = await meetingApi.create(payload);
       navigate(`/meetings/${data.meeting.id}`, { state: { createdMeeting: true, chatRoomId: data.meeting.chat_room_id } });
     } catch (error) {
       setFormMessage(error.response?.data?.message || "모임을 등록하지 못했습니다.");
@@ -661,19 +693,59 @@ function MobileMeetingCreate() {
           <label>선택된 장소명<input required value={form.location_name} onChange={(event) => update("location_name", event.target.value)} placeholder="검색 결과를 선택하면 장소명이 자동으로 입력됩니다." /></label>
           <MobileLocationMap clientId={mapClientId} selectedLocation={(form.location_name && !locationScope) ? form : null} results={locationResults} onSelect={selectLocation} />
           
-          <div className="mobile-schedule-toggles" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '30px', width: '100%', marginBottom: '12px', marginTop: '24px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', minHeight: 'auto', fontWeight: '600', flexDirection: 'row', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={hasStartSchedule} onChange={(event) => toggleStartSchedule(event.target.checked)} style={{ width: '20px', height: '20px', minHeight: '20px', accentColor: '#4f46e5', margin: 0, padding: 0, cursor: 'pointer' }} /> 
-                  시작 일정 있음
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', minHeight: 'auto', fontWeight: '600', flexDirection: 'row', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={hasEndSchedule} disabled={!hasStartSchedule} onChange={(event) => toggleEndSchedule(event.target.checked)} style={{ width: '20px', height: '20px', minHeight: '20px', accentColor: '#4f46e5', margin: 0, padding: 0, cursor: 'pointer' }} /> 
-                  종료 일정 있음
-                </label>
+          {form.meeting_type === "regular" ? (
+            <div className="date-time-row" style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '24px', marginBottom: '12px' }}>
+              <label>반복 요일
+                <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
+                  {REPEAT_DAYS.map(day => (
+                    <button
+                      key={day.value}
+                      type="button"
+                      onClick={() => {
+                        setForm(prev => {
+                          const days = prev.repeat_days || [];
+                          return { ...prev, repeat_days: days.includes(day.value) ? days.filter(d => d !== day.value) : [...days, day.value] };
+                        });
+                      }}
+                      style={{
+                        flex: 1, padding: '8px 0', borderRadius: '8px', border: '1px solid #e2e8f0', 
+                        background: (form.repeat_days || []).includes(day.value) ? '#4f46e5' : '#fff',
+                        color: (form.repeat_days || []).includes(day.value) ? '#fff' : '#1e293b',
+                        fontWeight: '600', fontSize: '14px', cursor: 'pointer'
+                      }}
+                    >
+                      {day.label}
+                    </button>
+                  ))}
+                </div>
+              </label>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <label style={{ flex: 1 }}>{"\uc2dc\uc791\uc77c"}<CalendarSelect label={"\uc2dc\uc791\uc77c"} value={form.start_date} onChange={updateStartDate} icon={<CalendarClock size={17} />} /></label>
+                <label style={{ flex: 1 }}>{"\uc885\ub8cc\uc77c (선택)"}<CalendarSelect label={"\uc885\ub8cc\uc77c"} value={form.end_date} onChange={updateEndDate} icon={<CalendarClock size={17} />} /></label>
               </div>
-              {hasStartSchedule && <div className="date-time-row"><label>{"\uc2dc\uc791 \ub0a0\uc9dc"}<CalendarSelect label={"\uc2dc\uc791\uc77c"} value={form.start_date} onChange={updateStartDate} icon={<CalendarClock size={17} />} /></label><label>{"\uc2dc\uc791 \uc2dc\uac04"}<span className="mobile-icon-input"><AlarmClock size={17} /><TimeSelect required value={form.start_time} onChange={updateStartTime} /></span></label></div>}
-              {hasEndSchedule && <div className="date-time-row"><label>{"\uc885\ub8cc \ub0a0\uc9dc"}<CalendarSelect label={"\uc885\ub8cc\uc77c"} value={form.end_date} onChange={updateEndDate} icon={<CalendarClock size={17} />} /></label><label>{"\uc885\ub8cc \uc2dc\uac04"}<span className="mobile-icon-input"><AlarmClock size={17} /><TimeSelect required value={form.end_time} onChange={updateEndTime} /></span></label></div>}
-              {scheduleError && hasEndSchedule && <p className="mobile-form-message mobile-form-message--error" style={{marginTop: '8px'}}>{scheduleError}</p>}
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <label style={{ flex: 1 }}>{"\uc2dc\uc791 \uc2dc\uac04"}<span className="mobile-icon-input"><AlarmClock size={17} /><TimeSelect required value={form.start_time} onChange={updateStartTime} /></span></label>
+                <label style={{ flex: 1 }}>{"\uc885\ub8cc \uc2dc\uac04"}<span className="mobile-icon-input"><AlarmClock size={17} /><TimeSelect required value={form.end_time} onChange={updateEndTime} /></span></label>
+              </div>
+              {scheduleError && <p className="mobile-form-message mobile-form-message--error" style={{marginTop: '0px'}}>{scheduleError}</p>}
+            </div>
+          ) : (
+            <>
+              <div className="mobile-schedule-toggles" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '30px', width: '100%', marginBottom: '12px', marginTop: '24px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', minHeight: 'auto', fontWeight: '600', flexDirection: 'row', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={hasStartSchedule} onChange={(event) => toggleStartSchedule(event.target.checked)} style={{ width: '20px', height: '20px', minHeight: '20px', accentColor: '#4f46e5', margin: 0, padding: 0, cursor: 'pointer' }} /> 
+                      시작 일정 있음
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', minHeight: 'auto', fontWeight: '600', flexDirection: 'row', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={hasEndSchedule} disabled={!hasStartSchedule} onChange={(event) => toggleEndSchedule(event.target.checked)} style={{ width: '20px', height: '20px', minHeight: '20px', accentColor: '#4f46e5', margin: 0, padding: 0, cursor: 'pointer' }} /> 
+                      종료 일정 있음
+                    </label>
+                  </div>
+                  {hasStartSchedule && <div className="date-time-row"><label>{"\uc2dc\uc791 \ub0a0\uc9dc"}<CalendarSelect label={"\uc2dc\uc791\uc77c"} value={form.start_date} onChange={updateStartDate} icon={<CalendarClock size={17} />} /></label><label>{"\uc2dc\uc791 \uc2dc\uac04"}<span className="mobile-icon-input"><AlarmClock size={17} /><TimeSelect required value={form.start_time} onChange={updateStartTime} /></span></label></div>}
+                  {hasEndSchedule && <div className="date-time-row"><label>{"\uc885\ub8cc \ub0a0\uc9dc"}<CalendarSelect label={"\uc885\ub8cc\uc77c"} value={form.end_date} onChange={updateEndDate} icon={<CalendarClock size={17} />} /></label><label>{"\uc885\ub8cc \uc2dc\uac04"}<span className="mobile-icon-input"><AlarmClock size={17} /><TimeSelect required value={form.end_time} onChange={updateEndTime} /></span></label></div>}
+                  {scheduleError && hasEndSchedule && <p className="mobile-form-message mobile-form-message--error" style={{marginTop: '8px'}}>{scheduleError}</p>}
+            </>
+          )}
 
           <label>정원<input type="number" min="2" max={maxLimit} value={form.max_participants} onChange={(event) => update("max_participants", event.target.value)} /></label>
         </section>}

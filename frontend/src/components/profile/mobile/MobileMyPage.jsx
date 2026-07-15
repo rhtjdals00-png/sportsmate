@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { CalendarCheck, Check, Dumbbell, Footprints, MapPin, MessageCircle, Pencil, ShieldCheck, Star, Trophy, X, ChevronDown, ChevronUp, Loader2, Headphones } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import Button from "../../common/Button.jsx";
 import EmptyState from "../../common/EmptyState.jsx";
@@ -8,6 +8,7 @@ import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { userApi } from "../../../api/userApi";
 import { useAsync } from "../../../hooks/useAsync";
 import { getSportIcon } from "../../../utils/sportIcons.jsx";
+import { meetingApi } from "../../../api/meetingApi.js";
 
 
 const levelLabels = {
@@ -90,6 +91,174 @@ function isAdminUser(user) {
   return Boolean(user?.is_admin || user?.isAdmin || role === "admin" || role === "superadmin" || role === "administrator");
 }
 
+const SCHEDULE_REASON_MAX_LENGTH = 100;
+
+function formatDateTime(value) {
+  const date = validDate(value);
+  if (!date) return "";
+  const ampm = date.getHours() >= 12 ? "오후" : "오전";
+  const h = date.getHours() % 12 || 12;
+  const m = String(date.getMinutes()).padStart(2, "0");
+  return `${date.getMonth() + 1}월 ${date.getDate()}일 ${ampm} ${h}:${m}`;
+}
+
+function formatDateInputValue(value) {
+  const date = validDate(value);
+  if (!date) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function formatTimeInputValue(value) {
+  const date = validDate(value);
+  if (!date) return "";
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function calendarItemTime(value) {
+  const date = validDate(value);
+  if (!date) return "";
+  const ampm = date.getHours() >= 12 ? "오후" : "오전";
+  const h = date.getHours() % 12 || 12;
+  const m = String(date.getMinutes()).padStart(2, "0");
+  return `${ampm} ${h}:${m}`;
+}
+
+function isPastDateTime(value) {
+  const date = validDate(value);
+  return date ? date < new Date() : false;
+}
+
+function ScheduleChangeModal({ item, submitting, error, onClose, onSubmit }) {
+  const [dateValue, setDateValue] = useState(formatDateInputValue(item?.start_at));
+  const [startValue, setStartValue] = useState(formatTimeInputValue(item?.start_at));
+  const [endValue, setEndValue] = useState(formatTimeInputValue(item?.end_at));
+  const [reason, setReason] = useState("");
+
+  useEffect(() => {
+    setDateValue(formatDateInputValue(item?.start_at));
+    setStartValue(formatTimeInputValue(item?.start_at));
+    setEndValue(formatTimeInputValue(item?.end_at));
+    setReason("");
+  }, [item]);
+
+  if (!item) return null;
+
+  const submit = (event) => {
+    event.preventDefault();
+    const trimmedReason = reason.trim();
+    if (!dateValue || !startValue || !endValue) {
+      onSubmit(null, "변경 날짜와 시간을 모두 입력해 주세요.");
+      return;
+    }
+    if (!trimmedReason) {
+      onSubmit(null, "변경 사유를 입력해 주세요.");
+      return;
+    }
+    if (trimmedReason.length > SCHEDULE_REASON_MAX_LENGTH) {
+      onSubmit(null, `변경 사유는 ${SCHEDULE_REASON_MAX_LENGTH}자 이내로 입력해 주세요.`);
+      return;
+    }
+    const startAt = `${dateValue}T${startValue}:00`;
+    const endAt = `${dateValue}T${endValue}:00`;
+    if (new Date(endAt) <= new Date(startAt)) {
+      onSubmit(null, "종료 시간은 시작 시간 이후여야 합니다.");
+      return;
+    }
+    if (new Date(startAt) <= new Date()) {
+      onSubmit(null, "현재 이후의 시간으로만 변경할 수 있습니다.");
+      return;
+    }
+    onSubmit({ start_at: startAt, end_at: endAt, reason: trimmedReason });
+  };
+
+  return (
+    <div className="schedule-modal schedule-modal--form is-open" aria-hidden="false" onMouseDown={(event) => event.target === event.currentTarget && !submitting && onClose()}>
+      <form className="schedule-modal-panel schedule-action-panel" onSubmit={submit}>
+        <button className="schedule-modal-close" type="button" onClick={onClose} disabled={submitting}><X size={18} /></button>
+        <h2 className="schedule-modal-title" style={{ marginTop: '0' }}>일정 변경</h2>
+        <p className="schedule-action-guide" style={{ fontSize: '13px', color: '#64748b', marginBottom: '12px' }}>선택한 일정만 변경됩니다. 다른 정기 일정에는 영향을 주지 않습니다.</p>
+        <div className="schedule-action-current" style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', marginBottom: '16px' }}>
+          <b style={{ display: 'block', marginBottom: '4px' }}>{item.title}</b>
+          <span style={{ fontSize: '13px', color: '#475569' }}>현재 일정 {formatDateTime(item.start_at)}{item.end_at ? `~${calendarItemTime(item.end_at)}` : ""}</span>
+        </div>
+        <div className="schedule-action-grid" style={{ display: 'grid', gap: '12px', marginBottom: '16px' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', fontSize: '13px', fontWeight: 'bold' }}>변경 날짜 *<input type="date" style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', marginTop: '4px' }} value={dateValue} onChange={(event) => setDateValue(event.target.value)} /></label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', fontSize: '13px', fontWeight: 'bold' }}>시작 시간 *<input type="time" style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', marginTop: '4px' }} value={startValue} onChange={(event) => setStartValue(event.target.value)} /></label>
+            <label style={{ display: 'flex', flexDirection: 'column', fontSize: '13px', fontWeight: 'bold' }}>종료 시간 *<input type="time" style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', marginTop: '4px' }} value={endValue} onChange={(event) => setEndValue(event.target.value)} /></label>
+          </div>
+        </div>
+        <label className="schedule-action-field" style={{ display: 'flex', flexDirection: 'column', fontSize: '13px', fontWeight: 'bold', marginBottom: '16px' }}>변경 사유 *
+          <textarea style={{ padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px', marginTop: '4px', minHeight: '80px', resize: 'vertical' }} value={reason} maxLength={SCHEDULE_REASON_MAX_LENGTH} onChange={(event) => setReason(event.target.value)} placeholder="참여자에게 전달할 변경 사유를 입력해 주세요." />
+          <small style={{ color: '#94a3b8', textAlign: 'right', marginTop: '4px' }}>{reason.length}/{SCHEDULE_REASON_MAX_LENGTH}</small>
+        </label>
+        <p className="schedule-action-note" style={{ fontSize: '12px', color: '#64748b', marginBottom: '20px' }}>일정을 변경하면 승인된 참여자에게 알림이 전송됩니다.</p>
+        {error && <p className="schedule-action-error" style={{ color: '#ef4444', fontSize: '13px', marginBottom: '16px', fontWeight: 'bold' }}>{error}</p>}
+        <div className="schedule-action-buttons" style={{ display: 'flex', gap: '8px' }}>
+          <button className="ghost-btn" style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontWeight: 'bold' }} type="button" onClick={onClose} disabled={submitting}>돌아가기</button>
+          <button className="schedule-action-submit" style={{ flex: 1, padding: '12px', borderRadius: '8px', background: '#4f46e5', color: '#fff', border: 'none', fontWeight: 'bold' }} type="submit" disabled={submitting}>{submitting ? "변경 중..." : "일정 변경"}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+const CANCEL_REASON_PRESETS = [
+  { label: "우천", text: "우천으로 인해 이번 일정은 취소합니다." },
+  { label: "장소 문제", text: "장소 이용 문제로 이번 일정은 취소합니다." },
+  { label: "방장 사정", text: "방장 사정으로 이번 일정은 취소합니다." },
+  { label: "참여 인원 부족", text: "참여 인원 부족으로 이번 일정은 취소합니다." }
+];
+
+function ScheduleCancelModal({ item, submitting, error, onClose, onSubmit }) {
+  const [reason, setReason] = useState("");
+
+  useEffect(() => {
+    setReason("");
+  }, [item]);
+
+  if (!item) return null;
+
+  const submit = (event) => {
+    event.preventDefault();
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) {
+      onSubmit(null, "취소 사유를 입력해 주세요.");
+      return;
+    }
+    if (trimmedReason.length > SCHEDULE_REASON_MAX_LENGTH) {
+      onSubmit(null, `취소 사유는 ${SCHEDULE_REASON_MAX_LENGTH}자 이내로 입력해 주세요.`);
+      return;
+    }
+    onSubmit({ reason: trimmedReason });
+  };
+
+  return (
+    <div className="schedule-modal schedule-modal--form is-open" aria-hidden="false" onMouseDown={(event) => event.target === event.currentTarget && !submitting && onClose()}>
+      <form className="schedule-modal-panel schedule-action-panel" onSubmit={submit}>
+        <button className="schedule-modal-close" type="button" onClick={onClose} disabled={submitting}><X size={18} /></button>
+        <h2 className="schedule-modal-title" style={{ marginTop: '0' }}>일정 취소</h2>
+        <p className="schedule-action-guide" style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>{formatDateTime(item.start_at)}{item.end_at ? `~${calendarItemTime(item.end_at)}` : ""} 일정만 취소합니다.</p>
+        <div className="schedule-reason-presets" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '16px' }}>
+          {CANCEL_REASON_PRESETS.map((preset) => (
+            <button key={preset.label} style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '20px', border: '1px solid #cbd5e1', background: '#f8fafc', cursor: 'pointer', color: '#334155' }} type="button" onClick={() => setReason(preset.text)}>{preset.label}</button>
+          ))}
+        </div>
+        <label className="schedule-action-field" style={{ display: 'flex', flexDirection: 'column', fontSize: '13px', fontWeight: 'bold', marginBottom: '16px' }}>취소 사유 *
+          <textarea style={{ padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px', marginTop: '4px', minHeight: '80px', resize: 'vertical' }} value={reason} maxLength={SCHEDULE_REASON_MAX_LENGTH} onChange={(event) => setReason(event.target.value)} placeholder="참여자에게 전달할 취소 사유를 입력해 주세요." />
+          <small style={{ color: '#94a3b8', textAlign: 'right', marginTop: '4px' }}>{reason.length}/{SCHEDULE_REASON_MAX_LENGTH}</small>
+        </label>
+        <p className="schedule-action-note" style={{ fontSize: '12px', color: '#64748b', marginBottom: '20px' }}>취소하면 이 일정은 달력에 취소 상태로 남고, 승인된 참여자에게 알림이 전송됩니다.</p>
+        {error && <p className="schedule-action-error" style={{ color: '#ef4444', fontSize: '13px', marginBottom: '16px', fontWeight: 'bold' }}>{error}</p>}
+        <div className="schedule-action-buttons" style={{ display: 'flex', gap: '8px' }}>
+          <button className="ghost-btn" style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontWeight: 'bold' }} type="button" onClick={onClose} disabled={submitting}>돌아가기</button>
+          <button className="schedule-action-submit is-danger" style={{ flex: 1, padding: '12px', borderRadius: '8px', background: '#ef4444', color: '#fff', border: 'none', fontWeight: 'bold' }} type="submit" disabled={submitting}>{submitting ? "취소 중..." : "일정 취소"}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function MobileMyPage() {
   const navigate = useNavigate();
   const { user, logout, setCurrentUser } = useAuth();
@@ -126,10 +295,110 @@ function MobileMyPage() {
   const [introDraft, setIntroDraft] = useState(initialIntro);
   const [introSaving, setIntroSaving] = useState(false);
   const [introMessage, setIntroMessage] = useState("");
-  const scheduleItems = useMemo(() => [
-    ...(meetings.data?.hosted || []).map((meeting) => normalizeScheduleMeeting(meeting, "host")),
-    ...(meetings.data?.joined || []).map((meeting) => normalizeScheduleMeeting(meeting, "joined"))
-  ].filter((item) => validDate(item.start_at)).sort((a, b) => new Date(a.start_at) - new Date(b.start_at)), [meetings.data]);
+  const scheduleItems = useMemo(() => {
+    const rawItems = [
+      ...(meetings.data?.hosted || []).map(m => ({...m, state: "host"})),
+      ...(meetings.data?.joined || []).map(m => ({...m, state: "joined"}))
+    ];
+    const expanded = [];
+    rawItems.forEach(meeting => {
+      if (meeting.meeting_type === "regular" && meeting.sessions && meeting.sessions.length > 0) {
+        meeting.sessions.forEach(session => {
+          if (!validDate(session.start_at)) return;
+          expanded.push({
+            id: meeting.id,
+            sessionId: session.id,
+            title: meeting.title || "제목 없는 모임",
+            place: meeting.location_name || meeting.address || "장소 미정",
+            start_at: session.start_at,
+            end_at: session.end_at,
+            state: meeting.state,
+            status: meeting.status,
+            meeting_type: meeting.meeting_type,
+            sessionStatus: session.status || "scheduled",
+            cancellationReason: session.cancellation_reason || "",
+            rescheduleReason: session.reschedule_reason || "",
+            originalStartAt: session.original_start_at || ""
+          });
+        });
+      } else {
+        if (!validDate(meeting.start_at)) return;
+        expanded.push({
+          id: meeting.id,
+          sessionId: null,
+          title: meeting.title || "제목 없는 모임",
+          place: meeting.location_name || meeting.address || "장소 미정",
+          start_at: meeting.start_at,
+          end_at: meeting.end_at,
+          state: meeting.state,
+          status: meeting.status,
+          meeting_type: meeting.meeting_type,
+          sessionStatus: null
+        });
+      }
+    });
+    // 중복 제거 (방장이면서 참여자인 경우 방장우선)
+    const byKey = new Map();
+    expanded.forEach(item => {
+      const key = `${item.id}-${item.sessionId || 'one-time'}-${item.start_at}`;
+      const existing = byKey.get(key);
+      if (!existing || (item.state === "host" && existing.state !== "host")) {
+        byKey.set(key, item);
+      }
+    });
+    return Array.from(byKey.values()).sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
+  }, [meetings.data]);
+
+  const [scheduleAction, setScheduleAction] = useState(null);
+  const [scheduleActionSubmitting, setScheduleActionSubmitting] = useState(false);
+  const [scheduleActionError, setScheduleActionError] = useState("");
+
+  const openScheduleAction = (type, item) => {
+    setScheduleAction({ type, item });
+    setScheduleActionError("");
+  };
+
+  const closeScheduleAction = () => {
+    if (scheduleActionSubmitting) return;
+    setScheduleAction(null);
+    setScheduleActionError("");
+  };
+
+  const handleScheduleChange = async (payload, clientError = "") => {
+    if (clientError) {
+      setScheduleActionError(clientError);
+      return;
+    }
+    setScheduleActionSubmitting(true);
+    setScheduleActionError("");
+    try {
+      await meetingApi.updateSession(scheduleAction.item.id, scheduleAction.item.sessionId, payload);
+      setScheduleAction(null);
+      meetings.execute(); 
+    } catch (error) {
+      setScheduleActionError(error.response?.data?.message || "요청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setScheduleActionSubmitting(false);
+    }
+  };
+
+  const handleScheduleCancel = async (payload, clientError = "") => {
+    if (clientError) {
+      setScheduleActionError(clientError);
+      return;
+    }
+    setScheduleActionSubmitting(true);
+    setScheduleActionError("");
+    try {
+      await meetingApi.cancelSession(scheduleAction.item.id, scheduleAction.item.sessionId, payload.reason);
+      setScheduleAction(null);
+      meetings.execute(); 
+    } catch (error) {
+      setScheduleActionError(error.response?.data?.message || "요청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setScheduleActionSubmitting(false);
+    }
+  };
   const monthBase = useMemo(() => new Date(), []);
   const [selectedScheduleKey, setSelectedScheduleKey] = useState("");
   const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
@@ -339,54 +608,78 @@ function MobileMyPage() {
               const isClosed = item.status !== "open";
               
               return (
-                <Link key={`${item.state}-${item.id}`} to={item.state === "host" ? `/host/meetings/${item.id}` : `/meetings/${item.id}`}>
-                  {/* 방장/참여중 및 모집 종료 여부를 직관적으로 보여주는 뱃지 영역 */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                    <span style={{
-                      fontSize: '11px',
-                      padding: '3px 8px',
-                      borderRadius: '12px',
-                      background: item.state === "host" ? "#eff6ff" : "#f0fdf4",
-                      color: item.state === "host" ? "#3b82f6" : "#22c55e",
-                      fontWeight: '800'
-                    }}>
-                      {item.state === "host" ? "👑 방장" : "🙌 참여중"}
-                    </span>
-                    
-                    {/* 일회성 / 정기 구분 뱃지 */}
-                    <span style={{
-                      fontSize: '11px',
-                      padding: '3px 8px',
-                      borderRadius: '12px',
-                      background: "#fff7ed",
-                      color: "#ea580c",
-                      fontWeight: '800'
-                    }}>
-                      {item.meeting_type === "regular" ? "🔄 정기" : "⚡ 일회성"}
-                    </span>
-                    
-                    {isClosed && (
+                <div key={`${item.state}-${item.id}-${item.start_at}`} style={{ display: 'flex', flexDirection: 'column', borderBottom: '1px solid #f1f5f9', paddingBottom: '16px', marginBottom: '16px' }}>
+                  <Link to={item.state === "host" ? `/host/meetings/${item.id}` : `/meetings/${item.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                    {/* 방장/참여중 및 모집 종료 여부를 직관적으로 보여주는 뱃지 영역 */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
                       <span style={{
                         fontSize: '11px',
                         padding: '3px 8px',
                         borderRadius: '12px',
-                        background: "#f1f5f9",
-                        color: "#64748b",
+                        background: item.state === "host" ? "#eff6ff" : "#f0fdf4",
+                        color: item.state === "host" ? "#3b82f6" : "#22c55e",
                         fontWeight: '800'
                       }}>
-                        🔒 모집 종료
+                        {item.state === "host" ? "👑 방장" : "🙌 참여중"}
                       </span>
-                    )}
+                      
+                      {/* 일회성 / 정기 구분 뱃지 */}
+                      <span style={{
+                        fontSize: '11px',
+                        padding: '3px 8px',
+                        borderRadius: '12px',
+                        background: "#fff7ed",
+                        color: "#ea580c",
+                        fontWeight: '800'
+                      }}>
+                        {item.meeting_type === "regular" ? "🔄 정기" : "⚡ 일회성"}
+                      </span>
+                      
+                      {isClosed && (
+                        <span style={{
+                          fontSize: '11px',
+                          padding: '3px 8px',
+                          borderRadius: '12px',
+                          background: "#f1f5f9",
+                          color: "#64748b",
+                          fontWeight: '800'
+                        }}>
+                          🔒 모집 종료
+                        </span>
+                      )}
+                      
+                      <span style={{ fontSize: '12px', color: '#94a3b8', marginLeft: 'auto' }}>
+                        {shortTime(item.start_at)}
+                      </span>
+                    </div>
                     
-                    <span style={{ fontSize: '12px', color: '#94a3b8', marginLeft: 'auto' }}>
-                      {shortTime(item.start_at)}
-                    </span>
-                  </div>
+                    {/* 모집 종료된 모임은 약간 흐리게 처리하여 시각적으로 구분 */}
+                    <strong style={{ color: isClosed ? "#94a3b8" : "inherit", display: 'block' }}>{item.title}</strong>
+                    <p style={{ color: isClosed ? "#cbd5e1" : "inherit", margin: '4px 0 0 0', fontSize: '13px' }}>{item.place}</p>
+                    
+                    {/* 일정 취소/변경 정보 뱃지 */}
+                    {item.sessionStatus === "cancelled" && (
+                      <div style={{ marginTop: '8px', padding: '8px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px' }}>
+                        <b style={{ color: '#ef4444', fontSize: '12px', display: 'block' }}>일정 취소됨</b>
+                        <span style={{ color: '#7f1d1d', fontSize: '12px' }}>{item.cancellationReason || "취소 사유가 등록되지 않았습니다."}</span>
+                      </div>
+                    )}
+                    {item.sessionStatus === "scheduled" && item.rescheduleReason && item.originalStartAt && (
+                      <div style={{ marginTop: '8px', padding: '8px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px' }}>
+                        <b style={{ color: '#16a34a', fontSize: '12px', display: 'block' }}>일정 변경됨</b>
+                        <span style={{ color: '#166534', fontSize: '12px' }}>기존 {formatDateTime(item.originalStartAt)} · 사유: {item.rescheduleReason}</span>
+                      </div>
+                    )}
+                  </Link>
                   
-                  {/* 모집 종료된 모임은 약간 흐리게 처리하여 시각적으로 구분 */}
-                  <strong style={{ color: isClosed ? "#94a3b8" : "inherit" }}>{item.title}</strong>
-                  <p style={{ color: isClosed ? "#cbd5e1" : "inherit" }}>{item.place}</p>
-                </Link>
+                  {/* 방장 관리 영역 */}
+                  {item.state === "host" && item.meeting_type === "regular" && item.sessionId && item.sessionStatus === "scheduled" && !isPastDateTime(item.start_at) && (
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                      <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); openScheduleAction("change", item); }} style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 'bold', color: '#4f46e5', border: '1px solid #c7d2fe', borderRadius: '6px', background: '#fff' }}>일정 변경</button>
+                      <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); openScheduleAction("cancel", item); }} style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 'bold', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '6px', background: '#fff' }}>일정 취소</button>
+                    </div>
+                  )}
+                </div>
               );
             }) : <p>표시할 일정이 없습니다.</p>}
           </div>
@@ -414,6 +707,21 @@ function MobileMyPage() {
       <div className="mobile-mypage-logout-wrapper">
         <Button variant="danger" className="mobile-mypage-logout-btn" onClick={handleLogout}>로그아웃</Button>
       </div>
+
+      <ScheduleChangeModal
+        item={scheduleAction?.type === "change" ? scheduleAction.item : null}
+        submitting={scheduleActionSubmitting}
+        error={scheduleAction?.type === "change" ? scheduleActionError : ""}
+        onClose={closeScheduleAction}
+        onSubmit={handleScheduleChange}
+      />
+      <ScheduleCancelModal
+        item={scheduleAction?.type === "cancel" ? scheduleAction.item : null}
+        submitting={scheduleActionSubmitting}
+        error={scheduleAction?.type === "cancel" ? scheduleActionError : ""}
+        onClose={closeScheduleAction}
+        onSubmit={handleScheduleCancel}
+      />
 
       {/* 로그아웃 대기 상태 모달 팝업 */}
       {isLoggingOut && (
