@@ -1,4 +1,4 @@
-﻿.home-shell {
+.home-shell {
   position: relative;
   overflow: hidden;
   min-height: 460px;
@@ -304,7 +304,7 @@
 }
 
 .desktop-home-page .home-categories {
-  max-width: 1180px;
+  max-width: none;
   gap: 22px;
   margin: 0 auto;
 }

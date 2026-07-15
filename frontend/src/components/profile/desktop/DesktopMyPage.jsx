@@ -1,4 +1,4 @@
-﻿import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   CalendarDays,
   Camera,
@@ -1034,6 +1034,15 @@ function DesktopMyPage() {
     setAuthOpen(true);
     setAuthPassword("");
   };
+
+  useEffect(() => {
+    if (searchParams.get("edit_profile") === "1") {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("edit_profile");
+      setSearchParams(nextParams, { replace: true });
+      openProtectedEdit();
+    }
+  }, [searchParams, setSearchParams]);
 
   const confirmProtectedEdit = async () => {
     if (!authPassword.trim()) {

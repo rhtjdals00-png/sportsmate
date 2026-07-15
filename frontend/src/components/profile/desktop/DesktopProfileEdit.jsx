@@ -75,7 +75,7 @@ const levelOptions = [
 const fallbackSportCategories = [
   { id: "ball", name: "구기 종목", sports: ["축구", "농구", "야구", "배구", "풋살", "족구"] },
   { id: "racket", name: "라켓 스포츠", sports: ["배드민턴", "테니스", "탁구", "스쿼시"] },
-  { id: "outdoor", name: "야외 활동", sports: ["러닝", "등산", "트레킹", "자전거", "걷기"] },
+  { id: "outdoor", name: "러닝 / 야외", sports: ["러닝", "등산", "트레킹", "자전거"] },
   { id: "fitness", name: "피트니스", sports: ["헬스", "크로스핏", "클라이밍", "요가", "필라테스"] },
   { id: "etc", name: "기타", sports: ["볼링", "댄스", "골프", "수영"] }
 ];
@@ -602,6 +602,10 @@ function DesktopProfileEdit() {
     if (!sportName) return;
     setForm((current) => {
       if (current.preferred_sports.includes(sportName)) return current;
+      if (current.preferred_sports.length >= 6) {
+        alert("선호 종목은 최대 6개까지만 선택할 수 있습니다.");
+        return current;
+      }
       return {
         ...current,
         preferred_sports: [...current.preferred_sports, sportName],

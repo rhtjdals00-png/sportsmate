@@ -414,6 +414,51 @@ def list_meetings(params, current_user_id=None):
     if params.get("mine") == "joined" and current_user_id:
         query = query.join(Participant).filter(Participant.user_id == current_user_id, Participant.status == "approved")
     limit = max(1, min(int(params.get("limit", 20)), 50))
+    is_recommend = params.get("recommend") in {"1", "true", "yes"}
+    if is_recommend:
+        query = query.filter(Meeting.status == "open")
+        candidates = query.all()
+        preferred_sports_list = []
+        user_regions = []
+        if current_user_id:
+            user_obj = User.query.options(joinedload(User.profile)).get(current_user_id)
+            if user_obj and user_obj.profile:
+                if user_obj.profile.preferred_sports:
+                    preferred_sports_list = [
+                        s.strip() for s in user_obj.profile.preferred_sports.split(",") if s.strip()
+                    ]
+                if user_obj.profile.region:
+                    user_regions = [
+                        r.strip() for r in user_obj.profile.region.split() if len(r.strip()) > 1
+                    ]
+
+
+        def get_recommend_key(meeting):
+            # 1순위: 내 관심 종목
+            sport_match = 1
+            if preferred_sports_list and meeting.sport:
+                if meeting.sport.name in preferred_sports_list:
+                    sport_match = 0
+            
+            # 2순위: 인원수가 많이 찬 모임 (100%에 가까울수록 먼저)
+            max_p = meeting.max_participants or 1
+            curr_p = meeting.current_participants or 0
+            capacity_ratio = -(curr_p / max_p)
+            
+            # 3순위: 모임일이 더 빠른 순
+            start_time = meeting.start_at.timestamp() if meeting.start_at else 9999999999
+            
+            # 4순위: 내가 설정한 활동지역 근처
+            region_match = 1
+            if user_regions and meeting.address:
+                if any(r in meeting.address for r in user_regions):
+                    region_match = 0
+                    
+            return (sport_match, capacity_ratio, start_time, region_match)
+
+        candidates.sort(key=get_recommend_key)
+        return candidates[:limit]
+
     latitude = _float_param(params, "lat") or _float_param(params, "latitude")
     longitude = _float_param(params, "lng") or _float_param(params, "longitude")
     if latitude is not None and longitude is not None:

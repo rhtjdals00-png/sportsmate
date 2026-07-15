@@ -126,7 +126,13 @@ def sync_supabase_user(data):
     before_provider = user.provider if user else ""
 
     if not user:
-        user = User(email=email, auth_user_id=auth_user_id, name=name, phone_number=phone_number, nickname=nickname, user_tag=generate_user_tag())
+        # Check if phone number is already in use by another user
+        phone_number_to_set = phone_number
+        if phone_number:
+            existing = User.query.filter_by(phone_number=phone_number).first()
+            if existing:
+                phone_number_to_set = None
+        user = User(email=email, auth_user_id=auth_user_id, name=name, phone_number=phone_number_to_set, nickname=nickname, user_tag=generate_user_tag())
         db.session.add(user)
     else:
         if not user.is_active:
@@ -135,7 +141,19 @@ def sync_supabase_user(data):
         user.email = email
         # 2026-07-02: Supabase 동기화는 초기값 보강에만 쓰고, SportsMate DB에서 관리하는 계정 정보는 보존.
         user.name = name if force_profile_update and name else (user.name or name)
-        user.phone_number = phone_number if force_profile_update and phone_number else (user.phone_number or phone_number)
+        
+        # Check if target phone number is already in use by another user
+        target_phone = phone_number if force_profile_update and phone_number else (user.phone_number or phone_number)
+        if target_phone and target_phone != user.phone_number:
+            existing = User.query.filter(User.phone_number == target_phone, User.id != user.id).first()
+            if existing:
+                # Do NOT update user.phone_number since it is in use by another user.
+                pass
+            else:
+                user.phone_number = target_phone
+        else:
+            user.phone_number = user.phone_number or target_phone
+
         user.nickname = nickname if force_profile_update and nickname else (user.nickname or nickname)
         user.user_tag = user.user_tag or generate_user_tag()
 
@@ -179,6 +197,9 @@ def register_user(data):
     validate_password(password)
     if User.query.filter_by(email=email).first():
         raise ValueError("이미 가입된 이메일입니다.")
+    if phone_number:
+        if User.query.filter_by(phone_number=phone_number).first():
+            raise ValueError("이미 가입된 핸드폰 번호입니다.")
     preferred_sports = data.get("preferred_sports") or []
     if isinstance(preferred_sports, list):
         preferred_sports_value = ",".join(str(item).strip() for item in preferred_sports if str(item).strip())

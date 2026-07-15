@@ -24,7 +24,6 @@ function AuthCallbackPage() {
     async function finishLogin() {
       try {
         const result = await completeOAuthCallback(window.location.href);
-        window.history.replaceState({}, document.title, window.location.pathname);
         const redirectPath = localStorage.getItem("sportsmate_post_auth_redirect") || "/";
         localStorage.removeItem("sportsmate_post_auth_redirect");
 

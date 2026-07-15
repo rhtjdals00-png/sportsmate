@@ -9,7 +9,6 @@ def seed_database():
     categories = [
         ("구기 종목", "팀 모집", ["축구", "풋살", "농구", "배구", "야구", "족구"]),
         ("라켓 스포츠", "파트너 모집", ["배드민턴", "탁구", "테니스", "스쿼시"]),
-        ("러닝 / 야외", "동행 모집", ["러닝", "등산", "트레킹", "자전거", "산책"]),
         ("피트니스", "운동 메이트 모집", ["헬스", "크로스핏", "클라이밍", "요가", "필라테스"]),
         ("기타", "운동 메이트 모집", ["볼링", "당구", "골프", "수영"])
     ]
@@ -57,20 +56,20 @@ def seed_database():
 
     demo = User(email="demo@sportsmate.kr", nickname="스포츠메이트", user_tag="D001", name="홍길동")
     demo.set_password("password123")
-    demo.profile = UserProfile(region="서울 강남구", exercise_level="intermediate", preferred_sports="러닝, 배드민턴")
+    demo.profile = UserProfile(region="서울 강남구", exercise_level="intermediate", preferred_sports="농구, 배드민턴")
     db.session.add(demo)
     db.session.flush()
 
     applicant = User(email="mate@sportsmate.kr", nickname="운동메이트", user_tag="D002", name="김철수")
     applicant.set_password("password123")
-    applicant.profile = UserProfile(region="서울 송파구", exercise_level="beginner", preferred_sports="러닝, 배드민턴")
+    applicant.profile = UserProfile(region="서울 송파구", exercise_level="beginner", preferred_sports="농구, 배드민턴")
     db.session.add(applicant)
     db.session.flush()
 
     meeting_specs = [
-        ("퇴근 후 한강 러닝 5km", "가볍게 몸 풀고 함께 뛰는 러닝 모임입니다.", "여의도 한강공원", "서울 영등포구 여의동로 330", 11, 8, "11", "11560", 37.5284, 126.9348),
+        ("저녁 한강 야외 농구 모임", "시원한 강바람 맞으며 농구 한게임 하실 분 모집합니다.", "반포한강공원 농구장", "서울 서초구 신반포로11길 40", 3, 8, "11", "11650", 37.5115, 127.0003),
         ("주말 오전 배드민턴", "초보도 환영하는 실내 배드민턴 모임입니다.", "송파 체육문화회관", "서울 송파구 올림픽로 25", 7, 10, "11", "11710", 37.5145, 127.1059),
-        ("강남 직장인 헬스 루틴", "운동 루틴을 공유하고 서로 동기부여하는 모임입니다.", "강남 피트니스센터", "서울 강남구 테헤란로 123", 16, 6, "11", "11680", 37.5012, 127.0396)
+        ("강남 직장인 헬스 루틴", "운동 루틴을 공유하고 서로 동기부여하는 모임입니다.", "강남 피트니스센터", "서울 강남구 테헤란로 123", 11, 6, "11", "11680", 37.5012, 127.0396)
     ]
 
     for index, (title, description, location, address, sport_index, max_count, sido_code, sigungu_code, latitude, longitude) in enumerate(meeting_specs, start=1):
@@ -102,14 +101,14 @@ def seed_database():
         db.session.flush()
         db.session.add(ChatMessage(chat_room_id=room.id, user_id=demo.id, content="모임에 오신 것을 환영합니다."))
         if index == 1:
-            db.session.add(Participant(meeting_id=meeting.id, user_id=applicant.id, role="member", status="pending", join_message="퇴근 후 러닝에 함께 참여하고 싶습니다."))
-            db.session.add(Notice(meeting_id=meeting.id, title="준비물 안내", content="가벼운 러닝화와 개인 물을 준비해 주세요.", is_pinned=True))
-            vote = Vote(meeting_id=meeting.id, title="러닝 후 간식 장소를 골라주세요.")
+            db.session.add(Participant(meeting_id=meeting.id, user_id=applicant.id, role="member", status="pending", join_message="퇴근 후 농구 모임에 함께 참여하고 싶습니다."))
+            db.session.add(Notice(meeting_id=meeting.id, title="준비물 안내", content="가벼운 운동복과 개인 물을 준비해 주세요.", is_pinned=True))
+            vote = Vote(meeting_id=meeting.id, title="모임 후 식사 메뉴를 골라주세요.")
             db.session.add(vote)
             db.session.flush()
-            db.session.add(VoteOption(vote_id=vote.id, text="카페"))
-            db.session.add(VoteOption(vote_id=vote.id, text="샐러드 가게"))
+            db.session.add(VoteOption(vote_id=vote.id, text="피자"))
+            db.session.add(VoteOption(vote_id=vote.id, text="치킨"))
 
     db.session.add(Notification(user_id=demo.id, type="system", title="SportsMate 시작", message="내 주변 운동 모임을 찾아보세요.", link_url="/meetings"))
-    db.session.add(Notification(user_id=demo.id, type="join_request", title="새 참여 신청", message="퇴근 후 한강 러닝 5km에 새 참여 신청이 있습니다.", link_url="/host/meetings/1/applicants"))
+    db.session.add(Notification(user_id=demo.id, type="join_request", title="새 참여 신청", message="저녁 한강 야외 농구 모임에 새 참여 신청이 있습니다.", link_url="/host/meetings/1/applicants"))
     db.session.commit()

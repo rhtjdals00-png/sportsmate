@@ -51,7 +51,8 @@ def _sport_sort_key(sport):
 
 def _cached_categories():
     categories = SportCategory.query.all()
-    return [category.to_dict() for category in sorted(categories, key=_category_sort_key)]
+    filtered = [cat for cat in categories if cat.name not in ["야외 활동", "야외활동"]]
+    return [category.to_dict() for category in sorted(filtered, key=_category_sort_key)]
 
 
 def _cached_sports(category_id=None):
@@ -59,7 +60,12 @@ def _cached_sports(category_id=None):
     if category_id is not None:
         query = query.filter_by(category_id=category_id)
     sports = query.all()
-    return [sport.to_dict() for sport in sorted(sports, key=_sport_sort_key)]
+    filtered = [
+        sport for sport in sports
+        if sport.category.name not in ["야외 활동", "야외활동"]
+        and sport.name not in ["걷기"]
+    ]
+    return [sport.to_dict() for sport in sorted(filtered, key=_sport_sort_key)]
 
 
 def _cached_sport_purposes():

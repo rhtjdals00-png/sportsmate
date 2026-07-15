@@ -1,4 +1,4 @@
-import { CalendarClock, MapPin, Plus, Search, Star, Users } from "lucide-react";
+import { CalendarClock, MapPin, Plus, Search, Users } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMemo, useRef, useState } from "react";
 import EmptyState from "../../common/EmptyState.jsx";
@@ -9,6 +9,7 @@ import { useAsync } from "../../../hooks/useAsync";
 import { formatMeetingSchedule, formatMeetingType } from "../../../utils/formatters";
 import { getMeetingCoverImage, isUsingSportThumbnail } from "../../../utils/sportThumbnails";
 import { getSportVisualAsset, HOME_SPORT_SHORTCUT_LABELS } from "../../../utils/sportVisualAssets";
+import { useAuth } from "../../../contexts/AuthContext.jsx";
 
 function HomeRecommendedCard({ meeting }) {
   const sportName = meeting.sport?.name || meeting.sport_name;
@@ -51,10 +52,7 @@ function HomeRecommendedCard({ meeting }) {
           <Users size={16} />
           <span>{meeting.current_participants}/{meeting.max_participants}명</span>
         </div>
-        <div className="home-recommend-card__meta-item">
-          <Star size={16} />
-          <span>4.{meeting.id % 5 + 5}</span>
-        </div>
+
       </dl>
     </article>
   );
@@ -73,29 +71,51 @@ function getMeetingStatusTone(status) {
 }
 
 function DesktopHome() {
+  const { user } = useAuth();
   const [recommendRetryKey] = useState(0);
-  const recommendedMeetings = useAsync(() => meetingApi.list({ limit: 10, status: "open" }), [recommendRetryKey]);
+  const recommendedOneTime = useAsync(
+    () => meetingApi.list({ limit: 10, status: "open", recommend: true, meeting_type: "one_time" }),
+    [recommendRetryKey, user?.profile?.preferred_sports, user?.profile?.region]
+  );
+  const recommendedRegular = useAsync(
+    () => meetingApi.list({ limit: 10, status: "open", recommend: true, meeting_type: "regular" }),
+    [recommendRetryKey, user?.profile?.preferred_sports, user?.profile?.region]
+  );
   const sports = useAsync(() => sportApi.sports(), []);
-  const recommendedItems = recommendedMeetings.data?.items || [];
   const navigate = useNavigate();
-  const carouselRef = useRef(null);
   const dragStateRef = useRef(null);
   const dragMovedRef = useRef(false);
-  const [carouselDragging, setCarouselDragging] = useState(false);
   const sportItems = sports.data?.items || [];
 
-  // 2026-07-10: DesktopPrototype 없이 홈 화면만 독립 렌더링하도록 홈 전용 구성으로 분리.
+  const preferredSports = useMemo(() => {
+    if (!user?.profile?.preferred_sports) return [];
+    return user.profile.preferred_sports
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }, [user?.profile?.preferred_sports]);
+
   const homeSportShortcuts = useMemo(() => {
-    return HOME_SPORT_SHORTCUT_LABELS.map((label) => ({
+    const activeLabels = preferredSports.slice(0, 6);
+    const mapped = activeLabels.map((label) => ({
       label,
       asset: getSportVisualAsset(label),
       sport: sportItems.find((sport) => sport.name === label)
     }));
-  }, [sportItems]);
+
+    if (mapped.length < 6) {
+      const padded = [...mapped];
+      while (padded.length < 6) {
+        padded.push(null);
+      }
+      return padded;
+    }
+    return mapped;
+  }, [preferredSports, sportItems]);
 
   const startCarouselDrag = (event) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
-    const target = carouselRef.current;
+    const target = event.currentTarget.closest(".home-card-carousel");
     if (!target || target.scrollWidth <= target.clientWidth) return;
     dragMovedRef.current = false;
     dragStateRef.current = {
@@ -103,12 +123,12 @@ function DesktopHome() {
       startX: event.clientX,
       scrollLeft: target.scrollLeft
     };
-    setCarouselDragging(true);
+    target.classList.add("is-dragging");
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
 
   const moveCarouselDrag = (event) => {
-    const target = carouselRef.current;
+    const target = event.currentTarget.closest(".home-card-carousel");
     const state = dragStateRef.current;
     if (!target || !state || state.pointerId !== event.pointerId) return;
     const deltaX = event.clientX - state.startX;
@@ -123,7 +143,10 @@ function DesktopHome() {
     if (dragStateRef.current?.pointerId !== event.pointerId) return;
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     dragStateRef.current = null;
-    setCarouselDragging(false);
+    const target = event.currentTarget.closest(".home-card-carousel");
+    if (target) {
+      target.classList.remove("is-dragging");
+    }
   };
 
   const openRecommendedMeeting = (meetingId) => {
@@ -168,32 +191,76 @@ function DesktopHome() {
       </section>
 
       <section className="home-categories-wrap">
-        <div className="home-categories">
-          {homeSportShortcuts.map(({ asset, label, sport }) => (
-            <Link key={label} to={`/meetings?sport=${sport?.id || encodeURIComponent(label)}`}>
-              {asset.thumbnail && <img className="home-category-card__image" src={asset.thumbnail} alt="" aria-hidden="true" />}
-              <span className="home-category-card__hover">
-                {asset.icon && <img className="home-category-card__icon" src={asset.icon} alt="" aria-hidden="true" />}
-                <strong>{label}</strong>
-                <em>관심 종목 보기</em>
-              </span>
-            </Link>
-          ))}
+        <div className="section-head" style={{ marginBottom: "26px" }}>
+          <h2>나의 관심 종목</h2>
+          <Link to={user ? "/mypage?edit_profile=1" : "/login"}>관심 종목 설정</Link>
+        </div>
+        <div className="home-categories" style={{ marginTop: 0 }}>
+          {homeSportShortcuts.map((item, index) => {
+            if (!item) {
+              return (
+                <Link
+                  key={`empty-${index}`}
+                  to={user ? "/mypage?edit_profile=1" : "/login"}
+                  className="home-category-placeholder"
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    minHeight: "170px",
+                    border: "2px dashed #cbd5e1",
+                    borderRadius: "8px",
+                    background: "#ffffff",
+                    color: "#64748b",
+                    textDecoration: "none",
+                    gap: "8px",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease"
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "#f5f3ff";
+                    e.currentTarget.style.borderColor = "#4f46e5";
+                    e.currentTarget.style.color = "#4f46e5";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "#ffffff";
+                    e.currentTarget.style.borderColor = "#cbd5e1";
+                    e.currentTarget.style.color = "#64748b";
+                  }}
+                >
+                  <Plus size={24} />
+                  <span style={{ fontSize: "14px", fontWeight: "700" }}>관심 종목 추가</span>
+                </Link>
+              );
+            }
+            const { asset, label, sport } = item;
+            return (
+              <Link key={label} to={`/meetings?sport=${sport?.id || encodeURIComponent(label)}`}>
+                {asset.thumbnail && <img className="home-category-card__image" src={asset.thumbnail} alt="" aria-hidden="true" />}
+                <span className="home-category-card__hover">
+                  {asset.icon && <img className="home-category-card__icon" src={asset.icon} alt="" aria-hidden="true" />}
+                  <strong>{label}</strong>
+                  <em>관심 종목 보기</em>
+                </span>
+              </Link>
+            );
+          })}
         </div>
       </section>
 
       <section className="home-recommend">
         <div className="section-head">
-          <h2>오늘의 추천 모임</h2>
-          <Link to="/meetings">전체 보기</Link>
+          <h2>추천 일회성 모임</h2>
+          <Link to="/meetings?meeting_type=one_time">전체 보기</Link>
         </div>
-        {recommendedMeetings.loading ? (
+        {recommendedOneTime.loading ? (
           <LoadingCards count={4} />
-        ) : recommendedMeetings.error ? (
+        ) : recommendedOneTime.error ? (
           <EmptyState title="추천 모임을 불러오지 못했습니다." description="백엔드 서버와 DB 연결 상태를 확인해주세요." actionLabel="모임 게시판" actionTo="/meetings" />
-        ) : recommendedItems.length ? (
-          <div ref={carouselRef} className={`home-card-carousel ${carouselDragging ? "is-dragging" : ""}`}>
-            {recommendedItems.map((meeting) => (
+        ) : recommendedOneTime.data?.items?.length ? (
+          <div className="home-card-carousel">
+            {recommendedOneTime.data.items.map((meeting) => (
               <div
                 key={meeting.id}
                 className="home-card-drag-target"
@@ -211,7 +278,40 @@ function DesktopHome() {
             ))}
           </div>
         ) : (
-          <EmptyState title="아직 등록된 모임이 없습니다." actionLabel="모임 만들기" actionTo="/meetings/create" />
+          <EmptyState title="아직 등록된 일회성 모임이 없습니다." actionLabel="모임 만들기" actionTo="/meetings/create" />
+        )}
+      </section>
+
+      <section className="home-recommend" style={{ marginTop: "40px" }}>
+        <div className="section-head">
+          <h2>추천 정기 모임</h2>
+          <Link to="/meetings?meeting_type=regular">전체 보기</Link>
+        </div>
+        {recommendedRegular.loading ? (
+          <LoadingCards count={4} />
+        ) : recommendedRegular.error ? (
+          <EmptyState title="추천 모임을 불러오지 못했습니다." description="백엔드 서버와 DB 연결 상태를 확인해주세요." actionLabel="모임 게시판" actionTo="/meetings" />
+        ) : recommendedRegular.data?.items?.length ? (
+          <div className="home-card-carousel">
+            {recommendedRegular.data.items.map((meeting) => (
+              <div
+                key={meeting.id}
+                className="home-card-drag-target"
+                role="link"
+                tabIndex={0}
+                onClick={() => openRecommendedMeeting(meeting.id)}
+                onKeyDown={(event) => handleRecommendedKeyDown(event, meeting.id)}
+                onPointerDown={startCarouselDrag}
+                onPointerMove={moveCarouselDrag}
+                onPointerUp={endCarouselDrag}
+                onPointerCancel={endCarouselDrag}
+              >
+                <HomeRecommendedCard meeting={meeting} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="아직 등록된 정기 모임이 없습니다." actionLabel="모임 만들기" actionTo="/meetings/create" />
         )}
       </section>
     </div>

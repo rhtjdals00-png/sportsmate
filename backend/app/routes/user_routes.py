@@ -65,6 +65,13 @@ def update_me():
     user = user_query().get_or_404(int(get_jwt_identity()))
     data = request.get_json() or {}
 
+    if "phone_number" in data:
+        phone_number = normalize_phone_number(data["phone_number"])
+        if phone_number:
+            existing = User.query.filter(User.phone_number == phone_number, User.id != user.id).first()
+            if existing:
+                return jsonify({"message": "이미 등록되었거나 다른 계정에 연동된 핸드폰 번호입니다. 다른 번호를 입력해주세요."}), 400
+
     for field in ["name", "phone_number", "nickname", "profile_image_url"]:
         if field in data:
             setattr(user, field, normalize_phone_number(data[field]) if field == "phone_number" else data[field])
@@ -132,6 +139,11 @@ def link_email_account():
         validate_password(password)
     except ValueError as error:
         return jsonify({"message": str(error)}), 400
+
+    if phone_number:
+        existing = User.query.filter(User.phone_number == phone_number, User.id != user.id).first()
+        if existing:
+            return jsonify({"message": "이미 등록되었거나 다른 계정에 연동된 핸드폰 번호입니다. 다른 번호를 입력해주세요."}), 400
 
     # 2026-07-02: 소셜 계정이 이메일 로그인 연동을 완료하면 provider에 email을 표시.
     user.name = name

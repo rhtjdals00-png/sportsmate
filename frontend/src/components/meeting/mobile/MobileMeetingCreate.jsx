@@ -309,7 +309,6 @@ const initialForm = {
 const fallbackSportGroups = [
   { category: { id: "fallback-ball", name: "구기 종목", purpose: "팀 모집 / 친선전" }, sports: ["축구", "풋살", "농구", "배구", "야구", "족구"] },
   { category: { id: "fallback-racket", name: "라켓 스포츠", purpose: "파트너 모집 / 친선전" }, sports: ["배드민턴", "탁구", "테니스", "스쿼시"] },
-  { category: { id: "fallback-outdoor", name: "러닝 / 야외", purpose: "동행 모집 / 팀 모집" }, sports: ["러닝", "등산", "트래킹", "자전거", "산책"] },
   { category: { id: "fallback-fitness", name: "피트니스", purpose: "파트너 모집 / 운동 메이트 모집" }, sports: ["헬스", "크로스핏", "클라이밍", "요가", "필라테스"] },
   { category: { id: "fallback-etc", name: "기타", purpose: "파트너 모집" }, sports: ["볼링", "당구", "골프", "수영"] }
 ];

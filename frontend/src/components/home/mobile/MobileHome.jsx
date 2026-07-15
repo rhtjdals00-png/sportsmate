@@ -27,6 +27,10 @@ function isAdminUser(user) {
 
 function MobileHome() {
   const { user } = useAuth();
+  const meetings = useAsync(
+    () => meetingApi.list({ limit: 5, status: "open", recommend: true }),
+    [user?.profile?.preferred_sports, user?.profile?.region]
+  );
   const [activeTab, setActiveTab] = useState("one_time"); // "one_time" | "regular"
   const oneTimeMeetings = useAsync(() => meetingApi.list({ limit: 5, status: "open", meeting_type: "one_time" }), []);
   const regularMeetings = useAsync(() => meetingApi.list({ limit: 5, status: "open", meeting_type: "regular" }), []);

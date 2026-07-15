@@ -1,4 +1,4 @@
-import { CalendarClock, MapPin, Star, Users } from "lucide-react";
+import { CalendarClock, MapPin, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import Badge from "../../common/Badge.jsx";
 import { formatDateTime, formatMeetingType } from "../../../utils/formatters";
@@ -53,10 +53,7 @@ function MeetingCard({ meeting, compact = false }) {
             {meeting.current_participants}/{meeting.max_participants}명
           </span>
         </div>
-        <div>
-          <Star size={16} />
-          <span>4.{meeting.id % 5 + 5}</span>
-        </div>
+
       </dl>
     </Link>
   );
