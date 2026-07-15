@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useMemo, useState, useRef } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Camera,
@@ -32,7 +32,7 @@ function HostMeetingManagePage() {
   const { meetingId } = useParams();
   const navigate = useNavigate();
   const [refreshKey, setRefreshKey] = useState(0);
-  const [notice, setNotice] = useState({ title: "", content: "", is_pinned: true });
+  const [notice, setNotice] = useState({ title: "", content: "", is_pinned: true, notice_type: "text", session_id: null });
   const [isDeletingMeeting, setIsDeletingMeeting] = useState(false);
   const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId]);
   const notices = useAsync(() => meetingApi.notices(meetingId), [meetingId, refreshKey]);
@@ -108,7 +108,7 @@ function HostMeetingManagePage() {
   const submitNotice = async (event) => {
     event.preventDefault();
     await meetingApi.createNotice(meeting.id, notice);
-    setNotice({ title: "", content: "", is_pinned: true });
+    setNotice({ title: "", content: "", is_pinned: true, notice_type: "text", session_id: null });
     setRefreshKey((value) => value + 1);
   };
 
@@ -229,6 +229,47 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
   const [activeTab, setActiveTab] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const fileInputRef = useRef(null);
+  const sessions = useAsync(
+    () => meeting.meeting_type === "regular" ? meetingApi.sessions(meeting.id) : Promise.resolve({ items: [] }),
+    [meeting.id, meeting.meeting_type]
+  );
+
+  const scheduleNoticeOptions = useMemo(() => {
+    if (meeting.meeting_type === "regular") {
+      return (sessions.data?.items || []).filter((item) => item.status !== "cancelled").map((item) => ({
+        id: item.id,
+        label: formatMeetingDate(item.start_at),
+        content: `${meeting.title} 일정 안내\n일시: ${formatMeetingDate(item.start_at)}${meeting.location_name ? `\n장소: ${meeting.location_name}` : ""}`
+      }));
+    }
+    if (!meeting.start_at) return [];
+    return [{
+      id: null,
+      label: formatMeetingDate(meeting.start_at),
+      content: `${meeting.title} 일정 안내\n일시: ${formatMeetingDate(meeting.start_at)}${meeting.location_name ? `\n장소: ${meeting.location_name}` : ""}`
+    }];
+  }, [meeting, sessions.data?.items]);
+
+  const selectNoticeType = (noticeType) => {
+    const firstSchedule = scheduleNoticeOptions[0];
+    setNotice((current) => ({
+      ...current,
+      notice_type: noticeType,
+      session_id: noticeType === "schedule" ? (firstSchedule?.id ?? null) : null,
+      title: noticeType === "schedule" ? "일정 안내" : current.title,
+      content: noticeType === "schedule" ? (firstSchedule?.content || current.content) : current.content
+    }));
+  };
+
+  const selectScheduleNotice = (sessionId) => {
+    const selected = scheduleNoticeOptions.find((item) => String(item.id ?? "one-time") === String(sessionId));
+    setNotice((current) => ({
+      ...current,
+      session_id: selected?.id ?? null,
+      title: "일정 안내",
+      content: selected?.content || current.content
+    }));
+  };
 
   const handleTabClick = (tabName) => {
     setActiveTab((prev) => (prev === tabName ? null : tabName));
@@ -852,6 +893,23 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
             <div className="section-head"><h2>공지 관리</h2></div>
             <div className="desktop-two-column notice-column" style={{ marginTop: 0 }}>
               <form className="host-notice-desktop-form" onSubmit={submitNotice}>
+                <div className="form-group">
+                  <label htmlFor="notice-type">공지 유형</label>
+                  <select id="notice-type" value={notice.notice_type || "text"} onChange={(event) => selectNoticeType(event.target.value)}>
+                    <option value="text">일반 공지</option>
+                    <option value="schedule">일정 공지</option>
+                  </select>
+                </div>
+                {notice.notice_type === "schedule" ? (
+                  <div className="form-group">
+                    <label htmlFor="notice-session">공지할 일정</label>
+                    <select id="notice-session" value={notice.session_id ?? "one-time"} onChange={(event) => selectScheduleNotice(event.target.value)} disabled={!scheduleNoticeOptions.length}>
+                      {scheduleNoticeOptions.length ? scheduleNoticeOptions.map((item) => (
+                        <option key={item.id ?? "one-time"} value={item.id ?? "one-time"}>{item.label}</option>
+                      )) : <option value="one-time">등록된 일정이 없습니다.</option>}
+                    </select>
+                  </div>
+                ) : null}
                 <div className="form-group">
                   <label htmlFor="notice-title">제목</label>
                   <input id="notice-title" type="text" required placeholder="공지 제목을 입력하세요" value={notice.title} onChange={(event) => setNotice({ ...notice, title: event.target.value })} />

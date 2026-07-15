@@ -1,4 +1,4 @@
-import { Bell, BellRing, Headphones, Home, List, LogOut, Megaphone, MessageCircle, Search, User, Vote } from "lucide-react";
+import { Bell, BellRing, Home, List, LogOut, Megaphone, MessageCircle, User, Vote } from "lucide-react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
@@ -16,8 +16,7 @@ const navItems = [
   { to: "/", label: "홈", icon: Home },
   { to: "/meetings", label: "모임게시판", icon: List },
   { to: "/chats", label: "채팅", icon: MessageCircle },
-  { to: "/mypage", label: "내 정보", icon: User },
-  { to: "/support", label: "고객센터", icon: Headphones }
+  { to: "/mypage", label: "내 정보", icon: User }
 ];
 
 const copy = {
@@ -54,7 +53,6 @@ function NotificationIcon({ type }) {
 function DesktopHeader() {
   const navigate = useNavigate();
   const { isAuthenticated, logout, user } = useAuth();
-  const [keyword, setKeyword] = useState("");
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -98,17 +96,6 @@ function DesktopHeader() {
     return () => window.removeEventListener("pointerdown", closeOnOutside);
   }, [notificationOpen]);
 
-  const runSearch = (value = keyword) => {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    navigate(`/meetings?q=${encodeURIComponent(trimmed)}`);
-  };
-
-  const submitSearch = (event) => {
-    event.preventDefault();
-    runSearch();
-  };
-
   const confirmLogout = async () => {
     setLoggingOut(true);
     await logout();
@@ -146,23 +133,6 @@ function DesktopHeader() {
             </span>
             SPORTSMATE
           </Link>
-          <form className="desktop-header__search" onSubmit={submitSearch}>
-            <input
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  runSearch(event.currentTarget.value);
-                }
-              }}
-              placeholder={copy.searchPlaceholder}
-              aria-label={copy.searchLabel}
-            />
-            <button type="submit" aria-label={copy.search}>
-              <Search size={18} />
-            </button>
-          </form>
           <div className="desktop-header__actions">
             {(user?.role === "admin" || user?.role === "superadmin") && (
               <Link to="/admin" className="desktop-header__admin-btn">

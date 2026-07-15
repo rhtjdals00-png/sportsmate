@@ -3,6 +3,7 @@ import { apiClient } from "./client";
 export const meetingApi = {
   list: (params = {}) => apiClient.get("/meetings", { params }).then((res) => res.data),
   detail: (id) => apiClient.get(`/meetings/${id}`).then((res) => res.data),
+  sessions: (id) => apiClient.get(`/meetings/${id}/sessions`).then((res) => res.data),
   create: (payload) => apiClient.post("/meetings", payload).then((res) => res.data),
   update: (id, payload) => apiClient.patch(`/meetings/${id}`, payload).then((res) => res.data),
   updateSession: (meetingId, sessionId, payload) =>

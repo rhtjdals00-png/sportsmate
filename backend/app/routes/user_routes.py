@@ -6,7 +6,6 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models import Meeting, MeetingSession, Participant, Review, Sport, User, UserProfile
-from app.services.auth_service import validate_password
 from app.services.meeting_service import ensure_regular_meeting_sessions
 from app.utils.timezone import kst_now
 
@@ -129,26 +128,15 @@ def link_email_account():
     data = request.get_json() or {}
     name = (data.get("name") or "").strip()
     phone_number = normalize_phone_number(data.get("phone_number"))
-    password = data.get("password") or ""
 
     if not name:
         return jsonify({"message": "이름을 입력해주세요."}), 400
     if not phone_number:
         return jsonify({"message": "핸드폰 번호를 입력해주세요."}), 400
-    try:
-        validate_password(password)
-    except ValueError as error:
-        return jsonify({"message": str(error)}), 400
-
-    if phone_number:
-        existing = User.query.filter(User.phone_number == phone_number, User.id != user.id).first()
-        if existing:
-            return jsonify({"message": "이미 등록되었거나 다른 계정에 연동된 핸드폰 번호입니다. 다른 번호를 입력해주세요."}), 400
-
     # 2026-07-02: 소셜 계정이 이메일 로그인 연동을 완료하면 provider에 email을 표시.
     user.name = name
     user.phone_number = phone_number
-    user.set_password(password)
+    user.password_hash = None
     user.provider = append_provider(user.provider, "email")
     db.session.commit()
     return jsonify({"user": user.to_dict()})

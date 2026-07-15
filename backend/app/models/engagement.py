@@ -39,6 +39,9 @@ class Notice(db.Model, TimestampMixin):
     title = db.Column(db.String(120), nullable=False)
     content = db.Column(db.Text, nullable=False)
     is_pinned = db.Column(db.Boolean, default=False, nullable=False)
+    notice_type = db.Column(db.String(20), default="text", nullable=False)
+    vote_id = db.Column(db.Integer, db.ForeignKey("votes.id", ondelete="SET NULL"), nullable=True)
+    session_id = db.Column(db.Integer, db.ForeignKey("meeting_sessions.id", ondelete="SET NULL"), nullable=True)
 
     def to_dict(self):
         return {
@@ -47,6 +50,9 @@ class Notice(db.Model, TimestampMixin):
             "title": self.title,
             "content": self.content,
             "is_pinned": self.is_pinned,
+            "notice_type": self.notice_type,
+            "vote_id": self.vote_id,
+            "session_id": self.session_id,
             "created_at": self.created_at.isoformat()
         }
 

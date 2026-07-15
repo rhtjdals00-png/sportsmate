@@ -1,4 +1,5 @@
 import DesktopHeader from "../components/layout/desktop/DesktopHeader.jsx";
+import DesktopFooter from "../components/layout/desktop/DesktopFooter.jsx";
 
 function DesktopLayout({ children }) {
   return (
@@ -7,6 +8,7 @@ function DesktopLayout({ children }) {
       <main className="desktop-main">
         <div className="desktop-main__inner">{children}</div>
       </main>
+      <DesktopFooter />
     </div>
   );
 }

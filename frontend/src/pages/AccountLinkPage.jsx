@@ -111,8 +111,7 @@ function AccountLinkPage() {
 
       const data = await userApi.linkEmailAccount({
         name: form.name.trim(),
-        phone_number: form.phone_number,
-        password: form.password
+        phone_number: form.phone_number
       });
       setCurrentUser?.(data.user);
       markProfileEditVerified();

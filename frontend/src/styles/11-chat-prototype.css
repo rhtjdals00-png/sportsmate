@@ -1509,6 +1509,53 @@
   gap: 4px;
 }
 
+.desktop-prototype .chat-vote-modal > section > .chat-vote-modal__notice-link {
+  display: inline-flex;
+  width: auto;
+  min-height: 38px;
+  align-items: center;
+  gap: 6px;
+  margin-top: -4px;
+  padding: 0 12px;
+  border: 1px solid rgba(79, 70, 229, 0.16);
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.desktop-prototype .chat-vote-modal__header-actions {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+}
+
+.desktop-prototype .chat-vote-modal__header-actions .chat-vote-modal__notice-link {
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  min-height: 38px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-color: rgba(79, 70, 229, 0.16);
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.desktop-prototype .chat-vote-modal__header-actions .chat-vote-modal__notice-link:hover {
+  background: #e0e7ff;
+}
+
+/* 공지 상세 모달에는 투표 이동용 액션을 표시하지 않습니다. */
+.desktop-prototype .chat-notice-modal .chat-vote-modal__header-actions {
+  display: none !important;
+}
+
 .desktop-prototype .chat-vote-modal__header p {
   margin: 0;
   color: #64748b;
@@ -1850,6 +1897,82 @@
   color: #64748b;
   font-size: 12px;
   font-weight: 850;
+}
+
+.desktop-prototype .chat-notice-list {
+  display: grid;
+  max-height: 240px;
+  gap: 7px;
+  overflow-y: auto;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 14px;
+}
+
+.desktop-prototype .chat-notice-list > strong {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.desktop-prototype .chat-notice-list button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 9px 10px;
+  color: #334155;
+  text-align: left;
+  cursor: pointer;
+}
+
+.desktop-prototype .chat-notice-list button:hover,
+.desktop-prototype .chat-notice-list button.is-selected {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.desktop-prototype .chat-notice-list button > span {
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #2563eb;
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.desktop-prototype .chat-notice-list button > b {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-prototype .chat-notice-list button > small {
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.desktop-prototype .chat-notice-type-field {
+  display: grid;
+  gap: 6px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.desktop-prototype .chat-notice-type-field select {
+  min-height: 40px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 0 10px;
+  color: #0f172a;
+  font: inherit;
 }
 
 .desktop-prototype .chat-notice-form {

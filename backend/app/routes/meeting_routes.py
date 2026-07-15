@@ -4,7 +4,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import Attendance, ChatMessage, ChatRoom, Meeting, Notice, Participant, Review, Sport, User, Vote, VoteOption, VoteResponse
+from app.models import Attendance, ChatMessage, ChatRoom, Meeting, MeetingSession, Notice, Participant, Review, Sport, User, Vote, VoteOption, VoteResponse
 from app.services.meeting_service import cancel_meeting_session, close_expired_one_time_meetings, create_meeting, create_review, get_next_meeting_session, join_meeting, list_meeting_sessions, list_meetings, update_application, update_meeting, update_meeting_session
 from app.utils.meeting_state import meeting_chat_is_read_only
 from app.utils.timezone import parse_client_datetime
@@ -287,11 +287,27 @@ def post_notice(meeting_id):
     if meeting.host_id != user_id and not can_manage_meeting_tools(meeting_id, user_id):
         return jsonify({"message": "방장만 공지를 작성할 수 있습니다."}), 403
     data = request.get_json() or {}
+    notice_type = data.get("notice_type") if data.get("notice_type") in {"text", "vote", "schedule"} else "text"
+    vote_id = int(data["vote_id"]) if data.get("vote_id") else None
+    session_id = int(data["session_id"]) if data.get("session_id") else None
+    if notice_type == "vote":
+        vote = Vote.query.filter_by(id=vote_id, meeting_id=meeting_id).first() if vote_id else None
+        if not vote:
+            return jsonify({"message": "연결할 투표를 찾을 수 없습니다."}), 400
+    if notice_type == "schedule":
+        session = MeetingSession.query.filter_by(id=session_id, meeting_id=meeting_id).first() if session_id else None
+        if not session and meeting.meeting_type == "regular":
+            return jsonify({"message": "연결할 일정을 찾을 수 없습니다."}), 400
+        if meeting.meeting_type != "regular":
+            session_id = None
     notice = Notice(
         meeting_id=meeting_id,
         title=data.get("title", ""),
         content=data.get("content", ""),
-        is_pinned=data.get("is_pinned", False)
+        is_pinned=data.get("is_pinned", False),
+        notice_type=notice_type,
+        vote_id=vote_id if notice_type == "vote" else None,
+        session_id=session_id if notice_type == "schedule" else None
     )
     db.session.add(notice)
     chat_room = meeting.chat_room or ChatRoom(meeting_id=meeting.id)

@@ -477,9 +477,10 @@ function DesktopChatRoom() {
   const [locationSearching, setLocationSearching] = useState(false);
   const [locationPickerMessage, setLocationPickerMessage] = useState("");
   const [noticeOpen, setNoticeOpen] = useState(false);
+  const [selectedNotice, setSelectedNotice] = useState(null);
   const [noticeFormOpen, setNoticeFormOpen] = useState(false);
   const [noticeRefreshKey, setNoticeRefreshKey] = useState(0);
-  const [noticeForm, setNoticeForm] = useState({ title: "", content: "", is_pinned: true });
+  const [noticeForm, setNoticeForm] = useState({ title: "", content: "", is_pinned: true, notice_type: "text", vote_id: null, session_id: null });
   const [noticeSubmitting, setNoticeSubmitting] = useState(false);
   const [noticeError, setNoticeError] = useState("");
   const [messageMenu, setMessageMenu] = useState(null);
@@ -488,6 +489,7 @@ function DesktopChatRoom() {
   const [showLatestJump, setShowLatestJump] = useState(false);
   const [draggingReply, setDraggingReply] = useState(null);
   const [voteOpen, setVoteOpen] = useState(false);
+  const [voteReturnToNotice, setVoteReturnToNotice] = useState(false);
   const [voteMode, setVoteMode] = useState("list");
   const [voteKind, setVoteKind] = useState("general");
   const [voteRefreshKey, setVoteRefreshKey] = useState(0);
@@ -558,6 +560,22 @@ function DesktopChatRoom() {
   const canManageRoom = Boolean(room?.can_manage || meeting?.can_manage || ["host", "cohost", "subhost", "assistant"].includes(String(myRole).toLowerCase()));
   const votes = useAsync(() => meeting?.id ? meetingApi.votes(meeting.id) : Promise.resolve({ items: [] }), [meeting?.id, voteRefreshKey]);
   const notices = useAsync(() => meeting?.id ? meetingApi.notices(meeting.id) : Promise.resolve({ items: [] }), [meeting?.id, noticeRefreshKey]);
+  const sessions = useAsync(() => meeting?.id && meeting.meeting_type === "regular" ? meetingApi.sessions(meeting.id) : Promise.resolve({ items: [] }), [meeting?.id]);
+  const scheduleNoticeOptions = useMemo(() => {
+    if (!meeting?.id) return [];
+    if (meeting.meeting_type === "regular") {
+      return (sessions.data?.items || []).filter((item) => item.status !== "cancelled").map((item) => ({
+        id: item.id,
+        label: `${formatMessageDate(item.start_at)} ${formatMessageTime(item.start_at)}`,
+        content: `${meeting.title} 일정 안내\n일시: ${formatMessageDate(item.start_at)} ${formatMessageTime(item.start_at)}${meeting.location_name ? `\n장소: ${meeting.location_name}` : ""}`
+      }));
+    }
+    return meeting.start_at ? [{
+      id: null,
+      label: `${formatMessageDate(meeting.start_at)} ${formatMessageTime(meeting.start_at)}`,
+      content: `${meeting.title} 일정 안내\n일시: ${formatMessageDate(meeting.start_at)} ${formatMessageTime(meeting.start_at)}${meeting.location_name ? `\n장소: ${meeting.location_name}` : ""}`
+    }] : [];
+  }, [meeting?.id, meeting?.meeting_type, meeting?.start_at, meeting?.title, meeting?.location_name, sessions.data?.items]);
   const pinnedNotice = useMemo(() => {
     const items = [...(notices.data?.items || [])].sort((first, second) => {
       const firstTime = new Date(first.created_at || 0).getTime();
@@ -1006,7 +1024,9 @@ function DesktopChatRoom() {
     }
   };
 
-  const openVoteList = () => {
+  const openVoteList = ({ fromNotice = false } = {}) => {
+    setNoticeOpen(false);
+    setVoteReturnToNotice(fromNotice);
     setVoteMode("list");
     setVoteError("");
     setVoteOpen(true);
@@ -1171,7 +1191,10 @@ function DesktopChatRoom() {
     setNoticeForm({
       title: draft.title || "",
       content: draft.content || "",
-      is_pinned: draft.is_pinned ?? true
+      is_pinned: draft.is_pinned ?? true,
+      notice_type: draft.notice_type || "text",
+      vote_id: draft.vote_id || null,
+      session_id: draft.session_id || null
     });
     setNoticeFormOpen(true);
   };
@@ -1193,7 +1216,10 @@ function DesktopChatRoom() {
       await meetingApi.createNotice(meeting.id, {
         title: noticeForm.title.trim(),
         content: noticeForm.content.trim(),
-        is_pinned: noticeForm.is_pinned
+        is_pinned: noticeForm.is_pinned,
+        notice_type: noticeForm.notice_type,
+        vote_id: noticeForm.vote_id,
+        session_id: noticeForm.session_id
       });
       setNoticeFormOpen(false);
       setNoticeRefreshKey((value) => value + 1);
@@ -1429,9 +1455,53 @@ function DesktopChatRoom() {
     openNoticeForm({
       title: `투표: ${vote.title}`,
       content: vote.options.map((option, index) => `${index + 1}. ${option.text}`).join("\n"),
-      is_pinned: true
+      is_pinned: true,
+      notice_type: "vote",
+      vote_id: vote.id
     });
   };
+
+  const findNoticeVote = (notice) => {
+    if (!notice) return null;
+    return (votes.data?.items || []).find((vote) => (
+      Number(vote.id) === Number(notice.vote_id)
+      || notice.title === `투표: ${vote.title}`
+    ));
+  };
+
+  const openNoticeItem = (notice) => {
+    const linkedVote = findNoticeVote(notice);
+    if (linkedVote) {
+      setSelectedNotice(notice);
+      openVoteList({ fromNotice: true });
+      return;
+    }
+    setSelectedNotice(notice);
+  };
+
+  const handleNoticeTypeChange = (noticeType) => {
+    const firstSchedule = scheduleNoticeOptions[0];
+    setNoticeForm((current) => ({
+      ...current,
+      notice_type: noticeType,
+      vote_id: null,
+      session_id: noticeType === "schedule" ? (firstSchedule?.id ?? null) : null,
+      title: noticeType === "schedule" ? "일정 안내" : current.title,
+      content: noticeType === "schedule" ? (firstSchedule?.content || current.content) : current.content
+    }));
+  };
+
+  const handleScheduleNoticeChange = (sessionId) => {
+    const selected = scheduleNoticeOptions.find((item) => String(item.id ?? "one-time") === String(sessionId));
+    setNoticeForm((current) => ({
+      ...current,
+      session_id: selected?.id ?? null,
+      title: "일정 안내",
+      content: selected?.content || current.content
+    }));
+  };
+
+  const displayedNotice = selectedNotice || pinnedNotice;
 
   return (
     <section className="desktop-page desktop-prototype legacy-pc legacy-chat-page">
@@ -1633,7 +1703,7 @@ function DesktopChatRoom() {
 
             {!isDirectChat ? <div className={`talk-info-panel ${talkInfoOpen ? "is-open" : ""}`}>
               {pinnedNotice ? (
-                <button type="button" onClick={() => setNoticeOpen(true)}>
+                <button type="button" onClick={() => { setSelectedNotice(pinnedNotice); setNoticeOpen(true); }}>
                   <Megaphone size={15} />
                   <span>공지 확인</span>
                 </button>
@@ -1680,7 +1750,7 @@ function DesktopChatRoom() {
             </div> : null}
 
             {!isDirectChat && pinnedNotice ? (
-              <button className="chat-pinned-notice" type="button" onClick={() => setNoticeOpen(true)}>
+              <button className="chat-pinned-notice" type="button" onClick={() => { setSelectedNotice(pinnedNotice); setNoticeOpen(true); }}>
                 <Megaphone size={16} />
                 <strong>공지사항</strong>
                 <span>{pinnedNoticeText}</span>
@@ -2033,11 +2103,25 @@ function DesktopChatRoom() {
         </div>
       ) : null}
 
-      {noticeOpen && pinnedNotice ? (
+      {noticeOpen && displayedNotice ? (
         <div className="chat-notice-modal" role="dialog" aria-modal="true" aria-label="공지사항">
           <button className="chat-vote-modal__backdrop" type="button" onClick={() => setNoticeOpen(false)} aria-label="닫기" />
           <section>
             <div className="chat-vote-modal__header">
+              <div className="chat-vote-modal__header-actions">
+                <button
+                  className="chat-vote-modal__notice-link"
+                  type="button"
+                  onClick={() => {
+                    setVoteOpen(false);
+                    setSelectedNotice(selectedNotice || pinnedNotice);
+                    setNoticeOpen(true);
+                  }}
+                >
+                  <Megaphone size={15} />
+                  공지사항 확인
+                </button>
+              </div>
               <div>
                 <span>공지사항</span>
                 <p>채팅방 상단에 고정된 공지입니다.</p>
@@ -2045,10 +2129,20 @@ function DesktopChatRoom() {
               <button className="chat-vote-modal__close" type="button" onClick={() => setNoticeOpen(false)} aria-label="닫기"><X size={18} /></button>
             </div>
             <article className="chat-notice-detail">
-              <strong>{pinnedNotice.title}</strong>
-              <p>{pinnedNotice.content}</p>
-              <small>{formatMessageDate(pinnedNotice.created_at)}</small>
+              <strong>{displayedNotice.title}</strong>
+              <p>{displayedNotice.content}</p>
+              <small>{formatMessageDate(displayedNotice.created_at)}</small>
             </article>
+            <div className="chat-notice-list">
+              <strong>전체 공지 {notices.data?.items?.length || 0}개</strong>
+              {(notices.data?.items || []).map((notice) => (
+                <button type="button" key={notice.id} className={displayedNotice.id === notice.id ? "is-selected" : ""} onClick={() => openNoticeItem(notice)}>
+                  <span>{notice.notice_type === "vote" ? "투표" : notice.notice_type === "schedule" ? "일정" : "공지"}</span>
+                  <b>{notice.title}</b>
+                  <small>{formatMessageDate(notice.created_at)}</small>
+                </button>
+              ))}
+            </div>
           </section>
         </div>
       ) : null}
@@ -2064,6 +2158,19 @@ function DesktopChatRoom() {
               </div>
               <button className="chat-vote-modal__close" type="button" onClick={() => setNoticeFormOpen(false)} aria-label="닫기"><X size={18} /></button>
             </div>
+            <label className="chat-notice-type-field">공지 유형
+              <select value={noticeForm.notice_type} onChange={(event) => handleNoticeTypeChange(event.target.value)}>
+                <option value="text">일반 공지</option>
+                <option value="schedule">일정 공지</option>
+              </select>
+            </label>
+            {noticeForm.notice_type === "schedule" ? (
+              <label className="chat-notice-type-field">공지할 일정
+                <select value={noticeForm.session_id ?? "one-time"} onChange={(event) => handleScheduleNoticeChange(event.target.value)} disabled={!scheduleNoticeOptions.length}>
+                  {scheduleNoticeOptions.length ? scheduleNoticeOptions.map((item) => <option key={item.id ?? "one-time"} value={item.id ?? "one-time"}>{item.label}</option>) : <option value="one-time">등록된 일정이 없습니다.</option>}
+                </select>
+              </label>
+            ) : null}
             {noticeError ? <p className="chat-vote-modal__error">{noticeError}</p> : null}
             <form className="chat-notice-form" onSubmit={createNotice}>
               <label>공지 제목<input value={noticeForm.title} onChange={(event) => setNoticeForm({ ...noticeForm, title: event.target.value })} placeholder="예: 오늘 모임 안내" /></label>
@@ -2089,6 +2196,10 @@ function DesktopChatRoom() {
               </div>
               <button className="chat-vote-modal__close" type="button" onClick={() => setVoteOpen(false)} aria-label="닫기"><X size={18} /></button>
             </div>
+            <button className="chat-vote-modal__notice-link" type="button" onClick={() => { setVoteOpen(false); setSelectedNotice(selectedNotice || pinnedNotice); setNoticeOpen(true); }}>
+              <Megaphone size={15} />
+              공지사항 확인
+            </button>
             {canManageRoom ? (
               <div className="chat-vote-modal__tabs">
                 <button type="button" className={voteMode === "list" ? "active" : ""} onClick={() => setVoteMode("list")}>진행중인 투표</button>
