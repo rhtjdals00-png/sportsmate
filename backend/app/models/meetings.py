@@ -125,6 +125,8 @@ class Meeting(db.Model, TimestampMixin):
             "meeting_type": self.meeting_type,
             "location_name": self.location_name,
             "address": self.address,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
             "start_at": self.start_at.isoformat() if self.start_at else None,
             "end_at": self.end_at.isoformat() if self.end_at else None,
             "repeat_rule": self.repeat_rule,

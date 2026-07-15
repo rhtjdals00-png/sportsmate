@@ -98,8 +98,10 @@ function MobileHome() {
           <LoadingCards count={3} />
         ) : (
           <div className="card-list">
-            {(meetings.data?.items || []).map((meeting) => (
-              <MeetingCard key={meeting.id} meeting={meeting} compact />
+            {(meetings.data?.items || [])
+              .filter((meeting) => meeting.status === "open" && new Date(meeting.start_at) >= new Date())
+              .map((meeting) => (
+                <MeetingCard key={meeting.id} meeting={meeting} compact />
             ))}
           </div>
         )}

@@ -19,5 +19,47 @@
     "action_type": "신고 처리",
     "description": "신고 #4 (ms) 상태를 dismissed(으)로 저장했습니다.",
     "target_id": 4
+  },
+  {
+    "timestamp": "2026-07-15 12:15:15",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 고성민(ID 22)의 계정 정지 처리 작업을 수행했습니다.",
+    "target_id": 22
+  },
+  {
+    "timestamp": "2026-07-15 12:15:25",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 고성민(ID 22)의 계정 활성화 상태 변경 작업을 수행했습니다.",
+    "target_id": 22
+  },
+  {
+    "timestamp": "2026-07-15 12:15:34",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 고성민(ID 22)의 권한을 suspended(으)로 변경, 회원 개인 정보 수정 작업을 수행했습니다.",
+    "target_id": 22
+  },
+  {
+    "timestamp": "2026-07-15 12:15:52",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 고성민(ID 22)의 계정 활성화 상태 변경 작업을 수행했습니다.",
+    "target_id": 22
+  },
+  {
+    "timestamp": "2026-07-15 12:17:20",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 고성민(ID 22)의 계정 정지 처리 작업을 수행했습니다.",
+    "target_id": 22
+  },
+  {
+    "timestamp": "2026-07-15 15:15:44",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 고성민(ID 22)의 계정 활성화 상태 변경 작업을 수행했습니다.",
+    "target_id": 22
   }
 ]

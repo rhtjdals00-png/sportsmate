@@ -47,8 +47,28 @@ import AppSettingsPage from "../pages/AppSettingsPage.jsx";
 import SupportPage from "../pages/SupportPage.jsx";
 import ProtectedRoute from "../components/common/ProtectedRoute.jsx";
 import AdminRoute from "../components/common/AdminRoute.jsx";
+import { useResponsive } from "../hooks/useResponsive.js";
 
+// Mobile Admin Imports
+import MobileAdminNoticesPage from "../components/admin/mobile/MobileAdminNoticesPage.jsx";
+import MobileAdminReportDetailPage from "../components/admin/mobile/MobileAdminReportDetailPage.jsx";
+import MobileAdminSupportPage from "../components/admin/mobile/MobileAdminSupportPage.jsx";
 const protect = (element) => <ProtectedRoute>{element}</ProtectedRoute>;
+
+const AdminNoticesRoute = () => {
+  const { isMobile } = useResponsive();
+  return isMobile ? <MobileAdminNoticesPage /> : <AdminNoticesPage />;
+};
+
+const AdminReportDetailRoute = () => {
+  const { isMobile } = useResponsive();
+  return isMobile ? <MobileAdminReportDetailPage /> : <AdminReportDetailPage />;
+};
+
+const AdminSupportRoute = () => {
+  const { isMobile } = useResponsive();
+  return isMobile ? <MobileAdminSupportPage /> : <AdminSupportPage />;
+};
 
 function AppRouter() {
   return (
@@ -98,12 +118,12 @@ function AppRouter() {
         <Route path="meetings" element={<AdminMeetingsPage />} />
         <Route path="meetings/:meetingId" element={<AdminMeetingDetailPage />} />
         <Route path="reports" element={<AdminReportsPage />} />
-        <Route path="reports/:reportId" element={<AdminReportDetailPage />} />
+        <Route path="reports/:reportId" element={<AdminReportDetailRoute />} />
         <Route path="broadcast" element={<AdminBroadcastPage />} />
         <Route path="analytics" element={<AdminAnalyticsPage />} />
         <Route path="audit-logs" element={<AdminAuditLogsPage />} />
-        <Route path="support" element={<AdminSupportPage />} />
-        <Route path="notices" element={<AdminNoticesPage />} />
+        <Route path="support" element={<AdminSupportRoute />} />
+        <Route path="notices" element={<AdminNoticesRoute />} />
         <Route path="settings" element={<AdminSettingsPage />} />
       </Route>
     </Routes>

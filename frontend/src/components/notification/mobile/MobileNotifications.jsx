@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { BellRing, MessageCircle, UserPlus, Megaphone, HelpCircle } from "lucide-react";
+import { BellRing, MessageCircle, UserPlus, Megaphone, HelpCircle, CheckCheck } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import EmptyState from "../../common/EmptyState.jsx";
@@ -46,6 +46,7 @@ function MobileNotifications() {
   const [onlyUnread, setOnlyUnread] = useState(false);
   const [visibleCount, setVisibleCount] = useState(7);
   const [localReadIds, setLocalReadIds] = useState(new Set());
+  const [savingAll, setSavingAll] = useState(false);
   
   const notifications = useAsync(() => apiClient.get("/notifications?limit=50").then(res => res.data), [refreshKey]);
   const pushSupport = useMemo(() => getPushSupportState(), []);
@@ -61,6 +62,27 @@ function MobileNotifications() {
     }
     setRefreshKey((value) => value + 1);
     window.dispatchEvent(new Event("notifications_updated"));
+  };
+
+  const markAllRead = async () => {
+    if (savingAll) return;
+    setSavingAll(true);
+    try {
+      await notificationApi.readAll();
+      const rawItems = notifications.data?.items || [];
+      const newReadIds = new Set(localReadIds);
+      rawItems.forEach(item => {
+        if (!item.is_read) newReadIds.add(item.id);
+      });
+      setLocalReadIds(newReadIds);
+      
+      setRefreshKey((value) => value + 1);
+      window.dispatchEvent(new Event("notifications_updated"));
+    } catch (e) {
+      console.error("Failed to mark all as read", e);
+    } finally {
+      setSavingAll(false);
+    }
   };
 
   const handleAction = async (item) => {
@@ -236,22 +258,46 @@ function MobileNotifications() {
             })}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', padding: '4px 16px 12px', gap: '6px' }}>
-            <input
-              type="checkbox"
-              id="onlyUnread"
-              checked={onlyUnread}
-              onChange={(e) => setOnlyUnread(e.target.checked)}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 16px 12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <input
+                type="checkbox"
+                id="onlyUnread"
+                checked={onlyUnread}
+                onChange={(e) => setOnlyUnread(e.target.checked)}
+                style={{
+                  width: '16px',
+                  height: '16px',
+                  accentColor: 'var(--mobile-primary, #4f46e5)',
+                  cursor: 'pointer'
+                }}
+              />
+              <label htmlFor="onlyUnread" style={{ fontSize: '13px', color: '#475569', fontWeight: '800', cursor: 'pointer', userSelect: 'none' }}>
+                안 읽은 알림만 보기
+              </label>
+            </div>
+            
+            <button
+              type="button"
+              onClick={markAllRead}
+              disabled={savingAll}
               style={{
-                width: '16px',
-                height: '16px',
-                accentColor: 'var(--mobile-primary, #4f46e5)',
-                cursor: 'pointer'
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                background: 'transparent',
+                border: 'none',
+                color: '#64748b',
+                fontSize: '12px',
+                fontWeight: '800',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                opacity: savingAll ? 0.5 : 1
               }}
-            />
-            <label htmlFor="onlyUnread" style={{ fontSize: '13px', color: '#475569', fontWeight: '800', cursor: 'pointer', userSelect: 'none' }}>
-              안 읽은 알림만 보기
-            </label>
+            >
+              <CheckCheck size={14} />
+              모두 읽음
+            </button>
           </div>
         </>
       )}
