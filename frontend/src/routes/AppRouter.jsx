@@ -1,4 +1,5 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { useEffect } from "react";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import ResponsiveLayout from "../layouts/ResponsiveLayout.jsx";
 import HomePage from "../pages/HomePage.jsx";
 import LoginPage from "../pages/LoginPage.jsx";
@@ -57,6 +58,18 @@ import MobileTermsPage from "../components/profile/mobile/MobileTermsPage.jsx";
 
 const protect = (element) => <ProtectedRoute>{element}</ProtectedRoute>;
 
+function DesktopScrollToTop() {
+  const { isMobile } = useResponsive();
+  const { pathname, search } = useLocation();
+
+  useEffect(() => {
+    if (isMobile) return;
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [isMobile, pathname, search]);
+
+  return null;
+}
+
 const AdminNoticesRoute = () => {
   const { isMobile } = useResponsive();
   return isMobile ? <MobileAdminNoticesPage /> : <AdminNoticesPage />;
@@ -74,9 +87,11 @@ const AdminSupportRoute = () => {
 
 function AppRouter() {
   return (
-    <Routes>
-      <Route element={<ResponsiveLayout />}>
-        <Route path="/" element={<HomePage />} />
+    <>
+      <DesktopScrollToTop />
+      <Routes>
+        <Route element={<ResponsiveLayout />}>
+          <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/account/find" element={<AccountFindPage />} />
@@ -130,6 +145,7 @@ function AppRouter() {
         <Route path="settings" element={<AdminSettingsPage />} />
       </Route>
     </Routes>
+    </>
   );
 }
 
