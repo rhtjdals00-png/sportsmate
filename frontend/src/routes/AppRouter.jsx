@@ -53,6 +53,8 @@ import { useResponsive } from "../hooks/useResponsive.js";
 import MobileAdminNoticesPage from "../components/admin/mobile/MobileAdminNoticesPage.jsx";
 import MobileAdminReportDetailPage from "../components/admin/mobile/MobileAdminReportDetailPage.jsx";
 import MobileAdminSupportPage from "../components/admin/mobile/MobileAdminSupportPage.jsx";
+import MobileTermsPage from "../components/profile/mobile/MobileTermsPage.jsx";
+
 const protect = (element) => <ProtectedRoute>{element}</ProtectedRoute>;
 
 const AdminNoticesRoute = () => {
@@ -99,6 +101,7 @@ function AppRouter() {
         <Route path="/profile/setup" element={protect(<ProfileSetupPage />)} />
         <Route path="/mypage/meetings" element={protect(<MyMeetingsPage />)} />
         <Route path="/mypage/reviews" element={protect(<MyReviewsPage />)} />
+        <Route path="/terms/:type" element={<MobileTermsPage />} />
         <Route path="/host" element={protect(<HostDashboardPage />)} />
         <Route path="/host/meetings/:meetingId" element={protect(<HostMeetingManagePage />)} />
         <Route path="/host/meetings/:meetingId/applicants" element={protect(<HostApplicantsPage />)} />

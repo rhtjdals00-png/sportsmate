@@ -117,8 +117,21 @@ function MobileMeetingList() {
   const filterType = params.get("meeting_type");
   const displayedMeetings = useMemo(() => {
     const rawItems = meetings.data?.items || [];
-    if (!filterType) return rawItems;
-    return rawItems.filter((meeting) => meeting.meeting_type === filterType);
+    
+    const openItems = rawItems.filter((meeting) => {
+      if (meeting.status !== "open") return false;
+      if (meeting.current_participants >= meeting.max_participants) return false;
+      
+      if (meeting.meeting_type === "regular") {
+        if (meeting.end_at) return new Date(meeting.end_at) >= new Date();
+        return true;
+      } else {
+        return new Date(meeting.start_at) >= new Date();
+      }
+    });
+
+    if (!filterType) return openItems;
+    return openItems.filter((meeting) => meeting.meeting_type === filterType);
   }, [meetings.data?.items, filterType]);
 
   const currentMeetingTypeLabel = useMemo(() => {

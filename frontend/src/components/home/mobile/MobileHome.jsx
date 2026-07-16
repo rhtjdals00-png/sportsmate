@@ -1,6 +1,6 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { CalendarPlus, Dumbbell, Search, ShieldCheck, Sparkles } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import MobilePullToRefresh from "../../layout/mobile/MobilePullToRefresh.jsx";
 import MeetingCard from "../../meeting/shared/MeetingCard.jsx";
@@ -9,6 +9,7 @@ import { meetingApi } from "../../../api/meetingApi";
 import { useAsync } from "../../../hooks/useAsync";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { getSportIcon } from "../../../utils/sportIcons.jsx";
+import { sportApi } from "../../../api/sportApi.js";
 
 function splitPreferredSports(value) {
   if (Array.isArray(value)) {
@@ -27,13 +28,16 @@ function isAdminUser(user) {
 
 function MobileHome() {
   const { user } = useAuth();
-  const meetings = useAsync(
-    () => meetingApi.list({ limit: 5, status: "open", recommend: true }),
+  const [activeTab, setActiveTab] = useState("one_time"); // "one_time" | "regular"
+  const oneTimeMeetings = useAsync(
+    () => meetingApi.list({ limit: 5, status: "open", meeting_type: "one_time", recommend: true }),
     [user?.profile?.preferred_sports, user?.profile?.region]
   );
-  const [activeTab, setActiveTab] = useState("one_time"); // "one_time" | "regular"
-  const oneTimeMeetings = useAsync(() => meetingApi.list({ limit: 5, status: "open", meeting_type: "one_time" }), []);
-  const regularMeetings = useAsync(() => meetingApi.list({ limit: 5, status: "open", meeting_type: "regular" }), []);
+  const regularMeetings = useAsync(
+    () => meetingApi.list({ limit: 5, status: "open", meeting_type: "regular", recommend: true }),
+    [user?.profile?.preferred_sports, user?.profile?.region]
+  );
+  const sportsList = useAsync(() => sportApi.sports(), []);
   const preferredSports = useMemo(
     () => splitPreferredSports(user?.profile?.preferred_sports),
     [user?.profile?.preferred_sports]
@@ -44,18 +48,159 @@ function MobileHome() {
   );
   const hasPreferredSports = sportShortcuts.length > 0;
   const showAdminEntry = isAdminUser(user);
+  const navigate = useNavigate();
+
+  const [weather, setWeather] = useState(null);
+  const swiperRef = useRef(null);
+
+  useEffect(() => {
+    fetch("https://api.open-meteo.com/v1/forecast?latitude=37.566&longitude=126.9784&current_weather=true")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.current_weather) setWeather(data.current_weather);
+      })
+      .catch((err) => console.error("Weather fetch error:", err));
+  }, []);
+
+  useEffect(() => {
+    const swiper = swiperRef.current;
+    if (!swiper) return;
+    const interval = setInterval(() => {
+      const maxScroll = swiper.scrollWidth - swiper.clientWidth;
+      // 끝까지 스크롤 된 경우 다시 처음으로, 아니면 다음 슬라이드로
+      if (swiper.scrollLeft >= maxScroll - 10) {
+        swiper.scrollTo({ left: 0, behavior: 'smooth' });
+      } else {
+        swiper.scrollTo({ left: swiper.scrollLeft + swiper.clientWidth, behavior: 'smooth' });
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const getWeatherMessage = (weatherObj) => {
+    if (!weatherObj) return { title: "날씨 정보를 불러오는 중...", desc: "잠시만 기다려주세요." };
+    const temp = weatherObj.temperature !== undefined ? `${weatherObj.temperature}°C` : "";
+    const code = weatherObj.weathercode;
+    
+    if (code >= 51 && code <= 67) return { title: `현재 ${temp} 비 ☔️`, desc: "비가 오네요! 실내 체육관 모임을 추천해드려요." };
+    if (code >= 71 && code <= 77) return { title: `현재 ${temp} 눈 ☃️`, desc: "눈길 조심하시고 따뜻한 실내 스포츠 어떠세요?" };
+    return { title: `현재 ${temp} 맑음 ☀️`, desc: "운동하기 딱 좋은 날씨! 야외 모임 어떠세요?" };
+  };
+  
+  const getSportMessage = (sportName) => {
+    const name = sportName || "운동";
+    if (/축구/.test(name)) return `${name} 한 게임 어떠세요? ⚽️`;
+    if (/풋살/.test(name)) return `${name} 한 게임 어떠세요? 🥅`;
+    if (/농구/.test(name)) return `${name} 한 게임 어떠세요? 🏀`;
+    if (/배구/.test(name)) return `${name} 한 게임 어떠세요? 🏐`;
+    if (/야구/.test(name)) return `${name} 한 게임 어떠세요? ⚾️`;
+    if (/족구/.test(name)) return `${name} 한 게임 어떠세요? 🦶⚽️`;
+    if (/배드민턴/.test(name)) return `${name} 한 게임 어떠세요? 🏸`;
+    if (/탁구/.test(name)) return `${name} 한 게임 어떠세요? 🏓`;
+    if (/테니스/.test(name)) return `${name} 한 게임 어떠세요? 🎾`;
+    if (/스쿼시/.test(name)) return `${name} 한 게임 어떠세요? 🎾`;
+    
+    if (/러닝|마라톤/.test(name)) return `상쾌하게 ${name} 어떠세요? 🏃‍♂️`;
+    if (/등산/.test(name)) return `상쾌하게 ${name} 가보실까요? ⛰️`;
+    if (/트레킹|트래킹|자전거|라이딩/.test(name)) return `상쾌하게 ${name} 어떠세요? 🚴`;
+    if (/산책|워킹|걷기/.test(name)) return `여유롭게 ${name} 어떠세요? 🚶`;
+    
+    if (/헬스|웨이트|피트니스|크로스핏/.test(name)) return `득근득근 ${name} 어떠세요? 💪`;
+    if (/클라이밍/.test(name)) return `짜릿한 ${name} 어떠세요? 🧗‍♂️`;
+    
+    if (/요가|필라테스/.test(name)) return `차분하게 ${name} 어떠세요? 🧘‍♀️`;
+    if (/수영/.test(name)) return `개운하게 ${name} 어떠세요? 🏊`;
+    if (/볼링/.test(name)) return `재밌는 ${name} 한 게임 어떠세요? 🎳`;
+    if (/당구/.test(name)) return `재밌는 ${name} 한 게임 어떠세요? 🎱`;
+    if (/골프/.test(name)) return `여유롭게 ${name} 어떠세요? ⛳️`;
+
+    return `즐거운 ${name} 한 번 어떠세요? 🏅`;
+  };
+
+  const getSportSearchRoute = (sportName) => {
+    const name = sportName || "운동";
+    
+    // DB에서 받아온 실제 스포츠 목록에서 ID 추출 (숫자 ID 매핑용)
+    const sports = sportsList.data?.items || [];
+    const matchedSport = sports.find((s) => name.includes(s.name) || s.name.includes(name));
+    
+    if (matchedSport && matchedSport.category_id && matchedSport.id) {
+      return `/meetings?category=${matchedSport.category_id}&sport=${matchedSport.id}`;
+    }
+
+    // fallbackMap (DB 연동 실패 혹은 로딩 전 대비용 하드코딩)
+    const sportMap = {
+      "축구": "category=ball&sport=soccer", "풋살": "category=ball&sport=futsal",
+      "농구": "category=ball&sport=basketball", "배구": "category=ball&sport=volleyball",
+      "야구": "category=ball&sport=baseball", "족구": "category=ball&sport=jokgu",
+      "배드민턴": "category=racket&sport=badminton", "탁구": "category=racket&sport=table-tennis",
+      "테니스": "category=racket&sport=tennis", "스쿼시": "category=racket&sport=squash",
+      "러닝": "category=outdoor&sport=running", "마라톤": "category=outdoor&sport=running",
+      "등산": "category=outdoor&sport=hiking", "트래킹": "category=outdoor&sport=trekking",
+      "트레킹": "category=outdoor&sport=trekking", "자전거": "category=outdoor&sport=cycling",
+      "라이딩": "category=outdoor&sport=cycling", "산책": "category=outdoor&sport=walking",
+      "걷기": "category=outdoor&sport=walking", "헬스": "category=fitness&sport=gym",
+      "웨이트": "category=fitness&sport=gym", "피트니스": "category=fitness&sport=gym",
+      "크로스핏": "category=fitness&sport=crossfit", "클라이밍": "category=fitness&sport=climbing",
+      "요가": "category=fitness&sport=yoga", "필라테스": "category=fitness&sport=pilates",
+      "볼링": "category=etc&sport=bowling", "댄스": "category=etc&sport=dance",
+      "골프": "category=etc&sport=golf", "수영": "category=etc&sport=swimming"
+    };
+    for (const key in sportMap) {
+      if (name.includes(key)) return `/meetings?${sportMap[key]}`;
+    }
+    return `/meetings?keyword=${encodeURIComponent(name)}`;
+  };
+
+  const getRegionSearchRoute = (regionName) => {
+    if (!regionName) return `/meetings`;
+    const sidoMap = {
+      "서울": "11", "부산": "26", "대구": "27", "인천": "28", "광주": "29",
+      "대전": "30", "울산": "31", "세종": "36", "경기": "41", "강원": "42",
+      "충북": "43", "충남": "44", "전북": "45", "전남": "46", "경북": "47",
+      "경남": "48", "제주": "50"
+    };
+    for (const key in sidoMap) {
+      if (regionName.includes(key)) {
+        const parts = regionName.split(" ");
+        const sigungu = parts.length > 1 ? parts[1] : "";
+        let url = `/meetings?sido=${sidoMap[key]}`;
+        if (sigungu) url += `&sigungu=${encodeURIComponent(sigungu)}`;
+        return url;
+      }
+    }
+    return `/meetings?keyword=${encodeURIComponent(regionName)}`;
+  };
+
+  const weatherInfo = getWeatherMessage(weather);
+  const nickname = user?.nickname || user?.name || '게스트';
+  const regionName = user?.profile?.region || '우리 동네';
+  const randomSport = useMemo(() => {
+    if (!sportShortcuts || sportShortcuts.length === 0) return '운동';
+    const randomIndex = Math.floor(Math.random() * sportShortcuts.length);
+    return sportShortcuts[randomIndex].label;
+  }, [sportShortcuts]);
 
   return (
     <MobilePullToRefresh onRefresh={async () => { await Promise.all([oneTimeMeetings.execute(), regularMeetings.execute()]); }}>
       <MobileHeader showLogo />
-      <section className="home-hero">
-        <div>
-          <span>내 주변 운동 모임</span>
-          <h1>오늘 같이 운동할 메이트를 찾아보세요.</h1>
-          <p>추천 모임, 신규 모임, 인기 종목을 한 화면에서 빠르게 확인합니다.</p>
+      <div className="mobile-hero-swiper" ref={swiperRef}>
+        <div className="mobile-hero-slide" style={{ cursor: 'pointer' }} onClick={() => navigate(getSportSearchRoute(randomSport))}>
+          <span>맞춤 추천</span>
+          <h1>{nickname}님, 이번 주말엔<br/>{getSportMessage(randomSport)}</h1>
+          <p>회원님을 위한 맞춤 모임을 준비했어요.</p>
         </div>
-        <img src="/images/logo.png" alt="SportsMate 로고" />
-      </section>
+        <div className="mobile-hero-slide" style={{ cursor: 'pointer', background: 'linear-gradient(135deg, rgba(255, 251, 235, 0.98), rgba(254, 243, 199, 0.86))' }} onClick={() => navigate(`/meetings`)}>
+          <span>오늘의 동네 날씨</span>
+          <h1>{weatherInfo.title}</h1>
+          <p>{weatherInfo.desc}</p>
+        </div>
+        <div className="mobile-hero-slide" style={{ cursor: 'pointer', background: 'linear-gradient(135deg, rgba(240, 253, 244, 0.98), rgba(220, 252, 231, 0.86))' }} onClick={() => navigate(getRegionSearchRoute(regionName))}>
+          <span>내 동네 핫플레이스</span>
+          <h1>지금 {regionName}에서<br/>가장 인기 있는 모임 ✨</h1>
+          <p>이웃들과 함께 바로 참여해보세요!</p>
+        </div>
+      </div>
 
       <div className="quick-actions">
         <Link to="/meetings">
@@ -98,21 +243,22 @@ function MobileHome() {
       <section className="section">
         <div className="section-title">
           <h2>추천 모임</h2>
-          <Sparkles size={18} />
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+        <div className="mobile-filter-type-tabs" style={{ marginBottom: '16px' }}>
           <button 
             type="button" 
+            className={activeTab === "one_time" ? "is-active" : ""}
             onClick={() => setActiveTab("one_time")}
-            style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: '1px solid #e2e8f0', background: activeTab === 'one_time' ? '#4f46e5' : '#fff', color: activeTab === 'one_time' ? '#fff' : '#1e293b', fontWeight: '600', fontSize: '14px', cursor: 'pointer' }}
+            style={{ padding: '10px 0', fontSize: '14px', fontWeight: '600' }}
           >
             일회성 모임
           </button>
           <button 
             type="button" 
+            className={activeTab === "regular" ? "is-active" : ""}
             onClick={() => setActiveTab("regular")}
-            style={{ flex: 1, padding: '10px 0', borderRadius: '8px', border: '1px solid #e2e8f0', background: activeTab === 'regular' ? '#4f46e5' : '#fff', color: activeTab === 'regular' ? '#fff' : '#1e293b', fontWeight: '600', fontSize: '14px', cursor: 'pointer' }}
+            style={{ padding: '10px 0', fontSize: '14px', fontWeight: '600' }}
           >
             정기 모임
           </button>
@@ -142,11 +288,12 @@ function MobileHome() {
           ) : (
             <div className="card-list">
               {(regularMeetings.data?.items || [])
-                .filter((meeting) => 
-                  meeting.status === "open" && 
-                  meeting.current_participants < meeting.max_participants && 
-                  new Date(meeting.start_at) >= new Date()
-                )
+                .filter((meeting) => {
+                  if (meeting.status !== "open") return false;
+                  if (meeting.current_participants >= meeting.max_participants) return false;
+                  if (meeting.end_at) return new Date(meeting.end_at) >= new Date();
+                  return true;
+                })
                 .map((meeting) => (
                   <MeetingCard key={meeting.id} meeting={meeting} compact />
               ))}
