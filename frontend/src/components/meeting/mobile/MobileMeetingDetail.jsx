@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { CalendarClock, Eye, LockKeyhole, MessageCircle, UserRound, Users, ChevronDown, Star, Crown, Share2 } from "lucide-react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
+import MobilePushPermissionModal from "../../notification/mobile/MobilePushPermissionModal.jsx";
 import Badge from "../../common/Badge.jsx";
 import Button from "../../common/Button.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
@@ -29,6 +30,7 @@ function MobileMeetingDetail() {
   const [reporting, setReporting] = useState(false);
   const [checkingAttendance, setCheckingAttendance] = useState(false);
   const [hostProfileOpen, setHostProfileOpen] = useState(false);
+  const [permissionModalOpen, setPermissionModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId, refreshKey]);
   const detailMeeting = detail.data?.meeting;
@@ -109,6 +111,12 @@ function MobileMeetingDetail() {
       await meetingApi.join(meetingId);
       setMessage({ text: "모임 참여를 신청했습니다.", tone: "success" });
       setRefreshKey((k) => k + 1);
+      if ("Notification" in window && Notification.permission !== "granted") {
+        if (!sessionStorage.getItem("sportsmate_push_prompted")) {
+          setPermissionModalOpen(true);
+          sessionStorage.setItem("sportsmate_push_prompted", "true");
+        }
+      }
     } catch (err) {
       setMessage({ text: err.response?.data?.message || "신청에 실패했습니다.", tone: "danger" });
     } finally {
@@ -571,6 +579,10 @@ function MobileMeetingDetail() {
           </Button>
         )}
       </div>
+      <MobilePushPermissionModal
+        isOpen={permissionModalOpen}
+        onClose={() => setPermissionModalOpen(false)}
+      />
     </>
   );
 }

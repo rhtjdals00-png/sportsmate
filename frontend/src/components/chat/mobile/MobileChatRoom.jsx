@@ -13,6 +13,8 @@ import { voteApi } from "../../../api/voteApi";
 import { userApi } from "../../../api/userApi";
 import { locationApi } from "../../../api/locationApi";
 import { reportApi } from "../../../api/reportApi";
+import MobilePushPermissionModal from "../../notification/mobile/MobilePushPermissionModal";
+
 let naverMapClientIdPromise = null;
 const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
 
@@ -317,6 +319,7 @@ function MobileChatRoom() {
   const [placeSearchResults, setPlaceSearchResults] = useState([]);
   const [placeSearchLoading, setPlaceSearchLoading] = useState(false);
   const [placeSearchError, setPlaceSearchError] = useState("");
+  const [permissionModalOpen, setPermissionModalOpen] = useState(false);
   const [profilePreviewUser, setProfilePreviewUser] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileNotice, setProfileNotice] = useState("");
@@ -541,6 +544,12 @@ function MobileChatRoom() {
         await chatApi.sendDirect(directRoomId, { content: content.trim() });
         setContent("");
         setDirectRefreshKey((value) => value + 1);
+        if ("Notification" in window && Notification.permission !== "granted") {
+          if (!sessionStorage.getItem("sportsmate_push_prompted")) {
+            setPermissionModalOpen(true);
+            sessionStorage.setItem("sportsmate_push_prompted", "true");
+          }
+        }
       } else {
         // 모임 채팅 전송
         await chatApi.send(chatRoomId, {
@@ -550,6 +559,12 @@ function MobileChatRoom() {
         setContent("");
         setReplyTarget(null);
         setRefreshKey((value) => value + 1);
+        if ("Notification" in window && Notification.permission !== "granted") {
+          if (!sessionStorage.getItem("sportsmate_push_prompted")) {
+            setPermissionModalOpen(true);
+            sessionStorage.setItem("sportsmate_push_prompted", "true");
+          }
+        }
       }
     } catch (sendError) {
       setError(sendError.response?.data?.message || "메시지 전송에 실패했습니다.");
@@ -606,6 +621,12 @@ function MobileChatRoom() {
         } else {
           setRefreshKey((value) => value + 1);
         }
+        if ("Notification" in window && Notification.permission !== "granted") {
+          if (!sessionStorage.getItem("sportsmate_push_prompted")) {
+            setPermissionModalOpen(true);
+            sessionStorage.setItem("sportsmate_push_prompted", "true");
+          }
+        }
       })
       .catch((photoError) => {
         setError(photoError.response?.data?.message || "사진 전송에 실패했습니다.");
@@ -650,6 +671,12 @@ function MobileChatRoom() {
             setRefreshKey((value) => value + 1);
           }
           setReplyTarget(null);
+          if ("Notification" in window && Notification.permission !== "granted") {
+            if (!sessionStorage.getItem("sportsmate_push_prompted")) {
+              setPermissionModalOpen(true);
+              sessionStorage.setItem("sportsmate_push_prompted", "true");
+            }
+          }
         } catch (locationError) {
           const errMsg = locationError.response?.data?.message || "위치 공유에 실패했습니다.";
           setError(errMsg);
@@ -732,6 +759,12 @@ function MobileChatRoom() {
       setPlaceSearchOpen(false);
       setPlaceSearchKeyword("");
       setPlaceSearchResults([]);
+      if ("Notification" in window && Notification.permission !== "granted") {
+        if (!sessionStorage.getItem("sportsmate_push_prompted")) {
+          setPermissionModalOpen(true);
+          sessionStorage.setItem("sportsmate_push_prompted", "true");
+        }
+      }
     } catch (err) {
       setError(err.response?.data?.message || "위치 공유에 실패했습니다.");
     } finally {
@@ -1825,6 +1858,12 @@ function MobileChatRoom() {
           </div>
         </div>
       ) : null}
+
+      {/* Push Permission Modal */}
+      <MobilePushPermissionModal
+        isOpen={permissionModalOpen}
+        onClose={() => setPermissionModalOpen(false)}
+      />
 
       {/* Mobile Chat Drawer */}
       {drawerOpen ? (

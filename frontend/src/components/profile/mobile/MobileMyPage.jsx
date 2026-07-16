@@ -708,6 +708,21 @@ function MobileMyPage() {
         <Button variant="danger" className="mobile-mypage-logout-btn" onClick={handleLogout}>로그아웃</Button>
       </div>
 
+      <div className="mobile-mypage-footer-links" style={{
+        display: 'flex',
+        justifyContent: 'center',
+        gap: '12px',
+        margin: '0 20px 40px',
+        fontSize: '12px',
+        color: '#94a3b8'
+      }}>
+        <Link to="/terms/service" style={{ color: 'inherit', textDecoration: 'none' }}>이용약관</Link>
+        <span>|</span>
+        <Link to="/terms/privacy" style={{ color: 'inherit', textDecoration: 'none', fontWeight: 'bold' }}>개인정보처리방침</Link>
+        <span>|</span>
+        <Link to="/terms/location" style={{ color: 'inherit', textDecoration: 'none' }}>위치기반서비스</Link>
+      </div>
+
       <ScheduleChangeModal
         item={scheduleAction?.type === "change" ? scheduleAction.item : null}
         submitting={scheduleActionSubmitting}
