@@ -8,8 +8,10 @@ import { sportApi } from "../../../api/sportApi";
 import { useAsync } from "../../../hooks/useAsync";
 import { formatMeetingSchedule, formatMeetingType } from "../../../utils/formatters";
 import { getMeetingCoverImage, isUsingSportThumbnail } from "../../../utils/sportThumbnails";
-import { getSportVisualAsset, HOME_SPORT_SHORTCUT_LABELS } from "../../../utils/sportVisualAssets";
+import { getSportVisualAsset } from "../../../utils/sportVisualAssets";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
+
+const GUEST_SPORT_SHORTCUT_LABELS = ["풋살", "배드민턴", "러닝", "테니스", "등산", "농구"];
 
 function HomeRecommendedCard({ meeting }) {
   const sportName = meeting.sport?.name || meeting.sport_name;
@@ -71,7 +73,7 @@ function getMeetingStatusTone(status) {
 }
 
 function DesktopHome() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [recommendRetryKey] = useState(0);
   const recommendedOneTime = useAsync(
     () => meetingApi.list({ limit: 10, status: "open", recommend: true, meeting_type: "one_time" }),
@@ -96,12 +98,18 @@ function DesktopHome() {
   }, [user?.profile?.preferred_sports]);
 
   const homeSportShortcuts = useMemo(() => {
-    const activeLabels = preferredSports.slice(0, 6);
+    const activeLabels = isAuthenticated
+      ? preferredSports.slice(0, 6)
+      : GUEST_SPORT_SHORTCUT_LABELS;
     const mapped = activeLabels.map((label) => ({
       label,
       asset: getSportVisualAsset(label),
       sport: sportItems.find((sport) => sport.name === label)
     }));
+
+    if (!isAuthenticated) {
+      return mapped.filter((item) => item.sport);
+    }
 
     if (mapped.length < 6) {
       const padded = [...mapped];
@@ -111,7 +119,7 @@ function DesktopHome() {
       return padded;
     }
     return mapped;
-  }, [preferredSports, sportItems]);
+  }, [isAuthenticated, preferredSports, sportItems]);
 
   const startCarouselDrag = (event) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -193,15 +201,16 @@ function DesktopHome() {
       <section className="home-categories-wrap">
         <div className="section-head" style={{ marginBottom: "26px" }}>
           <h2>나의 관심 종목</h2>
-          <Link to={user ? "/mypage?edit_profile=1" : "/login"}>관심 종목 설정</Link>
+          {isAuthenticated && <Link to="/mypage?edit_profile=1">관심 종목 설정</Link>}
         </div>
         <div className="home-categories" style={{ marginTop: 0 }}>
           {homeSportShortcuts.map((item, index) => {
             if (!item) {
+              if (!isAuthenticated) return null;
               return (
                 <Link
                   key={`empty-${index}`}
-                  to={user ? "/mypage?edit_profile=1" : "/login"}
+                  to="/mypage?edit_profile=1"
                   className="home-category-placeholder"
                   style={{
                     display: "flex",

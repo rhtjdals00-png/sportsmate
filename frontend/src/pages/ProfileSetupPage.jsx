@@ -13,6 +13,8 @@ const levelOptions = [
   { value: "advanced", label: "상급" }
 ];
 
+const MAX_INTEREST_SPORTS = 6;
+
 const fallbackSportGroups = [
   { id: "ball", name: "구기 종목", sports: ["축구", "풋살", "농구", "배구", "야구", "족구"] },
   { id: "racket", name: "라켓 스포츠", sports: ["배드민턴", "탁구", "테니스", "스쿼시"] },
@@ -37,6 +39,10 @@ function splitSports(value) {
     .split(",")
     .map((sport) => sport.trim())
     .filter(Boolean);
+}
+
+function uniqueSportNames(items) {
+  return Array.from(new Set(items.map((item) => String(item || "").trim()).filter(Boolean)));
 }
 
 function parsePreferredLevels(value) {
@@ -453,6 +459,10 @@ function ProfileSetupPage() {
     if (!selectedSport) return;
     setForm((current) => {
       if (current.preferred_sports.includes(selectedSport)) return current;
+      if (uniqueSportNames(current.preferred_sports).length >= MAX_INTEREST_SPORTS) {
+        alert("관심 종목은 최대 6개까지 선택할 수 있습니다.");
+        return current;
+      }
       return {
         ...current,
         preferred_sports: [...current.preferred_sports, selectedSport],
@@ -488,6 +498,11 @@ function ProfileSetupPage() {
   const submit = async (event) => {
     event.preventDefault();
     setError("");
+    const normalizedSports = uniqueSportNames(form.preferred_sports);
+    if (normalizedSports.length > MAX_INTEREST_SPORTS) {
+      setError("관심 종목은 최대 6개까지 선택할 수 있습니다.");
+      return;
+    }
     setSaving(true);
     try {
       const phoneNumber = profilePhoneValue(form.phone_number);
@@ -504,7 +519,7 @@ function ProfileSetupPage() {
         region_2_latitude: form.region_2_latitude,
         region_2_longitude: form.region_2_longitude,
         exercise_level: form.exercise_level,
-        preferred_sports: form.preferred_sports.join(", "),
+        preferred_sports: normalizedSports.join(", "),
         preferred_sport_levels: useSportLevels
           ? { ...form.preferred_sport_levels, all: form.exercise_level }
           : { all: form.exercise_level }
@@ -673,7 +688,7 @@ function ProfileSetupPage() {
               <h2>{"선호 종목"}</h2>
               <p>{"대주제를 고른 뒤 소주제를 추가해주세요. 여러 종목을 선택할 수 있어요."}</p>
             </div>
-            <span>{form.preferred_sports.length}{"개 선택"}</span>
+            <span>{uniqueSportNames(form.preferred_sports).length}/{MAX_INTEREST_SPORTS}</span>
           </div>
           <div className={`profile-setup__sport-dropdowns ${useSportLevels ? "profile-setup__sport-dropdowns--with-level" : ""}`}>
             <select value={selectedCategoryId} onChange={(event) => { setSelectedCategoryId(event.target.value); setSelectedSport(""); }}>

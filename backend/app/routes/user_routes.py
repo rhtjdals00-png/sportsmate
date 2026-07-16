@@ -11,6 +11,8 @@ from app.utils.timezone import kst_now
 
 user_bp = Blueprint("users", __name__)
 
+MAX_INTEREST_SPORTS = 6
+
 
 MEETING_LIST_OPTIONS = (
     joinedload(Meeting.host).joinedload(User.profile),
@@ -40,11 +42,21 @@ def nullable_float(value):
         return None
 
 
-def append_provider(current_provider, next_provider):
-    providers = [item.strip() for item in (current_provider or "").split(",") if item.strip()]
-    if next_provider not in providers:
-        providers.append(next_provider)
-    return ",".join(providers) or next_provider
+def normalize_preferred_sports(value):
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise TypeError("preferred_sports must be a comma-separated string")
+
+    normalized = []
+    seen = set()
+    for item in value.split(","):
+        sport_name = item.strip()
+        if not sport_name or sport_name in seen:
+            continue
+        seen.add(sport_name)
+        normalized.append(sport_name)
+    return ", ".join(normalized)
 
 
 def user_query():
@@ -63,6 +75,19 @@ def get_me():
 def update_me():
     user = user_query().get_or_404(int(get_jwt_identity()))
     data = request.get_json() or {}
+
+    if "preferred_sports" in data:
+        try:
+            normalized_sports = normalize_preferred_sports(data["preferred_sports"])
+        except TypeError:
+            return jsonify({"message": "관심 종목 형식이 올바르지 않습니다."}), 400
+        normalized_sport_names = normalized_sports.split(", ") if normalized_sports else []
+        if len(normalized_sport_names) > MAX_INTEREST_SPORTS:
+            return jsonify({
+                "code": "INTEREST_SPORT_LIMIT_EXCEEDED",
+                "message": "관심 종목은 최대 6개까지 선택할 수 있습니다."
+            }), 400
+        data["preferred_sports"] = normalized_sports
 
     if "phone_number" in data:
         phone_number = normalize_phone_number(data["phone_number"])
@@ -117,27 +142,6 @@ def update_profile_intro_preference():
     else:
         return jsonify({"message": "알 수 없는 요청입니다."}), 400
 
-    db.session.commit()
-    return jsonify({"user": user.to_dict()})
-
-
-@user_bp.patch("/me/account-link")
-@jwt_required()
-def link_email_account():
-    user = user_query().get_or_404(int(get_jwt_identity()))
-    data = request.get_json() or {}
-    name = (data.get("name") or "").strip()
-    phone_number = normalize_phone_number(data.get("phone_number"))
-
-    if not name:
-        return jsonify({"message": "이름을 입력해주세요."}), 400
-    if not phone_number:
-        return jsonify({"message": "핸드폰 번호를 입력해주세요."}), 400
-    # 2026-07-02: 소셜 계정이 이메일 로그인 연동을 완료하면 provider에 email을 표시.
-    user.name = name
-    user.phone_number = phone_number
-    user.password_hash = None
-    user.provider = append_provider(user.provider, "email")
     db.session.commit()
     return jsonify({"user": user.to_dict()})
 
@@ -313,7 +317,7 @@ def update_review(review_id):
     db.session.commit()
     
     # 평점 평균 갱신 로직 추가
-    # 대상 유저(reviewee)가 평점의 주인이므로, 대상 유저의 프로필 평점을 다시 연산하여 반영합니다!
+    # 대상 유저(reviewee)가 평점의 주인이므로, 대상 유저의 프로필 평점을 다시 연산하여 반영합니다.
     reviewee = review.reviewee
     if reviewee and reviewee.profile:
         all_reviews = (

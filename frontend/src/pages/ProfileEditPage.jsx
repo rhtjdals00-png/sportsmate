@@ -1,7 +1,7 @@
 import { Camera, CheckCircle2, KeyRound, MapPin, Search, X, CircleAlert, LockKeyhole, XCircle } from "lucide-react";
 import StatusMessages from "../constants/statusMessages";
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import Button from "../components/common/Button.jsx";
 import DesktopProfileEdit from "../components/profile/desktop/DesktopProfileEdit.jsx";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
@@ -1146,31 +1146,13 @@ export function ProfileSetupPage() {
   return <MobileProfileEditPage />;
 }
 
-function hasLinkedEmailProvider(user) {
-  return (user?.provider || "")
-    .split(",")
-    .map((item) => item.trim())
-    .includes("email");
-}
-
 // PC와 모바일 프로필 수정 화면을 접속 기기 기준으로 분기합니다.
 function ProfileEditPage() {
   const { isMobile } = useResponsive();
-  const { user } = useAuth();
-  const [desktopEditUnlocked] = useState(() => isProfileEditVerified());
-  // 2026-07-02: 모바일 흐름은 유지하고, PC에서만 DB provider의 email 연동 상태를 기준으로 보호.
-  const canVerifyPassword = hasLinkedEmailProvider(user);
+  // 2026-07-16: PC는 로그인 보호 라우트만 통과하면 프로필 수정 화면으로 바로 진입합니다.
 
   if (isMobile) {
     return <MobileProfileEditPage />;
-  }
-
-  if (user && !canVerifyPassword) {
-    return <Navigate to="/mypage/account-link" replace />;
-  }
-
-  if (user && canVerifyPassword && !desktopEditUnlocked) {
-    return <Navigate to="/mypage" replace />;
   }
 
   return <DesktopProfileEdit />;

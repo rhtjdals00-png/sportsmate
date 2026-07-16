@@ -15,6 +15,25 @@ from app.extensions import db
 from app.models import User, UserProfile
 
 
+class LoginProviderRequiredError(ValueError):
+    pass
+
+
+class LoginProviderMismatchError(ValueError):
+    def __init__(self, registered_provider):
+        self.registered_provider = registered_provider
+        messages = {
+            "email": "이미 이메일로 가입된 계정입니다. 이메일과 비밀번호로 로그인해 주세요.",
+            "google": "이미 Google로 가입된 계정입니다. Google 로그인을 이용해 주세요.",
+            "kakao": "이미 Kakao로 가입된 계정입니다. Kakao 로그인을 이용해 주세요.",
+        }
+        super().__init__(messages[registered_provider])
+
+
+class InvalidStoredProviderError(ValueError):
+    pass
+
+
 def normalize_phone_number(value):
     digits = "".join(ch for ch in (value or "") if ch.isdigit())[:11]
     if not digits:
@@ -95,9 +114,8 @@ def supabase_auth_user_exists(auth_user_id):
 def sync_supabase_user(data):
     auth_user_id = (data.get("auth_user_id") or data.get("id") or "").strip()
     email, name, phone_number, nickname = normalize_profile_payload(data)
-    provider = (data.get("provider") or "email").strip() or "email"
+    login_provider = (data.get("login_provider") or "").strip().lower()
     profile_image_url = (data.get("profile_image_url") or data.get("avatar_url") or "").strip() or None
-    provider_id = (data.get("provider_id") or "").strip() or auth_user_id
     force_profile_update = bool(data.get("force_profile_update"))
 
     if not auth_user_id:
@@ -115,6 +133,14 @@ def sync_supabase_user(data):
     if not user:
         user = User.query.options(joinedload(User.profile)).filter_by(email=email).first()
     is_new_user = user is None
+    if is_new_user and login_provider not in {"email", "google", "kakao"}:
+        raise LoginProviderRequiredError("가입 방식을 확인할 수 없습니다. 다시 로그인해주세요.")
+    if not is_new_user:
+        stored_provider = (user.provider or "").strip().lower()
+        if stored_provider not in {"email", "google", "kakao"}:
+            raise InvalidStoredProviderError("계정의 가입 방식 정보를 확인할 수 없습니다. 고객센터에 문의해 주세요.")
+        if login_provider and stored_provider != login_provider:
+            raise LoginProviderMismatchError(stored_provider)
 
     from app.utils.settings import load_system_settings
     settings = load_system_settings()
@@ -132,7 +158,16 @@ def sync_supabase_user(data):
             existing = User.query.filter_by(phone_number=phone_number).first()
             if existing:
                 phone_number_to_set = None
-        user = User(email=email, auth_user_id=auth_user_id, name=name, phone_number=phone_number_to_set, nickname=nickname, user_tag=generate_user_tag())
+        user = User(
+            email=email,
+            auth_user_id=auth_user_id,
+            name=name,
+            phone_number=phone_number_to_set,
+            nickname=nickname,
+            user_tag=generate_user_tag(),
+            provider=login_provider,
+            provider_id=auth_user_id,
+        )
         db.session.add(user)
     else:
         if not user.is_active:
@@ -157,9 +192,6 @@ def sync_supabase_user(data):
         user.nickname = nickname if force_profile_update and nickname else (user.nickname or nickname)
         user.user_tag = user.user_tag or generate_user_tag()
 
-    # 2026-07-02: Supabase 재동기화가 google,email 같은 SportsMate 연동 상태를 google로 덮어쓰지 않도록 보존.
-    user.provider = merge_auth_providers(provider, user.provider)
-    user.provider_id = provider_id
     user.profile_image_url = profile_image_url or user.profile_image_url
 
     if not user.profile:

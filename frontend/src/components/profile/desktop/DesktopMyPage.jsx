@@ -10,18 +10,15 @@ import {
   LayoutDashboard,
   MessageCircle,
   Pencil,
-  ShieldCheck,
   Sparkles,
   Users,
   X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { userApi } from "../../../api/userApi";
 import { meetingApi } from "../../../api/meetingApi";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { useAsync } from "../../../hooks/useAsync";
-import { markProfileEditVerified } from "../../../utils/profileEditAccess";
 import { getMeetingCoverImage } from "../../../utils/sportThumbnails";
 import { formatRegularMeetingSchedule } from "../../../utils/formatters";
 
@@ -37,7 +34,7 @@ const MEETING_FILTERS = [
 ];
 
 const levelLabels = {
-  // 2026-07-01: 紐⑤컮???꾨줈??湲곗?怨??숈씪?섍쾶 ?대룞 ?섏? 紐낆묶???듭씪.
+  // 2026-07-01: 모바일 프로필 기준과 동일하게 운동 수준 명칭을 통일.
   beginner: "입문",
   intermediate: "중급",
   advanced: "상급"
@@ -183,13 +180,6 @@ function tagLabel(user) {
   return normalized ? `#${normalized}` : "";
 }
 
-function hasLinkedEmailProvider(user) {
-  return (user?.provider || "")
-    .split(",")
-    .map((item) => item.trim())
-    .includes("email");
-}
-
 function normalizeMeeting(meeting, state) {
   const isRegular = meeting.meeting_type === "regular";
   const allSessions = sortSessionsByStart(meeting.sessions || []);
@@ -197,7 +187,7 @@ function normalizeMeeting(meeting, state) {
   const fallbackNextSession = scheduledSessions.find((session) => isUpcomingSchedule(session.start_at));
   const nextSession = isRegular ? meeting.next_session || fallbackNextSession || null : null;
   const lastSession = isRegular ? [...scheduledSessions].reverse().find((session) => validDate(session.start_at)) : null;
-  // 2026-07-13: ?뺢린紐⑥엫? Meeting.start_at留뚯쑝濡?醫낅즺 ?먮떒?섏? ?딄퀬 ?ㅼ젣 ?뚯감 ?곗씠?곕? ?곗꽑?쒕떎.
+  // 2026-07-13: 정기모임은 Meeting.start_at만으로 종료 판단하지 않고 실제 회차 데이터를 우선한다.
   const scheduleStart = isRegular ? (nextSession?.start_at || lastSession?.start_at || null) : meeting.start_at;
   const scheduleEnd = isRegular ? (nextSession?.end_at || lastSession?.end_at || null) : meeting.end_at;
   return {
@@ -718,10 +708,6 @@ function DesktopMyPage() {
   const [activeActivity, setActiveActivity] = useState("schedule");
   const [introEdit, setIntroEdit] = useState(false);
   const [introDraft, setIntroDraft] = useState("");
-  const [authOpen, setAuthOpen] = useState(false);
-  const [authPassword, setAuthPassword] = useState("");
-  const [authError, setAuthError] = useState("");
-  const [authChecking, setAuthChecking] = useState(false);
   const [savingIntro, setSavingIntro] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarHighlight, setCalendarHighlight] = useState({ meetingId: "", chatRoomId: "", source: "", autoOpen: false });
@@ -765,7 +751,7 @@ function DesktopMyPage() {
   const canUseProtectedUserApi = Boolean(authUser && backendTokenReady);
 
   const profileState = useAsync(
-    // 2026-07-01: 諛깆뿏??JWT 以鍮???蹂댄샇 API ?몄텧濡?諛쒖깮?섎뜕 401 諛섎났??諛⑹?.
+    // 2026-07-01: 백엔드 JWT 준비 전 보호 API 호출로 발생하던 401 반복을 방지.
     () => (canUseProtectedUserApi ? userApi.me() : Promise.resolve({ user: null })),
     [canUseProtectedUserApi, authUser?.id, refreshKey]
   );
@@ -936,9 +922,6 @@ function DesktopMyPage() {
     { key: "reviews", label: "후기 관리", icon: FileText }
   ];
   const activePanel = activityPanels[activeActivity];
-  // 2026-07-02: PC ?꾨줈???섏젙 蹂댄샇??SportsMate DB provider??email ?곕룞???ㅼ젣 諛섏쁺??寃쎌슦?먮쭔 ?듦낵.
-  const canVerifyPassword = hasLinkedEmailProvider(user);
-
   const startIntroEdit = () => {
     setIntroDraft(savedIntro.slice(0, PROFILE_INTRO_MAX_LENGTH));
     setIntroEdit(true);
@@ -949,7 +932,7 @@ function DesktopMyPage() {
     const nextIntro = introDraft.trim().slice(0, PROFILE_INTRO_MAX_LENGTH);
     setSavingIntro(true);
     try {
-      // 2026-07-01: PC ???뺣낫 ??以??뚭컻瑜?諛깆뿏???꾨줈??bio? ?곌껐.
+      // 2026-07-01: PC 내 정보 한 줄 소개를 백엔드 프로필 bio와 연결.
       const data = await userApi.updateMe({ bio: nextIntro });
       setCurrentUser?.(data.user);
       setRefreshKey((key) => key + 1);
@@ -1016,7 +999,7 @@ function DesktopMyPage() {
     const reader = new FileReader();
     reader.onload = async () => {
       const imageUrl = reader.result;
-      // 2026-07-01: ?ㅼ젣 ?뚯씪 ?낅줈??API ?꾩엯 ?꾧퉴吏 ?꾨줈???대?吏 URL ?꾨뱶??誘몃━蹂닿린 媛믪쓣 ???
+      // 2026-07-01: 실제 파일 업로드 API 도입 전까지 프로필 이미지 URL 필드를 미리보기 값으로 저장.
       const data = await userApi.updateMe({ profile_image_url: imageUrl });
       setCurrentUser?.(data.user);
       setRefreshKey((key) => key + 1);
@@ -1025,14 +1008,7 @@ function DesktopMyPage() {
   };
 
   const openProtectedEdit = () => {
-    setAuthError("");
-    if (!canVerifyPassword) {
-      setAuthPassword("");
-      setAuthOpen("account-link");
-      return;
-    }
-    setAuthOpen(true);
-    setAuthPassword("");
+    navigate("/mypage/profile");
   };
 
   useEffect(() => {
@@ -1043,37 +1019,6 @@ function DesktopMyPage() {
       openProtectedEdit();
     }
   }, [searchParams, setSearchParams]);
-
-  const confirmProtectedEdit = async () => {
-    if (!authPassword.trim()) {
-      setAuthError("비밀번호를 입력해 주세요.");
-      return;
-    }
-
-    setAuthChecking(true);
-    setAuthError("");
-    try {
-      if (!isSupabaseConfigured || !supabase) {
-        throw new Error("인증 서비스 설정을 확인해 주세요.");
-      }
-      // 2026-07-02: 鍮꾨?踰덊샇 ?먮낯? Supabase Auth???덉쑝誘濡?Supabase 濡쒓렇??寃利앹쓣 癒쇱? ?섑뻾.
-      const { error: supabaseError } = await supabase.auth.signInWithPassword({
-        email: user?.email || "",
-        password: authPassword
-      });
-      if (supabaseError) {
-        throw new Error("비밀번호가 올바르지 않습니다.");
-      }
-      await userApi.verifyPassword({ password: authPassword });
-      markProfileEditVerified();
-      setAuthOpen(false);
-      navigate("/mypage/profile");
-    } catch (error) {
-      setAuthError(error?.response?.data?.message || "비밀번호 확인에 실패했습니다.");
-    } finally {
-      setAuthChecking(false);
-    }
-  };
 
   if (!authUser && !profileState.loading) {
     return (
@@ -1324,44 +1269,6 @@ function DesktopMyPage() {
         </section>
       </div>
 
-      {authOpen === true && (
-        <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setAuthOpen(false)}>
-          <form
-            className="profile-auth-modal"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!authChecking) confirmProtectedEdit();
-            }}
-          >
-            <button className="schedule-modal-close" type="button" onClick={() => setAuthOpen(false)}><X size={18} /></button>
-            <ShieldCheck size={26} />
-            <h2>프로필 수정 확인</h2>
-            <p>중요한 프로필 정보를 수정하기 전에 비밀번호 확인이 필요합니다.</p>
-            <input type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} placeholder="비밀번호 입력" />
-            {authError && <em className="nickname-check warn">{authError}</em>}
-            <div className="profile-auth-actions">
-              <button className="ghost-btn" type="button" onClick={() => setAuthOpen(false)}>취소</button>
-              <button className="primary-small" type="submit" disabled={authChecking}>
-                {authChecking ? "확인 중..." : "확인"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-      {authOpen === "account-link" && (
-        <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setAuthOpen(false)}>
-          <section className="profile-auth-modal">
-            <button className="schedule-modal-close" type="button" onClick={() => setAuthOpen(false)}><X size={18} /></button>
-            <ShieldCheck size={26} />
-            <h2>계정 연동이 필요합니다</h2>
-            <p>소셜 로그인 계정은 이름, 핸드폰 번호, 이메일 로그인 정보를 등록한 뒤 프로필 수정을 이용할 수 있습니다.</p>
-            <div className="profile-auth-actions">
-              <button className="ghost-btn" type="button" onClick={() => setAuthOpen(false)}>나중에 하기</button>
-              <button className="primary-small" type="button" onClick={() => navigate("/mypage/account-link")}>연동하기</button>
-            </div>
-          </section>
-        </div>
-      )}
       {writingReview && (
         <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setWritingReview(null)}>
           <form

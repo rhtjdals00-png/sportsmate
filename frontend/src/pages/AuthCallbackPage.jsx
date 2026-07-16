@@ -4,10 +4,6 @@ import { Loader2 } from "lucide-react";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 
-const providerLinkMessages = {
-  google: "기존 이메일 계정에 Google 로그인이 연결되었습니다. 앞으로 이메일 로그인과 Google 로그인을 모두 사용할 수 있습니다.",
-  kakao: "기존 이메일 계정에 카카오 로그인이 연결되었습니다. 앞으로 이메일 로그인과 카카오 로그인을 모두 사용할 수 있습니다."
-};
 
 function AuthCallbackPage() {
   const navigate = useNavigate();
@@ -23,23 +19,19 @@ function AuthCallbackPage() {
 
     async function finishLogin() {
       try {
-        const result = await completeOAuthCallback(window.location.href);
+        await completeOAuthCallback(window.location.href);
         const redirectPath = localStorage.getItem("sportsmate_post_auth_redirect") || "/";
         localStorage.removeItem("sportsmate_post_auth_redirect");
-
-        const linkMessage = result?.provider_linked ? providerLinkMessages[result.linked_provider] : "";
-        sessionStorage.setItem("sportsmate_flash", linkMessage || "로그인했습니다.");
-
-        if (mounted && linkMessage) {
-          setMessage(linkMessage);
-          redirectTimer = window.setTimeout(() => navigate(redirectPath, { replace: true }), 1600);
-        } else {
-          navigate(redirectPath, { replace: true });
-        }
+        sessionStorage.setItem("sportsmate_flash", "로그인했습니다.");
+        navigate(redirectPath, { replace: true });
       } catch (error) {
-        const errorMessage = error?.message || "로그인 세션을 확인하지 못했습니다. 다시 로그인해주세요.";
+        const errorMessage = error?.response?.data?.message || error?.message || "로그인 세션을 확인하지 못했습니다. 다시 로그인해주세요.";
         sessionStorage.setItem("sportsmate_auth_error", errorMessage);
         if (mounted) {
+          if (error?.response?.data?.code === "LOGIN_PROVIDER_MISMATCH") {
+            navigate("/login", { replace: true });
+            return;
+          }
           setMessage(errorMessage);
           redirectTimer = window.setTimeout(() => navigate("/login", { replace: true }), 1200);
         }
@@ -64,7 +56,7 @@ function AuthCallbackPage() {
         <p>{message}</p>
       </section>
 
-      {/* 소셜 로그인 진행 중 회전하는 로딩 모달 스피너 */}
+      {/* 소셜 로그인 진행 중에 표시되는 로딩 모달 */}
       <div className="mobile-logout-modal-overlay">
         <div className="mobile-logout-modal-content">
           <Loader2 size={36} className="mobile-logout-spinner" />
