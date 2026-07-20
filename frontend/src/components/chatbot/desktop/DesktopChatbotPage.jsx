@@ -1,4 +1,4 @@
-import { ArrowRight, Bell, CalendarDays, ClipboardList, FilePlus, Headphones, MessageSquare, Plus, Search, Send, Trash2, User, UserRound } from "lucide-react";
+import { ArrowRight, Bell, CalendarDays, ClipboardList, CloudSun, FilePlus, Headphones, MessageSquare, Plus, Search, Send, Trash2, User, UserRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { chatbotApi } from "../../../api/chatbotApi";
@@ -17,7 +17,7 @@ function formatChatTime(value) {
 }
 
 function isMyNearbyRequest(content) {
-  return /내\s*(주변|근처|위치)|현재\s*위치|주변\s*모임/.test(content || "");
+  return /내\s*(주변|근처|위치)|현재\s*위치|주변\s*모임|날씨|기온|온도|강수|비\s*(올|와)|눈\s*올|우산|습도|풍속|미세먼지|예보/.test(content || "");
 }
 
 function requestBrowserLocation() {
@@ -50,6 +50,7 @@ function ChatbotActionIcon({ type }) {
   if (type === "joined_meetings") return <CalendarDays size={15} />;
   if (type === "profile") return <UserRound size={15} />;
   if (type === "chat") return <MessageSquare size={15} />;
+  if (type === "weather") return <CloudSun size={15} />;
   return <ArrowRight size={15} />;
 }
 
@@ -241,6 +242,7 @@ function DesktopChatbotPage() {
   };
 
   const quickPrompts = [
+    "오늘 내 위치 날씨 알려줘",
     "내 주변 모임 알려줘",
     "내 일정 알려줘",
     "나한테 맞는 모임 추천해줘",

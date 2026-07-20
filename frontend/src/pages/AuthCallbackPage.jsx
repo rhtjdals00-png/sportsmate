@@ -9,17 +9,22 @@ function AuthCallbackPage() {
   const navigate = useNavigate();
   const [message, setMessage] = useState("로그인 정보를 확인하고 있습니다.");
   const { completeOAuthCallback } = useAuth();
+  const completeOAuthCallbackRef = useRef(completeOAuthCallback);
   const handledRef = useRef(false);
+  completeOAuthCallbackRef.current = completeOAuthCallback;
 
   useEffect(() => {
-    if (handledRef.current) return undefined;
-    handledRef.current = true;
     let mounted = true;
     let redirectTimer = null;
+    const authErrorRedirectTimer = window.setInterval(() => {
+      if (sessionStorage.getItem("sportsmate_auth_error")) {
+        navigate("/login", { replace: true });
+      }
+    }, 50);
 
     async function finishLogin() {
       try {
-        await completeOAuthCallback(window.location.href);
+        await completeOAuthCallbackRef.current(window.location.href);
         const redirectPath = localStorage.getItem("sportsmate_post_auth_redirect") || "/";
         localStorage.removeItem("sportsmate_post_auth_redirect");
         sessionStorage.setItem("sportsmate_flash", "로그인했습니다.");
@@ -38,15 +43,24 @@ function AuthCallbackPage() {
       }
     }
 
-    finishLogin();
+    // React Strict Mode mounts, cleans up, and mounts effects again in
+    // development. Defer the one-time code exchange so the throwaway first
+    // effect is cancelled and only the live second effect handles OAuth.
+    const startTimer = window.setTimeout(() => {
+      if (!mounted || handledRef.current) return;
+      handledRef.current = true;
+      finishLogin();
+    }, 0);
 
     return () => {
       mounted = false;
+      window.clearTimeout(startTimer);
       if (redirectTimer) {
         window.clearTimeout(redirectTimer);
       }
+      window.clearInterval(authErrorRedirectTimer);
     };
-  }, [completeOAuthCallback, navigate]);
+  }, [navigate]);
 
   return (
     <>

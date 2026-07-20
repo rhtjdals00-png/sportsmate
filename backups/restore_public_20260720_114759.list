@@ -1,0 +1,267 @@
+;
+; Archive created at 2026-07-20 02:48:09 UTC
+;     dbname: postgres
+;     TOC Entries: 258
+;     Compression: gzip
+;     Dump Version: 1.16-0
+;     Format: CUSTOM
+;     Integer: 4 bytes
+;     Offset: 8 bytes
+;     Dumped from database version: 17.6
+;     Dumped by pg_dump version: 17.10
+;
+;
+; Selected TOC Entries:
+;
+;31; 2615 2200 SCHEMA - public pg_database_owner
+;4214; 0 0 COMMENT - SCHEMA public pg_database_owner
+558; 1255 18206 FUNCTION public generate_user_tag() postgres
+419; 1259 17955 TABLE public attendances postgres
+418; 1259 17954 SEQUENCE public attendances_id_seq postgres
+4215; 0 0 SEQUENCE OWNED BY public attendances_id_seq postgres
+427; 1259 19144 TABLE public chat_message_reads postgres
+426; 1259 19143 SEQUENCE public chat_message_reads_id_seq postgres
+4216; 0 0 SEQUENCE OWNED BY public chat_message_reads_id_seq postgres
+421; 1259 17972 TABLE public chat_messages postgres
+420; 1259 17971 SEQUENCE public chat_messages_id_seq postgres
+4217; 0 0 SEQUENCE OWNED BY public chat_messages_id_seq postgres
+411; 1259 17896 TABLE public chat_rooms postgres
+410; 1259 17895 SEQUENCE public chat_rooms_id_seq postgres
+4218; 0 0 SEQUENCE OWNED BY public chat_rooms_id_seq postgres
+435; 1259 19284 TABLE public chatbot_messages postgres
+434; 1259 19283 SEQUENCE public chatbot_messages_id_seq postgres
+4219; 0 0 SEQUENCE OWNED BY public chatbot_messages_id_seq postgres
+433; 1259 19272 TABLE public chatbot_sessions postgres
+432; 1259 19271 SEQUENCE public chatbot_sessions_id_seq postgres
+4220; 0 0 SEQUENCE OWNED BY public chatbot_sessions_id_seq postgres
+437; 1259 19314 TABLE public chatbot_user_memories postgres
+436; 1259 19313 SEQUENCE public chatbot_user_memories_id_seq postgres
+4221; 0 0 SEQUENCE OWNED BY public chatbot_user_memories_id_seq postgres
+431; 1259 19184 TABLE public direct_chat_messages postgres
+430; 1259 19183 SEQUENCE public direct_chat_messages_id_seq postgres
+4222; 0 0 SEQUENCE OWNED BY public direct_chat_messages_id_seq postgres
+429; 1259 19164 TABLE public direct_chat_rooms postgres
+428; 1259 19163 SEQUENCE public direct_chat_rooms_id_seq postgres
+4223; 0 0 SEQUENCE OWNED BY public direct_chat_rooms_id_seq postgres
+445; 1259 19512 TABLE public meeting_sessions postgres
+444; 1259 19511 SEQUENCE public meeting_sessions_id_seq postgres
+407; 1259 17858 TABLE public meetings postgres
+406; 1259 17857 SEQUENCE public meetings_id_seq postgres
+4224; 0 0 SEQUENCE OWNED BY public meetings_id_seq postgres
+415; 1259 17929 TABLE public notices postgres
+414; 1259 17928 SEQUENCE public notices_id_seq postgres
+4225; 0 0 SEQUENCE OWNED BY public notices_id_seq postgres
+401; 1259 17818 TABLE public notifications postgres
+400; 1259 17817 SEQUENCE public notifications_id_seq postgres
+4226; 0 0 SEQUENCE OWNED BY public notifications_id_seq postgres
+409; 1259 17877 TABLE public participants postgres
+408; 1259 17876 SEQUENCE public participants_id_seq postgres
+4227; 0 0 SEQUENCE OWNED BY public participants_id_seq postgres
+403; 1259 17832 TABLE public push_subscriptions postgres
+402; 1259 17831 SEQUENCE public push_subscriptions_id_seq postgres
+4228; 0 0 SEQUENCE OWNED BY public push_subscriptions_id_seq postgres
+395; 1259 17775 TABLE public regions postgres
+394; 1259 17774 SEQUENCE public regions_id_seq postgres
+4229; 0 0 SEQUENCE OWNED BY public regions_id_seq postgres
+405; 1259 17846 TABLE public reports postgres
+404; 1259 17845 SEQUENCE public reports_id_seq postgres
+4230; 0 0 SEQUENCE OWNED BY public reports_id_seq postgres
+413; 1259 17910 TABLE public reviews postgres
+412; 1259 17909 SEQUENCE public reviews_id_seq postgres
+4231; 0 0 SEQUENCE OWNED BY public reviews_id_seq postgres
+393; 1259 17766 TABLE public sport_categories postgres
+392; 1259 17765 SEQUENCE public sport_categories_id_seq postgres
+4232; 0 0 SEQUENCE OWNED BY public sport_categories_id_seq postgres
+399; 1259 17806 TABLE public sports postgres
+398; 1259 17805 SEQUENCE public sports_id_seq postgres
+4233; 0 0 SEQUENCE OWNED BY public sports_id_seq postgres
+443; 1259 19472 TABLE public support_inquiries postgres
+442; 1259 19471 SEQUENCE public support_inquiries_id_seq postgres
+4234; 0 0 SEQUENCE OWNED BY public support_inquiries_id_seq postgres
+397; 1259 17790 TABLE public user_profiles postgres
+396; 1259 17789 SEQUENCE public user_profiles_id_seq postgres
+4235; 0 0 SEQUENCE OWNED BY public user_profiles_id_seq postgres
+391; 1259 17756 TABLE public users postgres
+390; 1259 17755 SEQUENCE public users_id_seq postgres
+4236; 0 0 SEQUENCE OWNED BY public users_id_seq postgres
+423; 1259 17991 TABLE public vote_options postgres
+422; 1259 17990 SEQUENCE public vote_options_id_seq postgres
+4237; 0 0 SEQUENCE OWNED BY public vote_options_id_seq postgres
+425; 1259 18003 TABLE public vote_responses postgres
+424; 1259 18002 SEQUENCE public vote_responses_id_seq postgres
+4238; 0 0 SEQUENCE OWNED BY public vote_responses_id_seq postgres
+417; 1259 17943 TABLE public votes postgres
+416; 1259 17942 SEQUENCE public votes_id_seq postgres
+4239; 0 0 SEQUENCE OWNED BY public votes_id_seq postgres
+3833; 2604 17958 DEFAULT public attendances id postgres
+3837; 2604 19147 DEFAULT public chat_message_reads id postgres
+3834; 2604 17975 DEFAULT public chat_messages id postgres
+3826; 2604 17899 DEFAULT public chat_rooms id postgres
+3845; 2604 19287 DEFAULT public chatbot_messages id postgres
+3844; 2604 19275 DEFAULT public chatbot_sessions id postgres
+3846; 2604 19317 DEFAULT public chatbot_user_memories id postgres
+3841; 2604 19187 DEFAULT public direct_chat_messages id postgres
+3839; 2604 19167 DEFAULT public direct_chat_rooms id postgres
+3824; 2604 17861 DEFAULT public meetings id postgres
+3828; 2604 17932 DEFAULT public notices id postgres
+3818; 2604 17821 DEFAULT public notifications id postgres
+3825; 2604 17880 DEFAULT public participants id postgres
+3819; 2604 17835 DEFAULT public push_subscriptions id postgres
+3814; 2604 17778 DEFAULT public regions id postgres
+3820; 2604 17849 DEFAULT public reports id postgres
+3827; 2604 17913 DEFAULT public reviews id postgres
+3813; 2604 17769 DEFAULT public sport_categories id postgres
+3817; 2604 17809 DEFAULT public sports id postgres
+3852; 2604 19475 DEFAULT public support_inquiries id postgres
+3815; 2604 17793 DEFAULT public user_profiles id postgres
+3811; 2604 17759 DEFAULT public users id postgres
+3835; 2604 17994 DEFAULT public vote_options id postgres
+3836; 2604 18006 DEFAULT public vote_responses id postgres
+3830; 2604 17946 DEFAULT public votes id postgres
+4183; 0 17955 TABLE DATA public attendances postgres
+4191; 0 19144 TABLE DATA public chat_message_reads postgres
+4185; 0 17972 TABLE DATA public chat_messages postgres
+4175; 0 17896 TABLE DATA public chat_rooms postgres
+4199; 0 19284 TABLE DATA public chatbot_messages postgres
+4197; 0 19272 TABLE DATA public chatbot_sessions postgres
+4201; 0 19314 TABLE DATA public chatbot_user_memories postgres
+4195; 0 19184 TABLE DATA public direct_chat_messages postgres
+4193; 0 19164 TABLE DATA public direct_chat_rooms postgres
+4205; 0 19512 TABLE DATA public meeting_sessions postgres
+4171; 0 17858 TABLE DATA public meetings postgres
+4179; 0 17929 TABLE DATA public notices postgres
+4165; 0 17818 TABLE DATA public notifications postgres
+4173; 0 17877 TABLE DATA public participants postgres
+4167; 0 17832 TABLE DATA public push_subscriptions postgres
+4159; 0 17775 TABLE DATA public regions postgres
+4169; 0 17846 TABLE DATA public reports postgres
+4177; 0 17910 TABLE DATA public reviews postgres
+4157; 0 17766 TABLE DATA public sport_categories postgres
+4163; 0 17806 TABLE DATA public sports postgres
+4203; 0 19472 TABLE DATA public support_inquiries postgres
+4161; 0 17790 TABLE DATA public user_profiles postgres
+4155; 0 17756 TABLE DATA public users postgres
+4187; 0 17991 TABLE DATA public vote_options postgres
+4189; 0 18003 TABLE DATA public vote_responses postgres
+4181; 0 17943 TABLE DATA public votes postgres
+4240; 0 0 SEQUENCE SET public attendances_id_seq postgres
+4241; 0 0 SEQUENCE SET public chat_message_reads_id_seq postgres
+4242; 0 0 SEQUENCE SET public chat_messages_id_seq postgres
+4243; 0 0 SEQUENCE SET public chat_rooms_id_seq postgres
+4244; 0 0 SEQUENCE SET public chatbot_messages_id_seq postgres
+4245; 0 0 SEQUENCE SET public chatbot_sessions_id_seq postgres
+4246; 0 0 SEQUENCE SET public chatbot_user_memories_id_seq postgres
+4247; 0 0 SEQUENCE SET public direct_chat_messages_id_seq postgres
+4248; 0 0 SEQUENCE SET public direct_chat_rooms_id_seq postgres
+4249; 0 0 SEQUENCE SET public meeting_sessions_id_seq postgres
+4250; 0 0 SEQUENCE SET public meetings_id_seq postgres
+4251; 0 0 SEQUENCE SET public notices_id_seq postgres
+4252; 0 0 SEQUENCE SET public notifications_id_seq postgres
+4253; 0 0 SEQUENCE SET public participants_id_seq postgres
+4254; 0 0 SEQUENCE SET public push_subscriptions_id_seq postgres
+4255; 0 0 SEQUENCE SET public regions_id_seq postgres
+4256; 0 0 SEQUENCE SET public reports_id_seq postgres
+4257; 0 0 SEQUENCE SET public reviews_id_seq postgres
+4258; 0 0 SEQUENCE SET public sport_categories_id_seq postgres
+4259; 0 0 SEQUENCE SET public sports_id_seq postgres
+4260; 0 0 SEQUENCE SET public support_inquiries_id_seq postgres
+4261; 0 0 SEQUENCE SET public user_profiles_id_seq postgres
+4262; 0 0 SEQUENCE SET public users_id_seq postgres
+4263; 0 0 SEQUENCE SET public vote_options_id_seq postgres
+4264; 0 0 SEQUENCE SET public vote_responses_id_seq postgres
+4265; 0 0 SEQUENCE SET public votes_id_seq postgres
+3922; 2606 17960 CONSTRAINT public attendances attendances_pkey postgres
+3930; 2606 19150 CONSTRAINT public chat_message_reads chat_message_reads_pkey postgres
+3924; 2606 17979 CONSTRAINT public chat_messages chat_messages_pkey postgres
+3910; 2606 17903 CONSTRAINT public chat_rooms chat_rooms_meeting_id_key postgres
+3912; 2606 17901 CONSTRAINT public chat_rooms chat_rooms_pkey postgres
+3942; 2606 19291 CONSTRAINT public chatbot_messages chatbot_messages_pkey postgres
+3940; 2606 19277 CONSTRAINT public chatbot_sessions chatbot_sessions_pkey postgres
+3944; 2606 19326 CONSTRAINT public chatbot_user_memories chatbot_user_memories_pkey postgres
+3938; 2606 19192 CONSTRAINT public direct_chat_messages direct_chat_messages_pkey postgres
+3934; 2606 19170 CONSTRAINT public direct_chat_rooms direct_chat_rooms_pkey postgres
+3958; 2606 19521 CONSTRAINT public meeting_sessions meeting_sessions_pkey postgres
+3904; 2606 17865 CONSTRAINT public meetings meetings_pkey postgres
+3918; 2606 17936 CONSTRAINT public notices notices_pkey postgres
+3894; 2606 17825 CONSTRAINT public notifications notifications_pkey postgres
+3906; 2606 17882 CONSTRAINT public participants participants_pkey postgres
+3896; 2606 17839 CONSTRAINT public push_subscriptions push_subscriptions_pkey postgres
+3884; 2606 17780 CONSTRAINT public regions regions_pkey postgres
+3902; 2606 17851 CONSTRAINT public reports reports_pkey postgres
+3914; 2606 17917 CONSTRAINT public reviews reviews_pkey postgres
+3879; 2606 17773 CONSTRAINT public sport_categories sport_categories_name_key postgres
+3881; 2606 17771 CONSTRAINT public sport_categories sport_categories_pkey postgres
+3892; 2606 17811 CONSTRAINT public sports sports_pkey postgres
+3954; 2606 19486 CONSTRAINT public support_inquiries support_inquiries_pkey postgres
+3932; 2606 19152 CONSTRAINT public chat_message_reads uq_chat_message_read_user postgres
+3947; 2606 19328 CONSTRAINT public chatbot_user_memories uq_chatbot_user_memories_user postgres
+3936; 2606 19172 CONSTRAINT public direct_chat_rooms uq_direct_chat_pair postgres
+3960; 2606 19523 CONSTRAINT public meeting_sessions uq_meeting_session_number postgres
+3962; 2606 19525 CONSTRAINT public meeting_sessions uq_meeting_session_start_at postgres
+3908; 2606 17884 CONSTRAINT public participants uq_participant_meeting_user postgres
+3886; 2606 17782 CONSTRAINT public regions uq_regions_code postgres
+3888; 2606 17797 CONSTRAINT public user_profiles user_profiles_pkey postgres
+3890; 2606 17799 CONSTRAINT public user_profiles user_profiles_user_id_key postgres
+3877; 2606 17763 CONSTRAINT public users users_pkey postgres
+3926; 2606 17996 CONSTRAINT public vote_options vote_options_pkey postgres
+3928; 2606 18008 CONSTRAINT public vote_responses vote_responses_pkey postgres
+3920; 2606 17948 CONSTRAINT public votes votes_pkey postgres
+3945; 1259 19334 INDEX public ix_chatbot_user_memories_user_id postgres
+3955; 1259 19531 INDEX public ix_meeting_sessions_meeting_id postgres
+3956; 1259 19532 INDEX public ix_meeting_sessions_start_at postgres
+3915; 1259 19723 INDEX public ix_notices_session_id postgres
+3916; 1259 19722 INDEX public ix_notices_vote_id postgres
+3882; 1259 17788 INDEX public ix_regions_code postgres
+3897; 1259 19611 INDEX public ix_reports_admin_id postgres
+3898; 1259 19609 INDEX public ix_reports_reporter_id postgres
+3899; 1259 19608 INDEX public ix_reports_status postgres
+3900; 1259 19610 INDEX public ix_reports_target postgres
+3948; 1259 19498 INDEX public ix_support_inquiries_admin_id postgres
+3949; 1259 19500 INDEX public ix_support_inquiries_category postgres
+3950; 1259 19562 INDEX public ix_support_inquiries_source postgres
+3951; 1259 19499 INDEX public ix_support_inquiries_status postgres
+3952; 1259 19497 INDEX public ix_support_inquiries_user_id postgres
+3871; 1259 17764 INDEX public ix_users_email postgres
+3872; 1259 18208 INDEX public ix_users_nickname postgres
+3873; 1259 18207 INDEX public ix_users_user_tag postgres
+3874; 1259 18057 INDEX public uq_users_auth_user_id postgres
+3875; 1259 18049 INDEX public uq_users_phone_number_present postgres
+3981; 2606 17961 FK CONSTRAINT public attendances attendances_meeting_id_fkey postgres
+3982; 2606 17966 FK CONSTRAINT public attendances attendances_user_id_fkey postgres
+3989; 2606 19153 FK CONSTRAINT public chat_message_reads chat_message_reads_chat_message_id_fkey postgres
+3990; 2606 19158 FK CONSTRAINT public chat_message_reads chat_message_reads_user_id_fkey postgres
+3983; 2606 17980 FK CONSTRAINT public chat_messages chat_messages_chat_room_id_fkey postgres
+3984; 2606 17985 FK CONSTRAINT public chat_messages chat_messages_user_id_fkey postgres
+3973; 2606 17904 FK CONSTRAINT public chat_rooms chat_rooms_meeting_id_fkey postgres
+3996; 2606 19292 FK CONSTRAINT public chatbot_messages chatbot_messages_session_id_fkey postgres
+3995; 2606 19278 FK CONSTRAINT public chatbot_sessions chatbot_sessions_user_id_fkey postgres
+3997; 2606 19329 FK CONSTRAINT public chatbot_user_memories chatbot_user_memories_user_id_fkey postgres
+3993; 2606 19193 FK CONSTRAINT public direct_chat_messages direct_chat_messages_direct_chat_room_id_fkey postgres
+3994; 2606 19198 FK CONSTRAINT public direct_chat_messages direct_chat_messages_sender_id_fkey postgres
+3991; 2606 19173 FK CONSTRAINT public direct_chat_rooms direct_chat_rooms_user_a_id_fkey postgres
+3992; 2606 19178 FK CONSTRAINT public direct_chat_rooms direct_chat_rooms_user_b_id_fkey postgres
+4000; 2606 19526 FK CONSTRAINT public meeting_sessions meeting_sessions_meeting_id_fkey postgres
+3969; 2606 17866 FK CONSTRAINT public meetings meetings_host_id_fkey postgres
+3970; 2606 17871 FK CONSTRAINT public meetings meetings_sport_id_fkey postgres
+3977; 2606 17937 FK CONSTRAINT public notices notices_meeting_id_fkey postgres
+3978; 2606 19717 FK CONSTRAINT public notices notices_session_id_fkey postgres
+3979; 2606 19712 FK CONSTRAINT public notices notices_vote_id_fkey postgres
+3966; 2606 17826 FK CONSTRAINT public notifications notifications_user_id_fkey postgres
+3971; 2606 17885 FK CONSTRAINT public participants participants_meeting_id_fkey postgres
+3972; 2606 17890 FK CONSTRAINT public participants participants_user_id_fkey postgres
+3967; 2606 17840 FK CONSTRAINT public push_subscriptions push_subscriptions_user_id_fkey postgres
+3963; 2606 17783 FK CONSTRAINT public regions regions_parent_code_fkey postgres
+3968; 2606 17852 FK CONSTRAINT public reports reports_reporter_id_fkey postgres
+3974; 2606 17918 FK CONSTRAINT public reviews reviews_meeting_id_fkey postgres
+3975; 2606 19373 FK CONSTRAINT public reviews reviews_reviewee_id_fkey postgres
+3976; 2606 17923 FK CONSTRAINT public reviews reviews_reviewer_id_fkey postgres
+3965; 2606 17812 FK CONSTRAINT public sports sports_category_id_fkey postgres
+3998; 2606 19492 FK CONSTRAINT public support_inquiries support_inquiries_admin_id_fkey postgres
+3999; 2606 19487 FK CONSTRAINT public support_inquiries support_inquiries_user_id_fkey postgres
+3964; 2606 18119 FK CONSTRAINT public user_profiles user_profiles_user_id_fkey postgres
+3985; 2606 17997 FK CONSTRAINT public vote_options vote_options_vote_id_fkey postgres
+3986; 2606 18014 FK CONSTRAINT public vote_responses vote_responses_option_id_fkey postgres
+3987; 2606 18019 FK CONSTRAINT public vote_responses vote_responses_user_id_fkey postgres
+3988; 2606 18009 FK CONSTRAINT public vote_responses vote_responses_vote_id_fkey postgres
+3980; 2606 17949 FK CONSTRAINT public votes votes_meeting_id_fkey postgres
+4149; 0 19512 ROW SECURITY public meeting_sessions postgres
