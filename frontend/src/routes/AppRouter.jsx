@@ -88,9 +88,8 @@ function AppRouter() {
   return (
     <>
       <DesktopScrollToTop />
-      
-    <Routes>
-      <Route element={<ResponsiveLayout />}>
+      <Routes>
+        <Route element={<ResponsiveLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
@@ -111,7 +110,6 @@ function AppRouter() {
         <Route path="/map" element={<MapPage />} />
         <Route path="/mypage" element={protect(<MyPage />)} />
         <Route path="/mypage/profile" element={protect(<ProfileEditPage />)} />
-        <Route path="/mypage/account-link" element={protect(<AccountLinkPage />)} />
         <Route path="/profile/intro" element={protect(<ProfileIntroPage />)} />
         <Route path="/profile/setup" element={protect(<ProfileSetupPage />)} />
         <Route path="/mypage/meetings" element={protect(<MyMeetingsPage />)} />

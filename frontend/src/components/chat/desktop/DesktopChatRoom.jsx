@@ -198,15 +198,6 @@ function loadNaverMapScript(clientId) {
   return window.__sportsmateNaverMapPromise;
 }
 
-function readImageAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
 function ChatLocationMessage({ message }) {
   const mapElementRef = useRef(null);
   const mapRef = useRef(null);
@@ -449,6 +440,7 @@ function DesktopChatRoom() {
   const isDirectChat = Boolean(directRoomId);
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [roomRefreshKey, setRoomRefreshKey] = useState(0);
@@ -517,9 +509,12 @@ function DesktopChatRoom() {
   const dragReplyRef = useRef(null);
   const photoDragRef = useRef(null);
   const unreadJumpDoneRef = useRef(false);
+  const loadingOlderRef = useRef(false);
+  const latestMeetingMessageIdRef = useRef(0);
+  const latestDirectMessageIdRef = useRef(0);
 
-  const messages = useAsync(() => chatRoomId ? chatApi.messages(chatRoomId) : Promise.resolve(null), [chatRoomId, refreshKey]);
-  const directMessages = useAsync(() => directRoomId ? chatApi.directMessages(directRoomId) : Promise.resolve(null), [directRoomId, directRefreshKey]);
+  const messages = useAsync(() => chatRoomId ? chatApi.messages(chatRoomId, { limit: 50 }) : Promise.resolve(null), [chatRoomId, refreshKey]);
+  const directMessages = useAsync(() => directRoomId ? chatApi.directMessages(directRoomId, { limit: 50 }) : Promise.resolve(null), [directRoomId, directRefreshKey]);
   const rooms = useAsync(() => chatApi.rooms(), [roomRefreshKey]);
   const directRooms = useAsync(() => chatApi.directRooms(), [directRoomRefreshKey]);
 
@@ -527,7 +522,7 @@ function DesktopChatRoom() {
     chatApi.mutedRooms()
       .then((res) => setMutedRooms(res.muted_rooms || []))
       .catch((err) => console.error("Failed to load muted rooms", err));
-  }, [roomRefreshKey, directRoomRefreshKey]);
+  }, []);
 
   const toggleMute = async (roomId, roomType) => {
     const isCurrentlyMuted = mutedRooms.some(r => String(r.room_id) === String(roomId) && r.room_type === roomType);
@@ -545,6 +540,72 @@ function DesktopChatRoom() {
     }
   };
   const activeMessages = isDirectChat ? directMessages : messages;
+  const mergeMessagePage = (resource, page, { prepend = false } = {}) => {
+    if (!page?.items?.length) return;
+    resource.setData((current) => {
+      if (!current) return page;
+      const itemsById = new Map();
+      [...(current.items || []), ...page.items].forEach((item) => itemsById.set(String(item.id), item));
+      const items = [...itemsById.values()].sort((first, second) => Number(first.id) - Number(second.id));
+      return {
+        ...current,
+        ...(page.room ? { room: page.room } : {}),
+        items,
+        has_more: prepend ? page.has_more : current.has_more,
+        next_before_id: prepend ? page.next_before_id : current.next_before_id,
+        latest_id: items.length ? items[items.length - 1].id : current.latest_id
+      };
+    });
+  };
+
+  useEffect(() => {
+    const items = messages.data?.items || [];
+    latestMeetingMessageIdRef.current = items.length ? Number(items[items.length - 1].id) : 0;
+  }, [messages.data?.items]);
+
+  useEffect(() => {
+    const items = directMessages.data?.items || [];
+    latestDirectMessageIdRef.current = items.length ? Number(items[items.length - 1].id) : 0;
+  }, [directMessages.data?.items]);
+
+  const fetchMeetingDelta = async () => {
+    const afterId = latestMeetingMessageIdRef.current;
+    if (!chatRoomId || !afterId) return;
+    const page = await chatApi.messages(chatRoomId, { after_id: afterId, limit: 200 });
+    mergeMessagePage(messages, page);
+  };
+
+  const fetchDirectDelta = async () => {
+    const afterId = latestDirectMessageIdRef.current;
+    if (!directRoomId || !afterId) return;
+    const page = await chatApi.directMessages(directRoomId, { after_id: afterId, limit: 200 });
+    mergeMessagePage(directMessages, page);
+  };
+
+  const loadOlderMessages = async () => {
+    const items = activeMessages.data?.items || [];
+    const beforeId = items[0]?.id;
+    if (!beforeId || loadingOlder) return;
+    const node = messageListRef.current;
+    const previousHeight = node?.scrollHeight || 0;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    try {
+      const page = isDirectChat
+        ? await chatApi.directMessages(directRoomId, { before_id: beforeId, limit: 50 })
+        : await chatApi.messages(chatRoomId, { before_id: beforeId, limit: 50 });
+      mergeMessagePage(activeMessages, page, { prepend: true });
+      window.requestAnimationFrame(() => {
+        if (node) node.scrollTop += node.scrollHeight - previousHeight;
+        loadingOlderRef.current = false;
+        setLoadingOlder(false);
+      });
+    } catch (loadError) {
+      setError(loadError.response?.data?.message || "이전 메시지를 불러오지 못했습니다.");
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  };
   const room = activeMessages.data?.room;
   const shouldJumpToUnread = !isDirectChat && new URLSearchParams(location.search).get("unread") === "1";
   const firstUnreadMessageId = room?.first_unread_message_id;
@@ -611,6 +672,7 @@ function DesktopChatRoom() {
 
   useLayoutEffect(() => {
     if (!messageListRef.current || !activeMessages.data?.items) return;
+    if (loadingOlderRef.current) return;
     if (shouldJumpToUnread && firstUnreadMessageId && !unreadJumpDoneRef.current) return;
     messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     setShowLatestJump(false);
@@ -649,19 +711,26 @@ function DesktopChatRoom() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (document.hidden || sending) return;
-      setRefreshKey((value) => value + 1);
-      setRoomRefreshKey((value) => value + 1);
-      setDirectRefreshKey((value) => value + 1);
-      setDirectRoomRefreshKey((value) => value + 1);
-    }, 3000);
+      const fetchDelta = isDirectChat ? fetchDirectDelta : fetchMeetingDelta;
+      fetchDelta().catch((pollError) => console.warn("Chat delta poll failed", pollError));
+    }, 30000);
     return () => window.clearInterval(timer);
-  }, [sending]);
+  }, [sending, isDirectChat, chatRoomId, directRoomId]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.hidden) return;
+      setRoomRefreshKey((value) => value + 1);
+      setDirectRoomRefreshKey((value) => value + 1);
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!voteOpen || !meeting?.id) return undefined;
     const timer = window.setInterval(() => {
       if (!document.hidden) setVoteRefreshKey((value) => value + 1);
-    }, 2500);
+    }, 30000);
     return () => window.clearInterval(timer);
   }, [voteOpen, meeting?.id]);
 
@@ -679,7 +748,7 @@ function DesktopChatRoom() {
     }
 
     const refreshChat = () => {
-      setRefreshKey((value) => value + 1);
+      fetchMeetingDelta().catch((realtimeError) => console.warn("Chat realtime refresh failed", realtimeError));
       setRoomRefreshKey((value) => value + 1);
     };
     const channel = supabase
@@ -689,11 +758,6 @@ function DesktopChatRoom() {
         schema: "public",
         table: "chat_messages",
         filter: `chat_room_id=eq.${chatRoomId}`
-      }, refreshChat)
-      .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: "chat_message_reads"
       }, refreshChat)
       .subscribe();
 
@@ -708,7 +772,7 @@ function DesktopChatRoom() {
     }
 
     const refreshDirectChat = () => {
-      setDirectRefreshKey((value) => value + 1);
+      fetchDirectDelta().catch((realtimeError) => console.warn("Direct chat realtime refresh failed", realtimeError));
       setDirectRoomRefreshKey((value) => value + 1);
     };
     const channel = supabase
@@ -867,13 +931,16 @@ function DesktopChatRoom() {
     setSending(true);
     setActionNotice("");
     setError("");
-    readImageAsDataUrl(file)
-      .then((dataUrl) => {
+    chatApi.uploadImage(file, {
+      roomId: isDirectChat ? directRoomId : chatRoomId,
+      roomType: isDirectChat ? "direct" : "meeting"
+    })
+      .then((upload) => {
         const payload = {
           content: file.name || "사진",
           message_type: "image",
-          attachment_url: dataUrl,
-          attachment_name: file.name
+          attachment_url: upload.attachment_url,
+          attachment_name: upload.attachment_name || file.name
         };
         return isDirectChat
           ? chatApi.sendDirect(directRoomId, payload)
@@ -1768,6 +1835,16 @@ function DesktopChatRoom() {
             ) : null}
 
             <div className="talk-messages" ref={messageListRef} onScroll={handleMessageScroll}>
+              {activeMessages.data?.has_more ? (
+                <button
+                  type="button"
+                  onClick={loadOlderMessages}
+                  disabled={loadingOlder}
+                  style={{ alignSelf: "center", margin: "8px auto 14px", padding: "7px 14px", borderRadius: "999px", border: "1px solid #dbe4ff", background: "#fff", color: "#475569", fontWeight: 800 }}
+                >
+                  {loadingOlder ? "불러오는 중..." : "이전 메시지 불러오기"}
+                </button>
+              ) : null}
               {visibleMessages.length ? (
                 visibleMessages.map((message, index) => {
                   const mine = isDirectChat ? message.sender_id === user?.id : message.user_id === user?.id;

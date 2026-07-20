@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { MapPin, UsersRound, MessageCircle, Users, Pin, ChevronUp, ChevronDown } from "lucide-react";
+import { MapPin, UsersRound, MessageCircle, Users, Pin, ChevronUp, ChevronDown, LogOut, Bell, BellOff } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
@@ -55,6 +55,16 @@ function MobileChatList() {
 
   const [hideClosedChats, setHideClosedChats] = useState(false);
   const [isClosedChatsExpanded, setIsClosedChatsExpanded] = useState(false);
+  const [mutedRooms, setMutedRooms] = useState([]);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  const [leaveTargetRoom, setLeaveTargetRoom] = useState(null);
+  const [leavingRoom, setLeavingRoom] = useState(false);
+
+  useEffect(() => {
+    chatApi.mutedRooms()
+      .then((res) => setMutedRooms(res.muted_rooms || []))
+      .catch((err) => console.error("Failed to load muted rooms", err));
+  }, []);
 
   const handleImgError = (id) =>
     setImgErrors((prev) => ({ ...prev, [id]: true }));
@@ -70,6 +80,40 @@ function MobileChatList() {
       localStorage.setItem("sportsmate_pinned_rooms", JSON.stringify(next));
       return next;
     });
+  };
+
+  const toggleMute = async (e, roomId, roomType) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const isCurrentlyMuted = mutedRooms.some(r => String(r.room_id) === String(roomId) && r.room_type === roomType);
+    try {
+      if (isCurrentlyMuted) {
+        await chatApi.unmute(roomId, roomType);
+      } else {
+        await chatApi.mute(roomId, roomType);
+      }
+      const res = await chatApi.mutedRooms();
+      setMutedRooms(res.muted_rooms || []);
+    } catch (err) {
+      console.error("Failed to toggle mute", err);
+    }
+  };
+
+  const leaveRoom = async () => {
+    const targetRoomId = leaveTargetRoom?.id;
+    if (!targetRoomId || leavingRoom) return;
+    setLeavingRoom(true);
+    try {
+      await chatApi.leave(targetRoomId);
+      setLeaveConfirmOpen(false);
+      setLeaveTargetRoom(null);
+      setRefreshKey((value) => value + 1);
+    } catch (leaveError) {
+      window.alert(leaveError.response?.data?.message || "채팅방 나가기에 실패했습니다.");
+      setLeaveConfirmOpen(false);
+    } finally {
+      setLeavingRoom(false);
+    }
   };
 
   const rooms = useAsync(() => chatApi.rooms(), [refreshKey]);
@@ -264,6 +308,7 @@ function MobileChatList() {
               const isSportThumb = isUsingSportThumbnail(meeting);
               const sportIconUrl = getSportIconUrl(getSportNameFromMeeting(meeting));
               const isPinned = pinnedRooms.includes(`meeting-${room.id}`);
+              const isMuted = mutedRooms.some(r => String(r.room_id) === String(room.id) && r.room_type === "meeting");
               return (
                 <Link
                   key={room.id}
@@ -311,11 +356,55 @@ function MobileChatList() {
                             alignItems: 'center',
                             justifyContent: 'center',
                             color: isPinned ? 'var(--mobile-primary, #4f46e5)' : '#cbd5e1',
-                            transition: 'all 0.2s'
+                            transition: 'all 0.2s',
+                            zIndex: 2
                           }}
                           aria-label={isPinned ? "고정 해제" : "상단 고정"}
                         >
                           <Pin size={13} fill={isPinned ? "var(--mobile-primary, #4f46e5)" : "none"} style={{ transform: 'rotate(45deg)' }} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => toggleMute(e, room.id, "meeting")}
+                          style={{
+                            background: 'none',
+                            border: 0,
+                            padding: '2px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: isMuted ? '#94a3b8' : '#cbd5e1',
+                            transition: 'all 0.2s',
+                            zIndex: 2
+                          }}
+                          aria-label={isMuted ? "알림 켜기" : "알림 끄기"}
+                        >
+                          {isMuted ? <BellOff size={13} /> : <Bell size={13} />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setLeaveTargetRoom(room);
+                            setLeaveConfirmOpen(true);
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 0,
+                            padding: '2px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#cbd5e1',
+                            transition: 'all 0.2s',
+                            zIndex: 2
+                          }}
+                          aria-label="채팅방 나가기"
+                        >
+                          <LogOut size={13} />
                         </button>
                         <time style={{ flexShrink: 0 }}>{formatChatTime(room.last_message?.created_at)}</time>
                       </div>
@@ -382,6 +471,7 @@ function MobileChatList() {
                   const isSportThumb = isUsingSportThumbnail(meeting);
                   const sportIconUrl = getSportIconUrl(getSportNameFromMeeting(meeting));
                   const isPinned = pinnedRooms.includes(`meeting-${room.id}`);
+                  const isMuted = mutedRooms.some(r => String(r.room_id) === String(room.id) && r.room_type === "meeting");
                   return (
                     <Link
                       key={room.id}
@@ -460,6 +550,49 @@ function MobileChatList() {
                             >
                               <Pin size={13} fill={isPinned ? "#94a3b8" : "none"} style={{ transform: 'rotate(45deg)' }} />
                             </button>
+                            <button
+                              type="button"
+                              onClick={(e) => toggleMute(e, room.id, "meeting")}
+                              style={{
+                                background: 'none',
+                                border: 0,
+                                padding: '2px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: isMuted ? '#94a3b8' : '#cbd5e1',
+                                transition: 'all 0.2s',
+                                zIndex: 2
+                              }}
+                              aria-label={isMuted ? "알림 켜기" : "알림 끄기"}
+                            >
+                              {isMuted ? <BellOff size={13} /> : <Bell size={13} />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setLeaveTargetRoom(room);
+                                setLeaveConfirmOpen(true);
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 0,
+                                padding: '2px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#cbd5e1',
+                                transition: 'all 0.2s',
+                                zIndex: 2
+                              }}
+                              aria-label="채팅방 나가기"
+                            >
+                              <LogOut size={13} />
+                            </button>
                             <time style={{ flexShrink: 0, color: '#94a3b8' }}>{formatChatTime(room.last_message?.created_at)}</time>
                           </div>
                         </div>
@@ -515,6 +648,7 @@ function MobileChatList() {
           {sortedDirectItems.map((room) => {
             const other = room.other_user || {};
             const isPinned = pinnedRooms.includes(`direct-${room.id}`);
+            const isMuted = mutedRooms.some(r => String(r.room_id) === String(room.id) && r.room_type === "direct");
             return (
               <Link
                 key={room.id}
@@ -551,11 +685,55 @@ function MobileChatList() {
                           alignItems: 'center',
                           justifyContent: 'center',
                           color: isPinned ? 'var(--mobile-primary, #4f46e5)' : '#cbd5e1',
-                          transition: 'all 0.2s'
+                          transition: 'all 0.2s',
+                          zIndex: 2
                         }}
                         aria-label={isPinned ? "고정 해제" : "상단 고정"}
                       >
                         <Pin size={13} fill={isPinned ? "var(--mobile-primary, #4f46e5)" : "none"} style={{ transform: 'rotate(45deg)' }} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => toggleMute(e, room.id, "direct")}
+                        style={{
+                          background: 'none',
+                          border: 0,
+                          padding: '2px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: isMuted ? '#94a3b8' : '#cbd5e1',
+                          transition: 'all 0.2s',
+                          zIndex: 2
+                        }}
+                        aria-label={isMuted ? "알림 켜기" : "알림 끄기"}
+                      >
+                        {isMuted ? <BellOff size={13} /> : <Bell size={13} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setLeaveTargetRoom(room);
+                          setLeaveConfirmOpen(true);
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 0,
+                          padding: '2px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#cbd5e1',
+                          transition: 'all 0.2s',
+                          zIndex: 2
+                        }}
+                        aria-label="채팅방 나가기"
+                      >
+                        <LogOut size={13} />
                       </button>
                       <time>
                         {formatChatTime(
@@ -577,6 +755,22 @@ function MobileChatList() {
           description="채팅방 멤버 프로필에서 1:1 채팅을 시작해보세요."
         />
       )}
+
+      {leaveConfirmOpen ? (
+        <div className="chat-vote-confirm" role="dialog" aria-modal="true" aria-label="채팅방 나가기">
+          <button className="chat-vote-modal__backdrop" type="button" onClick={() => setLeaveConfirmOpen(false)} aria-label="닫기" />
+          <section>
+            <strong>채팅방을 나갈까요?</strong>
+            <p>{leaveTargetRoom?.meeting?.title || "이 채팅방"}에서 나가면 모임 참여도 함께 취소됩니다.</p>
+            <div className="chat-vote-confirm__actions">
+              <button type="button" onClick={() => setLeaveConfirmOpen(false)}>취소</button>
+              <button type="button" className="is-danger" onClick={leaveRoom} disabled={leavingRoom}>
+                {leavingRoom ? "나가는 중" : "나가기"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </>
   );
 }

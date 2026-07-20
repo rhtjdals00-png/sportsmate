@@ -151,8 +151,8 @@ def send_message(room_id, user_id, data):
     return message
 
 
-def mark_room_messages_read(room, user_id):
-    message_ids = [message.id for message in room.messages if message.user_id != user_id]
+def mark_messages_read(messages, user_id):
+    message_ids = [message.id for message in messages if message.user_id != user_id]
     if not message_ids:
         return
     existing_ids = {
@@ -168,6 +168,10 @@ def mark_room_messages_read(room, user_id):
         if message_id not in existing_ids
     )
     db.session.commit()
+
+
+def mark_room_messages_read(room, user_id):
+    mark_messages_read(room.messages, user_id)
 
 
 def attach_read_counts(messages):

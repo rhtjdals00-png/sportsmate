@@ -1,6 +1,6 @@
 import { CalendarCheck, Home, MessageCircle, Search, User } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { chatApi } from "../../../api/chatApi";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
@@ -24,49 +24,39 @@ function MobileBottomNavigation() {
     return location.pathname === to || location.pathname.startsWith(`${to}/`);
   };
 
-  const fetchUnreadCount = async (intervalId) => {
+  /** Fetch only the total unread count (single integer, no room/message data). */
+  const fetchUnreadCount = useCallback(async () => {
     const token = localStorage.getItem("sportsmate_token");
     if (!user || !token) {
       setUnreadCount(0);
       return;
     }
     try {
-      const [roomsRes, directRes] = await Promise.all([
-        chatApi.rooms().catch((e) => {
-          if (e.response?.status === 401) throw e;
-          return { items: [] };
-        }),
-        chatApi.directRooms().catch((e) => {
-          if (e.response?.status === 401) throw e;
-          return { items: [] };
-        })
-      ]);
-      const meetingUnread = (roomsRes.items || []).reduce((acc, r) => acc + (r.unread_count || 0), 0);
-      const directUnread = (directRes.items || []).reduce((acc, r) => acc + (r.unread_count || 0), 0);
-      setUnreadCount(meetingUnread + directUnread);
-    } catch (e) {
-      if (e.response?.status === 401 && intervalId) {
-        clearInterval(intervalId);
-      }
+      const res = await chatApi.unreadCount();
+      setUnreadCount(res.unread_count || 0);
+    } catch {
+      // silent – Realtime will retry on next event
     }
-  };
+  }, [user]);
 
+  // Initial fetch + re-fetch when tab becomes visible again
   useEffect(() => {
     if (!user) {
       setUnreadCount(0);
       return undefined;
     }
-    let interval;
-    fetchUnreadCount(interval);
 
-    interval = setInterval(() => {
-      if (document.hidden) return;
-      fetchUnreadCount(interval);
-    }, 3000);
+    fetchUnreadCount();
 
-    return () => clearInterval(interval);
-  }, [user?.id]);
+    const handleVisibility = () => {
+      if (!document.hidden) fetchUnreadCount();
+    };
 
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [user?.id, fetchUnreadCount]);
+
+  // Supabase Realtime – instant badge update on new messages
   useEffect(() => {
     if (!user || !isSupabaseConfigured || !supabase) return undefined;
 
@@ -87,7 +77,7 @@ function MobileBottomNavigation() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id]);
+  }, [user?.id, fetchUnreadCount]);
 
   return (
     <nav className="bottom-nav" aria-label="주요 메뉴">
