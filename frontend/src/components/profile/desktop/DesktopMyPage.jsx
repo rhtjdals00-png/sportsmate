@@ -4,7 +4,6 @@ import {
   Camera,
   ChevronLeft,
   ChevronRight,
-  CircleDot,
   Crown,
   FileText,
   LayoutDashboard,
@@ -727,8 +726,9 @@ function DesktopMyPage() {
 
   useEffect(() => {
     const panel = searchParams.get("panel");
-    if (panel && ["schedule", "hosted", "joined", "favorite", "reviews"].includes(panel)) {
-      setActiveActivity(panel);
+    if (panel) {
+      const validPanels = ["schedule", "hosted", "joined", "reviews"];
+      setActiveActivity(validPanels.includes(panel) ? panel : "schedule");
     }
     if (searchParams.get("calendar") === "1") {
       setActiveActivity("schedule");
@@ -911,14 +911,12 @@ function DesktopMyPage() {
     schedule: { label: "다가오는 일정", count: scheduled.length, items: scheduled },
     hosted: { label: "내가 만든 모임", count: filteredHostedMeetings.length, items: filteredHostedMeetings, sourceCount: hostedMeetings.length, filter: createdMeetingFilter, setFilter: setCreatedMeetingFilter },
     joined: { label: "참여한 모임", count: filteredJoinedMeetings.length, items: filteredJoinedMeetings, sourceCount: joinedMeetings.length, filter: joinedMeetingFilter, setFilter: setJoinedMeetingFilter },
-    favorite: { label: "관심 모임", count: 0, items: [] },
     reviews: { label: "후기 관리", count: writtenReviews.length + receivedReviews.length, items: [] }
   };
   const activityMenu = [
     { key: "schedule", label: "다가오는 일정", icon: CalendarDays },
     { key: "hosted", label: "내가 만든 모임", icon: Crown },
     { key: "joined", label: "참여한 모임", icon: Users },
-    { key: "favorite", label: "관심 모임", icon: CircleDot },
     { key: "reviews", label: "후기 관리", icon: FileText }
   ];
   const activePanel = activityPanels[activeActivity];
@@ -1249,10 +1247,7 @@ function DesktopMyPage() {
                 )}
               </div>
             )}
-            {!meetingsState.loading && !reviewsLoading && activeActivity === "favorite" && (
-              <p className="empty-schedule">관심 모임 기능은 아직 준비 중입니다.</p>
-            )}
-            {!meetingsState.loading && !reviewsLoading && !["reviews", "favorite"].includes(activeActivity) && (
+            {!meetingsState.loading && !reviewsLoading && activeActivity !== "reviews" && (
               activePanel.items.length
                 ? activePanel.items.map((item) => <ScheduleItem key={`${item.state}-${item.id}`} item={item} variant={activeActivity} />)
                 : <p className="empty-schedule">
