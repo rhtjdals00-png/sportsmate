@@ -5,6 +5,7 @@ import { userApi } from "../../../api/userApi";
 import { sportApi } from "../../../api/sportApi";
 import { useAuth } from "../../../contexts/AuthContext";
 import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
+import BouncySelect from "../../common/BouncySelect";
 
 const passwordChecks = [
   { id: "length", label: "8자 이상", test: (password) => password.length >= 8 },
@@ -76,9 +77,15 @@ function tagLabel(user) {
   return normalized ? `[${normalized}]` : "";
 }
 
+function isEmailOnlyProvider(user) {
+  return String(user?.provider || "").trim().toLowerCase() === "email";
+}
+
 function MobileProfileEdit() {
   const navigate = useNavigate();
   const { user, setCurrentUser } = useAuth();
+  const canChangePassword = isEmailOnlyProvider(user);
+  
   const introStorageKey = user?.id ? `sportsmate_profile_extra_${user.id}` : "sportsmate_profile_extra_guest";
   const savedIntro = useMemo(() => {
     try {
@@ -321,13 +328,28 @@ function MobileProfileEdit() {
     setPhoneStatus("success");
   };
 
-  const submitWithdraw = () => {
-    // 2026-06-29: 회원 탈퇴는 백엔드 연결 전까지 실수 방지용 확인 흐름만 제공.
+  const submitWithdraw = async () => {
     if (withdrawText.trim() !== "탈퇴합니다") {
       setWithdrawStatus("mismatch");
       return;
     }
-    setWithdrawStatus("success");
+    
+    try {
+      await userApi.deleteMe();
+      setWithdrawStatus("success");
+      setTimeout(async () => {
+        try {
+          await logout();
+          sessionStorage.setItem("sportsmate_flash", "회원 탈퇴가 완료되었습니다.");
+          navigate("/login", { replace: true });
+        } catch (e) {
+          console.error("Failed to logout after withdraw:", e);
+        }
+      }, 1500);
+    } catch (e) {
+      console.error("Withdraw failed:", e);
+      setWithdrawStatus("mismatch");
+    }
   };
 
   const removeRegion = (regionName) => {
@@ -548,11 +570,14 @@ function MobileProfileEdit() {
         <div className="mobile-profile-form-grid mobile-level-grid">
           <label>
             기본 운동 수준
-            <select value={form.exercise_level} onChange={(event) => update("exercise_level", event.target.value)}>
-              {levelOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
+            <div style={{ marginTop: '8px' }}>
+              <BouncySelect 
+                value={form.exercise_level} 
+                onChange={(value) => update("exercise_level", value)}
+                placeholder="수준 선택"
+                options={levelOptions}
+              />
+            </div>
           </label>
         </div>
         <div className="mobile-profile-sport-section">
@@ -592,15 +617,14 @@ function MobileProfileEdit() {
                   {sportName}
                   <X size={14} />
                 </button>
-                <select
-                  aria-label={`${sportName} 운동 수준`}
-                  value={form.preferred_sport_levels[sportName] || form.exercise_level}
-                  onChange={(event) => updateSportLevel(sportName, event.target.value)}
-                >
-                  {levelOptions.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
+                <div style={{ minWidth: '120px' }}>
+                  <BouncySelect
+                    value={form.preferred_sport_levels[sportName] || form.exercise_level}
+                    onChange={(value) => updateSportLevel(sportName, value)}
+                    placeholder="수준 선택"
+                    options={levelOptions}
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -611,22 +635,24 @@ function MobileProfileEdit() {
         <div className="section-head">
           <h2>계정 보안</h2>
         </div>
-        <div className="mobile-security-section">
-          <span>
-            <strong>비밀번호</strong>
-            <small>로그인 비밀번호는 별도 확인 후 변경할 수 있습니다.</small>
-          </span>
-          <button type="button" onClick={() => setPasswordModalOpen(true)}>비밀번호 변경</button>
-        </div>
+        {canChangePassword && (
+          <div className="mobile-security-section">
+            <span>
+              <strong>비밀번호</strong>
+              <small>로그인 비밀번호는 별도 확인 후 변경할 수 있습니다.</small>
+            </span>
+            <button type="button" onClick={() => setPasswordModalOpen(true)}>비밀번호 변경</button>
+          </div>
+        )}
         <div className="mobile-security-section mobile-security-section--danger">
           <span>
             <strong>회원 탈퇴</strong>
             <small>탈퇴 요청은 최종 확인 후 처리됩니다.</small>
           </span>
-          <button type="button" onClick={() => setWithdrawModalOpen(true)}>회원 탈퇴</button>
+          <button type="button" onClick={() => setWithdrawModalOpen(true)} style={{ color: 'white', backgroundColor: '#ef4444', border: 'none' }}>회원 탈퇴</button>
         </div>
       </section>
-      {passwordModalOpen && (
+      {canChangePassword && passwordModalOpen && (
         <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closePasswordModal()}>
           <section className="profile-auth-modal password-change-modal" style={{ width: '95%', maxWidth: '360px', padding: '24px 20px', borderRadius: '16px', boxSizing: 'border-box' }}>
             <button className="schedule-modal-close" type="button" onClick={closePasswordModal} disabled={passwordSaving}><X size={18} /></button>
@@ -787,7 +813,7 @@ function MobileProfileEdit() {
           <section className="profile-auth-modal password-change-modal">
             <button className="schedule-modal-close" type="button" onClick={() => setWithdrawModalOpen(false)}><X size={18} /></button>
             <h2>회원 탈퇴</h2>
-            <p>회원 탈퇴는 신중하게 확인해야 하는 작업입니다. 지금은 프론트 확인 흐름만 동작합니다.</p>
+            <p>회원 탈퇴는 신중하게 확인해야 하는 작업입니다.</p>
             <label>
               확인 문구
               <input
@@ -801,9 +827,9 @@ function MobileProfileEdit() {
             </label>
             {withdrawStatus === "mismatch" && <em className="nickname-check warn">확인 문구를 정확히 입력해주세요.</em>}
             {withdrawStatus === "success" && <em className="nickname-check ok">회원 탈퇴 확인 흐름이 완료되었습니다.</em>}
-            <div>
+            <div style={{ display: 'flex', gap: '12px' }}>
               <button className="ghost-btn" type="button" onClick={() => setWithdrawModalOpen(false)}>취소</button>
-              <button className="primary-small danger-small" type="button" onClick={submitWithdraw}>탈퇴 확인</button>
+              <button className="primary-small danger-small" type="button" onClick={submitWithdraw} style={{ background: '#ef4444', color: 'white', border: 'none' }}>탈퇴 확인</button>
             </div>
           </section>
         </div>

@@ -85,8 +85,14 @@ function MobileMyPage() {
   const [introSaving, setIntroSaving] = useState(false);
   const [introMessage, setIntroMessage] = useState("");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
-  const handleLogout = async () => {
+  const promptLogout = () => {
+    setLogoutConfirmOpen(true);
+  };
+
+  const executeLogout = async () => {
+    setLogoutConfirmOpen(false);
     setIsLoggingOut(true);
     await new Promise((resolve) => setTimeout(resolve, 1000));
     try {
@@ -95,7 +101,6 @@ function MobileMyPage() {
       navigate("/login", { replace: true });
     } catch (err) {
       console.error("로그아웃 실패:", err);
-    } finally {
       setIsLoggingOut(false);
     }
   };
@@ -253,7 +258,7 @@ function MobileMyPage() {
         </Link>
       </div>
       <div className="mobile-mypage-logout-wrapper">
-        <Button variant="danger" className="mobile-mypage-logout-btn" onClick={handleLogout}>로그아웃</Button>
+        <Button variant="danger" className="mobile-mypage-logout-btn" onClick={promptLogout}>로그아웃</Button>
       </div>
 
       <div className="mobile-mypage-footer-links" style={{
@@ -272,6 +277,20 @@ function MobileMyPage() {
       </div>
 
 
+
+      {/* 로그아웃 확인 모달 팝업 */}
+      {logoutConfirmOpen && (
+        <div className="mobile-logout-modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && setLogoutConfirmOpen(false)}>
+          <div className="mobile-logout-modal-content" style={{ padding: '24px', textAlign: 'center', width: '280px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '8px' }}>로그아웃</h3>
+            <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '24px' }}>정말 로그아웃 하시겠습니까?</p>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+              <Button variant="ghost" onClick={() => setLogoutConfirmOpen(false)} style={{ flex: 1, whiteSpace: 'nowrap', minWidth: 'fit-content' }}>취소</Button>
+              <Button variant="danger" onClick={executeLogout} style={{ flex: 1, whiteSpace: 'nowrap', minWidth: 'fit-content' }}>로그아웃</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 로그아웃 대기 상태 모달 팝업 */}
       {isLoggingOut && (

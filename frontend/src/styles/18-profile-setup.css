@@ -117,7 +117,7 @@
 
 .profile-setup__fields {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -138,17 +138,28 @@
 .profile-setup textarea,
 .profile-setup select {
   width: 100%;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #fff;
+  border: 2px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
   color: #0f172a;
   font: inherit;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.profile-setup input:focus,
+.profile-setup textarea:focus,
+.profile-setup select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
 }
 
 .profile-setup input,
 .profile-setup select {
-  height: 46px;
-  padding: 0 14px;
+  height: 48px;
+  padding: 0 16px;
 }
 
 .profile-setup textarea {
@@ -232,24 +243,34 @@
 .profile-setup__categories button,
 .profile-setup__sport-list button,
 .profile-setup__selected button {
-  border: 1px solid #cbd5e1;
+  border: 2px solid #e2e8f0;
   background: #fff;
   color: #334155;
   font-weight: 800;
   cursor: pointer;
+  border-radius: 16px;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.profile-setup__level-buttons button:active,
+.profile-setup__categories button:active,
+.profile-setup__sport-list button:active {
+  transform: scale(0.96);
 }
 
 .profile-setup__level-buttons button {
   min-height: 48px;
-  border-radius: 8px;
+  border-radius: 16px;
 }
 
 .profile-setup__level-buttons button.is-active,
 .profile-setup__categories button.is-active,
 .profile-setup__sport-list button.is-selected {
-  border-color: #2563eb;
-  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  border-color: #3b82f6;
+  background: linear-gradient(135deg, #3b82f6, #60a5fa);
   color: #fff;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  transform: translateY(-2px);
 }
 
 .profile-setup__section-head {
@@ -324,10 +345,41 @@
   font-weight: 900;
 }
 
+.profile-setup__level-toggle span {
+  display: inline-block;
+  margin-bottom: 0;
+}
+
 .profile-setup__level-toggle input {
-  width: 18px;
-  height: 18px;
-  accent-color: #2563eb;
+  appearance: none;
+  width: 44px;
+  height: 24px;
+  background: #cbd5e1;
+  border-radius: 99px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.profile-setup__level-toggle input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.profile-setup__level-toggle input:checked {
+  background: #3b82f6;
+}
+
+.profile-setup__level-toggle input:checked::after {
+  transform: translateX(20px);
 }
 
 .profile-setup__sport-levels {
