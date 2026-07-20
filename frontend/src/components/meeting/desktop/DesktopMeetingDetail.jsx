@@ -22,6 +22,23 @@ function getNextSessionLabel(meeting) {
   return meeting?.next_session?.start_at ? formatDateTime(meeting.next_session.start_at) : "예정된 회차 없음";
 }
 
+function parseMeetingDateTime(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isMeetingOperationEnded(meeting) {
+  if (!meeting) return false;
+  if (meeting.meeting_type === "regular") {
+    if (meeting.next_session?.start_at) return false;
+    const endAt = parseMeetingDateTime(meeting.end_at);
+    return Boolean(endAt && Date.now() >= endAt.getTime());
+  }
+  const endAt = parseMeetingDateTime(meeting.end_at || meeting.start_at);
+  return Boolean(endAt && Date.now() >= endAt.getTime());
+}
+
 function loadNaverMapScript(clientId) {
   if (!clientId) return Promise.reject(new Error("missing naver map client id"));
   if (window.naver?.maps) return Promise.resolve(window.naver.maps);
@@ -326,8 +343,12 @@ function DesktopMeetingDetail() {
   const isHost = user?.id === meeting.host?.id || myParticipant?.role === "host";
   const isClosed = meeting.status !== "open";
   const isFull = Number(meeting.current_participants || 0) >= Number(meeting.max_participants || 0);
+  const isOperationEnded = isMeetingOperationEnded(meeting);
+  const isLeaveBlockedStatus = meeting.status === "cancelled" || meeting.status === "suspended";
   const hasApplied = Boolean(myParticipant && myParticipant.role !== "host" && myParticipant.status !== "cancelled");
-  const canCancelApplication = myParticipant?.status === "pending" && !cancelling;
+  const isMutatingParticipation = joining || cancelling;
+  const canCancelApplication = myParticipant?.status === "pending" && !isMutatingParticipation;
+  const canLeaveMeeting = myParticipant?.status === "approved" && !isHost && !isOperationEnded && !isLeaveBlockedStatus && !isMutatingParticipation;
   const canJoin = !isHost && !hasApplied && !isClosed && !isFull && !joining;
   const chatRoomId = meeting.chat_room_id;
 
@@ -354,7 +375,7 @@ function DesktopMeetingDetail() {
   };
 
   const cancelJoinRequest = async () => {
-    if (myParticipant?.status !== "pending") return;
+    if (myParticipant?.status !== "pending" || isMutatingParticipation) return;
     const ok = window.confirm("참가 신청을 취소하시겠습니까?");
     if (!ok) return;
 
@@ -370,11 +391,37 @@ function DesktopMeetingDetail() {
     }
   };
 
+  const leaveMeeting = async () => {
+    if (myParticipant?.status !== "approved" || !canLeaveMeeting) return;
+    const ok = window.confirm("모임에서 나가시겠습니까?");
+    if (!ok) return;
+
+    setCancelling(true);
+    setMessage({ text: "", tone: "notice" });
+    try {
+      await meetingApi.cancelJoin(meeting.id);
+      setRefreshKey((value) => value + 1);
+    } catch (error) {
+      setMessage({ text: error.response?.data?.message || "모임 나가기를 처리하지 못했습니다.", tone: "error" });
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const statusLabel = getStatusLabel(meeting.status);
   const participantLabel = getParticipantLabel(myParticipant);
-  const actionLabel = getActionLabel({ joining, cancelling, isClosed, isFull, isHost, myParticipant });
-  const actionHandler = canCancelApplication ? cancelJoinRequest : joinMeeting;
-  const actionDisabled = canCancelApplication ? false : !canJoin;
+  const actionLabel = getActionLabel({
+    joining,
+    cancelling,
+    isClosed,
+    isFull,
+    isHost,
+    isOperationEnded,
+    status: meeting.status,
+    myParticipant
+  });
+  const actionHandler = canCancelApplication ? cancelJoinRequest : canLeaveMeeting ? leaveMeeting : joinMeeting;
+  const actionDisabled = canCancelApplication || canLeaveMeeting ? false : !canJoin;
   const hostSummary = meeting.host_summary || {};
   const coverImage = getMeetingCoverImage(meeting);
 
@@ -525,12 +572,18 @@ function getParticipantLabel(participant) {
   return "";
 }
 
-function getActionLabel({ joining, cancelling, isClosed, isFull, isHost, myParticipant }) {
+function getActionLabel({ joining, cancelling, isClosed, isFull, isHost, isOperationEnded, status, myParticipant }) {
   if (joining) return "신청 중...";
+  if (cancelling && myParticipant?.status === "approved") return "나가는 중...";
   if (cancelling) return "취소 중...";
   if (isHost) return "방장 관리";
   if (myParticipant?.status === "pending") return "신청 취소";
-  if (myParticipant?.status === "approved") return "참여중";
+  if (myParticipant?.status === "approved") {
+    if (status === "cancelled") return "취소됨";
+    if (status === "suspended") return "운영중지";
+    if (isOperationEnded) return "운영 종료";
+    return "모임 나가기";
+  }
   if (myParticipant?.status === "rejected") return "신청 거절됨";
   if (isFull) return "모집마감";
   if (isClosed) return "모집종료";
