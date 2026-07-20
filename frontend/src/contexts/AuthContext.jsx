@@ -19,22 +19,27 @@ function normalizeLoginProvider(provider) {
 }
 
 function readPendingLoginProvider() {
-  const storedProvider = window.sessionStorage.getItem(PENDING_LOGIN_PROVIDER_KEY);
+  const storedProvider = window.sessionStorage.getItem(PENDING_LOGIN_PROVIDER_KEY)
+    || window.localStorage.getItem(PENDING_LOGIN_PROVIDER_KEY);
   if (!storedProvider) return null;
   const normalized = normalizeLoginProvider(storedProvider);
-  if (!normalized) window.sessionStorage.removeItem(PENDING_LOGIN_PROVIDER_KEY);
+  if (!normalized) clearPendingLoginProvider();
   return normalized;
 }
 
 function storePendingLoginProvider(provider) {
   const normalized = normalizeLoginProvider(provider);
-  window.sessionStorage.removeItem(PENDING_LOGIN_PROVIDER_KEY);
-  if (normalized) window.sessionStorage.setItem(PENDING_LOGIN_PROVIDER_KEY, normalized);
+  clearPendingLoginProvider();
+  if (normalized) {
+    window.sessionStorage.setItem(PENDING_LOGIN_PROVIDER_KEY, normalized);
+    window.localStorage.setItem(PENDING_LOGIN_PROVIDER_KEY, normalized);
+  }
   return normalized;
 }
 
 function clearPendingLoginProvider() {
   window.sessionStorage.removeItem(PENDING_LOGIN_PROVIDER_KEY);
+  window.localStorage.removeItem(PENDING_LOGIN_PROVIDER_KEY);
 }
 
 function isLoginProviderMismatchError(error) {
@@ -128,7 +133,7 @@ export function AuthProvider({ children }) {
     activeSyncsRef.current.clear();
   };
 
-  const clearAuthenticationAfterProviderMismatch = async (error, supabaseAccessToken) => {
+  const clearAuthenticationAfterProviderMismatch = (error, supabaseAccessToken) => {
     const message = error?.response?.data?.message || "가입한 방식으로 로그인해 주세요.";
     providerMismatchRef.current = {
       accessToken: supabaseAccessToken,
@@ -141,8 +146,13 @@ export function AuthProvider({ children }) {
     setBackendTokenReady(false);
     setUser(null);
     setSession(null);
+    // This helper can run inside Supabase's onAuthStateChange callback. Awaiting
+    // signOut there deadlocks because signOut waits for the current auth event
+    // callback to finish. Schedule it after the callback has unwound instead.
     if (supabase) {
-      await supabase.auth.signOut().catch(() => {});
+      window.setTimeout(() => {
+        supabase.auth.signOut().catch(() => {});
+      }, 0);
     }
     setAuthError(message);
     sessionStorage.setItem("sportsmate_auth_error", message);
@@ -182,7 +192,7 @@ export function AuthProvider({ children }) {
         data = await authApi.sync(syncPayload, supabaseAccessToken);
       } catch (error) {
         if (isLoginProviderMismatchError(error)) {
-          await clearAuthenticationAfterProviderMismatch(error, supabaseAccessToken);
+          clearAuthenticationAfterProviderMismatch(error, supabaseAccessToken);
           throw createLoginProviderMismatchError(error.response.data);
         }
         throw error;
@@ -257,10 +267,13 @@ export function AuthProvider({ children }) {
     supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
       const currentSession = data.session;
+      const isOAuthCallback = window.location.pathname === "/auth/callback";
       setSession(currentSession);
       localStorage.removeItem("sportsmate_token");
       setBackendTokenReady(false);
-      if (currentSession?.user) {
+      // OAuth 콜백에서는 exchangeCodeForSession/onAuthStateChange가 provider와 함께 동기화한다.
+      // 초기 세션 복원이 먼저 provider 없는 /auth/sync를 보내고 세션을 로그아웃시키는 경쟁을 막는다.
+      if (currentSession?.user && !isOAuthCallback) {
         try {
           await syncProfile(currentSession.user, { allow_nickname_suffix: true }, currentSession.access_token);
         } catch (error) {
@@ -284,42 +297,59 @@ export function AuthProvider({ children }) {
       setLoading(false);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       localStorage.removeItem("sportsmate_token");
       setBackendTokenReady(false);
+
+      // The callback page completes OAuth and reports provider mismatches itself.
+      // Starting another sync from the auth event makes setSession wait for this
+      // callback, so the page cannot receive the 409 and navigate to /login.
+      if (nextSession?.user && window.location.pathname === "/auth/callback") {
+        setLoading(false);
+        return;
+      }
+
       if (nextSession?.user) {
-        try {
-          await syncProfile(nextSession.user, {
-            allow_nickname_suffix: true,
-            login_provider: readPendingLoginProvider()
-          }, nextSession.access_token);
-        } catch (error) {
-          const msg = error?.response?.data?.message || error?.message || "로그인 동기화에 실패했습니다.";
-          if (isLoginProviderMismatchError(error)) {
+        // Never await asynchronous work from inside onAuthStateChange. Supabase
+        // auth methods may wait for this callback to return before resolving.
+        window.setTimeout(async () => {
+          if (!mounted) return;
+          try {
+            await syncProfile(nextSession.user, {
+              allow_nickname_suffix: true,
+              login_provider: readPendingLoginProvider()
+            }, nextSession.access_token);
+          } catch (error) {
+            const msg = error?.response?.data?.message || error?.message || "로그인 동기화에 실패했습니다.";
+            if (isLoginProviderMismatchError(error)) {
+              setAuthError(msg);
+              setLoading(false);
+              return;
+            }
+            if (msg === "정지된 회원입니다.") {
+              alert("정지된 회원입니다.");
+            }
             setAuthError(msg);
-            setLoading(false);
-            return;
+            setBackendTokenReady(false);
+            setUser(null);
+            if (supabase) {
+              await supabase.auth.signOut().catch(() => {});
+            }
           }
-          if (msg === "정지된 회원입니다.") {
-            alert("정지된 회원입니다.");
-          }
-          setAuthError(msg);
-          setBackendTokenReady(false);
-          setUser(null);
-          if (supabase) {
-            await supabase.auth.signOut().catch(() => {});
-          }
-        }
+          setLoading(false);
+        }, 0);
       } else {
-        clearPendingLoginProvider();
+        if (window.location.pathname !== "/auth/callback") {
+          clearPendingLoginProvider();
+        }
         currentSyncTokenRef.current = "";
         clearSyncCache();
         setAuthError("");
         setBackendTokenReady(false);
         setUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => {
@@ -486,7 +516,7 @@ export function AuthProvider({ children }) {
           const { data, error } = await client.auth.signInWithOAuth({
             provider: nextProvider,
             options: {
-              redirectTo: getAuthRedirectUrl("/auth/callback")
+              redirectTo: getAuthRedirectUrl(`/auth/callback?login_provider=${encodeURIComponent(nextProvider)}`)
             }
           });
           if (error) throw error;
@@ -498,16 +528,18 @@ export function AuthProvider({ children }) {
       },
       async completeOAuthCallback(callbackUrl = window.location.href) {
         const client = requireSupabase();
-        const pendingProvider = readPendingLoginProvider();
-        const loginProvider = SUPABASE_AUTH_PROVIDERS.includes(pendingProvider) ? pendingProvider : null;
         const url = new URL(callbackUrl);
         const searchParams = url.searchParams;
+        const callbackProvider = normalizeLoginProvider(searchParams.get("login_provider"));
+        const pendingProvider = callbackProvider || readPendingLoginProvider();
+        const loginProvider = SUPABASE_AUTH_PROVIDERS.includes(pendingProvider) ? pendingProvider : null;
         let nextUser = null;
         let nextAccessToken = "";
 
         try {
         if (searchParams.has("code")) {
-          const { data, error } = await client.auth.exchangeCodeForSession(callbackUrl);
+          const authCode = searchParams.get("code");
+          const { data, error } = await client.auth.exchangeCodeForSession(authCode);
           if (error) throw error;
           nextUser = data.session?.user || data.user || null;
           nextAccessToken = data.session?.access_token || "";

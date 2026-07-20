@@ -96,6 +96,7 @@ class Config:
     VWORLD_DOMAIN = os.getenv("VWORLD_DOMAIN", "")
     MOLIT_API_KEY = os.getenv("MOLIT_API_KEY", "")
     MOLIT_REGION_API_URL = os.getenv("MOLIT_REGION_API_URL", "")
+    KMA_API_KEY = os.getenv("KMA_API_KEY", "")
     SUPABASE_URL = os.getenv("SUPABASE_URL", "")
     SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
     SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")

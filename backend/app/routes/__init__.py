@@ -10,6 +10,7 @@ from .user_routes import user_bp
 from .vote_routes import vote_bp
 from .chatbot_routes import chatbot_bp
 from .support_routes import support_bp
+from .weather_routes import weather_bp
 
 
 def register_blueprints(app):
@@ -25,4 +26,5 @@ def register_blueprints(app):
     app.register_blueprint(vote_bp, url_prefix="/api/v1/votes")
     app.register_blueprint(chatbot_bp, url_prefix="/api/v1/chatbot")
     app.register_blueprint(support_bp, url_prefix="/api/v1/support")
+    app.register_blueprint(weather_bp, url_prefix="/api/v1/weather")
 

@@ -669,6 +669,85 @@
   grid-column: 1 / -1;
 }
 
+.desktop-weather-card {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+  color: #334155;
+}
+
+.desktop-weather-card.is-loading,
+.desktop-weather-card.is-unavailable {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 78px;
+}
+
+.desktop-weather-card.is-unavailable p,
+.desktop-weather-card > p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.desktop-weather-card__summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.desktop-weather-card__summary > span {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  color: #2563eb;
+  background: #fff;
+  box-shadow: 0 6px 18px rgb(37 99 235 / 10%);
+}
+
+.desktop-weather-card__summary div {
+  display: grid;
+  gap: 3px;
+}
+
+.desktop-weather-card__summary small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.desktop-weather-card__summary strong {
+  color: #0f172a;
+  font-size: 20px;
+}
+
+.desktop-weather-card__metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.desktop-weather-card__metrics > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 82%);
+  color: #64748b;
+  font-size: 12px;
+}
+
+.desktop-weather-card__metrics strong {
+  color: #1e293b;
+}
+
 .desktop-form-grid label,
 .desktop-form-actions label {
   display: grid;

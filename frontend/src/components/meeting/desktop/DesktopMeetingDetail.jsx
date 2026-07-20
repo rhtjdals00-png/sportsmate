@@ -5,10 +5,12 @@ import EmptyState from "../../common/EmptyState.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import { meetingApi } from "../../../api/meetingApi";
 import { locationApi } from "../../../api/locationApi";
+import { weatherApi } from "../../../api/weatherApi";
 import { useAsync } from "../../../hooks/useAsync";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { formatDateTime, formatMeetingType, formatRegularMeetingSchedule } from "../../../utils/formatters";
 import { getMeetingCoverImage } from "../../../utils/sportThumbnails";
+import DesktopWeatherCard from "./DesktopWeatherCard.jsx";
 
 const DEFAULT_MAP_CENTER = { latitude: 37.5665, longitude: 126.9780 };
 const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
@@ -300,6 +302,7 @@ function DesktopMeetingDetail() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [mapClientId, setMapClientId] = useState("");
   const [hostProfileOpen, setHostProfileOpen] = useState(false);
+  const [weather, setWeather] = useState({ loading: true, forecast: null });
   const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId, refreshKey]);
 
   useEffect(() => {
@@ -307,6 +310,34 @@ function DesktopMeetingDetail() {
       .then((data) => setMapClientId(data.naver_dynamic_map_client_id || ""))
       .catch(() => setMapClientId(""));
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const meeting = detail.data?.meeting;
+    const at = getDisplayStartAt(meeting);
+    const latitude = Number(meeting?.latitude);
+    const longitude = Number(meeting?.longitude);
+    if (!meeting || !at || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      setWeather({
+        loading: false,
+        forecast: meeting ? { available: false, message: "일정 또는 장소 좌표가 없어 예보를 확인할 수 없습니다." } : null,
+      });
+      return () => { active = false; };
+    }
+    setWeather({ loading: true, forecast: null });
+    weatherApi.forecast({ latitude, longitude, at, address: meeting.address || meeting.location_name || "" })
+      .then((data) => {
+        if (active) setWeather({ loading: false, forecast: data.forecast });
+      })
+      .catch((error) => {
+        if (!active) return;
+        setWeather({
+          loading: false,
+          forecast: { available: false, message: error.response?.data?.message || "예보를 불러오지 못했습니다." },
+        });
+      });
+    return () => { active = false; };
+  }, [detail.data?.meeting, meetingId, refreshKey]);
 
   if (detail.loading) return <LoadingCards count={3} />;
   if (detail.error || !detail.data?.meeting) {
@@ -385,6 +416,14 @@ function DesktopMeetingDetail() {
               <span className="desktop-meeting-detail__approval-chip">방장 승인 필요</span>
               {participantLabel && <span className="desktop-meeting-relation-badge">{participantLabel}</span>}
             </div>
+          </section>
+
+          <section className="desktop-section desktop-meeting-detail__weather">
+            <div className="desktop-section__head">
+              <h2>모임 날씨</h2>
+              <span>{meeting.meeting_type === "regular" ? "다음 회차 기준" : formatDateTime(getDisplayStartAt(meeting))}</span>
+            </div>
+            <DesktopWeatherCard forecast={weather.forecast} loading={weather.loading} />
           </section>
 
           <section className="desktop-section desktop-meeting-detail__map">
