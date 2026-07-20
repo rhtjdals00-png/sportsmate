@@ -496,3 +496,74 @@ def get_muted_chat_rooms():
     from app.utils.mute_store import get_muted_rooms
     mutes = get_muted_rooms(user_id)
     return jsonify({"muted_rooms": mutes}), 200
+
+
+@chat_bp.get("/unread-count")
+@jwt_required()
+def unread_count():
+    """Return only the total unread message count (single integer).
+
+    This is a lightweight alternative to fetching full room lists just to
+    display a badge.  It avoids loading room data, messages, user profiles,
+    and Base64 images, drastically reducing Supabase egress.
+    """
+    user_id = int(get_jwt_identity())
+
+    # --- meeting chat rooms ---
+    meeting_room_ids = (
+        db.session.query(ChatRoom.id)
+        .join(Meeting, ChatRoom.meeting_id == Meeting.id)
+        .outerjoin(Participant, Participant.meeting_id == Meeting.id)
+        .filter(
+            Meeting.status.notin_(["cancelled", "suspended"]),
+            or_(
+                Meeting.host_id == user_id,
+                (Participant.user_id == user_id) & (Participant.status == "approved"),
+            ),
+        )
+        .distinct()
+        .all()
+    )
+    meeting_room_id_list = [r[0] for r in meeting_room_ids]
+
+    meeting_unread = 0
+    if meeting_room_id_list:
+        row = (
+            db.session.query(func.count(ChatMessage.id))
+            .outerjoin(
+                ChatMessageRead,
+                (ChatMessageRead.chat_message_id == ChatMessage.id)
+                & (ChatMessageRead.user_id == user_id),
+            )
+            .filter(ChatMessage.chat_room_id.in_(meeting_room_id_list))
+            .filter(ChatMessage.user_id != user_id)
+            .filter(ChatMessageRead.id.is_(None))
+            .scalar()
+        )
+        meeting_unread = row or 0
+
+    # --- direct chat rooms ---
+    from app.models import DirectChatMessage
+
+    direct_room_ids = (
+        db.session.query(DirectChatRoom.id)
+        .filter(
+            or_(
+                DirectChatRoom.user_a_id == user_id,
+                DirectChatRoom.user_b_id == user_id,
+            )
+        )
+        .all()
+    )
+    direct_room_id_list = [r[0] for r in direct_room_ids]
+
+    direct_unread = 0
+    if direct_room_id_list:
+        direct_unread = (
+            db.session.query(func.count(DirectChatMessage.id))
+            .filter(DirectChatMessage.direct_chat_room_id.in_(direct_room_id_list))
+            .filter(DirectChatMessage.sender_id != user_id)
+            .scalar()
+        ) or 0
+
+    return jsonify({"unread_count": meeting_unread + direct_unread})
