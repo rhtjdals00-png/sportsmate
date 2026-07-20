@@ -1,15 +1,21 @@
-from flask import Blueprint, jsonify, request
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote
+from urllib.request import Request, urlopen
+from uuid import uuid4
+
+from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import ChatMessage, ChatMessageRead, ChatRoom, DirectChatRoom, Meeting, Participant, Sport, User
+from app.models import ChatMessage, ChatMessageRead, ChatRoom, DirectChatMessage, DirectChatRoom, Meeting, Participant, Sport, User
 from app.services.chat_service import (
     attach_read_counts,
     ensure_chat_access,
     ensure_direct_room_access,
     get_or_create_direct_room,
+    mark_messages_read,
     mark_room_messages_read,
     send_direct_message,
     send_message,
@@ -24,6 +30,46 @@ ROOM_LIST_OPTIONS = (
     joinedload(ChatRoom.meeting).joinedload(Meeting.sport).joinedload(Sport.category),
     joinedload(ChatRoom.meeting).joinedload(Meeting.chat_room),
 )
+
+CHAT_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+CHAT_IMAGE_EXTENSIONS = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+}
+
+
+def pagination_args():
+    requested = any(name in request.args for name in ("limit", "before_id", "after_id"))
+    if not requested:
+        return None
+    try:
+        limit = min(max(int(request.args.get("limit", 50)), 1), 200)
+        before_id = int(request.args["before_id"]) if request.args.get("before_id") else None
+        after_id = int(request.args["after_id"]) if request.args.get("after_id") else None
+    except (TypeError, ValueError):
+        raise ValueError("limit, before_id, after_id must be integers.")
+    if before_id and after_id:
+        raise ValueError("before_id and after_id cannot be used together.")
+    return limit, before_id, after_id
+
+
+def page_messages(query, model, limit, before_id=None, after_id=None):
+    if after_id:
+        rows = query.filter(model.id > after_id).order_by(model.id.asc()).limit(limit + 1).all()
+        return rows[:limit], len(rows) > limit
+    if before_id:
+        query = query.filter(model.id < before_id)
+    rows = query.order_by(model.id.desc()).limit(limit + 1).all()
+    return list(reversed(rows[:limit])), len(rows) > limit
+
+
+def storage_headers(secret_key):
+    headers = {"apikey": secret_key}
+    if secret_key.count(".") == 2:
+        headers["Authorization"] = f"Bearer {secret_key}"
+    return headers
 
 
 def participant_item(participant):
@@ -122,13 +168,140 @@ def rooms():
     return jsonify({"items": room_items})
 
 
+@chat_bp.post("/uploads")
+@jwt_required()
+def upload_chat_image():
+    user_id = int(get_jwt_identity())
+    uploaded_file = request.files.get("file")
+    room_type = (request.form.get("room_type") or "").strip().lower()
+    try:
+        room_id = int(request.form.get("room_id"))
+    except (TypeError, ValueError):
+        return jsonify({"message": "채팅방을 확인해주세요."}), 400
+
+    if room_type == "meeting":
+        room = ensure_chat_access(room_id, user_id)
+        if meeting_chat_is_read_only(room.meeting):
+            return jsonify({"message": "종료된 채팅방에는 사진을 보낼 수 없습니다."}), 403
+    elif room_type == "direct":
+        ensure_direct_room_access(room_id, user_id)
+    else:
+        return jsonify({"message": "지원하지 않는 채팅방 형식입니다."}), 400
+
+    if not uploaded_file:
+        return jsonify({"message": "업로드할 사진을 선택해주세요."}), 400
+    extension = CHAT_IMAGE_EXTENSIONS.get(uploaded_file.mimetype)
+    if not extension:
+        return jsonify({"message": "JPG, PNG, WEBP, GIF 이미지만 업로드할 수 있습니다."}), 400
+    payload = uploaded_file.stream.read(CHAT_IMAGE_MAX_BYTES + 1)
+    if len(payload) > CHAT_IMAGE_MAX_BYTES:
+        return jsonify({"message": "사진은 5MB 이하만 업로드할 수 있습니다."}), 400
+
+    supabase_url = current_app.config.get("SUPABASE_URL", "").rstrip("/")
+    secret_key = current_app.config.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    bucket = current_app.config.get("SUPABASE_CHAT_BUCKET", "chat-images")
+    if not supabase_url or not secret_key:
+        return jsonify({"message": "사진 저장소 설정이 완료되지 않았습니다."}), 503
+
+    object_path = f"{room_type}/{room_id}/{user_id}/{uuid4().hex}.{extension}"
+    encoded_path = quote(object_path, safe="/")
+    headers = storage_headers(secret_key)
+    headers.update({"Content-Type": uploaded_file.mimetype, "x-upsert": "false"})
+    upload_request = Request(
+        f"{supabase_url}/storage/v1/object/{bucket}/{encoded_path}",
+        data=payload,
+        headers=headers,
+        method="POST",
+    )
+    try:
+        with urlopen(upload_request, timeout=30) as response:
+            status_code = response.status
+    except HTTPError as error:
+        current_app.logger.warning("Chat image upload failed with status %s", error.code)
+        return jsonify({"message": "사진 업로드에 실패했습니다."}), 502
+    except (URLError, TimeoutError) as error:
+        current_app.logger.warning("Chat image upload request failed: %s", error)
+        return jsonify({"message": "사진 저장소에 연결하지 못했습니다."}), 502
+    if not 200 <= status_code < 300:
+        current_app.logger.warning("Chat image upload failed with status %s", status_code)
+        return jsonify({"message": "사진 업로드에 실패했습니다."}), 502
+
+    public_url = f"{supabase_url}/storage/v1/object/public/{bucket}/{encoded_path}"
+    return jsonify({
+        "attachment_url": public_url,
+        "attachment_name": (uploaded_file.filename or "chat-image")[:255],
+        "object_path": object_path,
+    }), 201
+
+
 @chat_bp.get("/<int:room_id>/messages")
 @jwt_required()
 def messages(room_id):
     user_id = int(get_jwt_identity())
     try:
-        room = ensure_chat_access(room_id, user_id, include_messages=True)
-        room_data = room.to_dict(current_user_id=user_id)
+        page = pagination_args()
+        room = ensure_chat_access(room_id, user_id, include_messages=page is None)
+        if page is None:
+            room_data = room.to_dict(current_user_id=user_id)
+            ordered_messages = sorted(room.messages, key=lambda message: (message.created_at, message.id))
+            read_ids = {
+                row.chat_message_id
+                for row in ChatMessageRead.query
+                .filter_by(user_id=user_id)
+                .join(ChatMessage, ChatMessage.id == ChatMessageRead.chat_message_id)
+                .filter(ChatMessage.chat_room_id == room.id)
+                .all()
+            }
+            first_unread = next(
+                (
+                    message
+                    for message in ordered_messages
+                    if message.user_id != user_id and message.id not in read_ids
+                ),
+                None
+            )
+            room_data["first_unread_message_id"] = first_unread.id if first_unread else None
+            mark_room_messages_read(room, user_id)
+            attach_read_counts(ordered_messages)
+            return jsonify({"room": room_data, "items": [message.to_dict() for message in ordered_messages]})
+
+        limit, before_id, after_id = page
+        message_query = (
+            ChatMessage.query
+            .options(
+                joinedload(ChatMessage.sender).joinedload(User.profile),
+                joinedload(ChatMessage.reply_to).joinedload(ChatMessage.sender).joinedload(User.profile),
+            )
+            .filter(ChatMessage.chat_room_id == room.id)
+        )
+        ordered_messages, has_more = page_messages(
+            message_query, ChatMessage, limit, before_id=before_id, after_id=after_id
+        )
+        first_unread = None
+        if not after_id:
+            first_unread = (
+                ChatMessage.query
+                .outerjoin(
+                    ChatMessageRead,
+                    and_(ChatMessageRead.chat_message_id == ChatMessage.id, ChatMessageRead.user_id == user_id),
+                )
+                .filter(ChatMessage.chat_room_id == room.id)
+                .filter(ChatMessage.user_id != user_id)
+                .filter(ChatMessageRead.id.is_(None))
+                .order_by(ChatMessage.id.asc())
+                .first()
+            )
+        mark_messages_read(ordered_messages, user_id)
+        attach_read_counts(ordered_messages)
+        response = {
+            "items": [message.to_dict() for message in ordered_messages],
+            "has_more": has_more,
+            "latest_id": ordered_messages[-1].id if ordered_messages else after_id,
+            "next_before_id": ordered_messages[0].id if has_more and ordered_messages else None,
+        }
+        if after_id:
+            return jsonify(response)
+
         participant = Participant.query.filter_by(meeting_id=room.meeting_id, user_id=user_id, status="approved").first()
         can_manage = bool(
             room.meeting
@@ -137,7 +310,15 @@ def messages(room_id):
                 or (participant and participant.role in ["host", "cohost", "subhost", "assistant"])
             )
         )
-        room_data["can_manage"] = can_manage
+        meeting_data = room.meeting.to_dict(current_user_id=user_id) if room.meeting else None
+        room_data = {
+            "id": room.id,
+            "meeting": meeting_data,
+            "is_read_only": meeting_chat_is_read_only(room.meeting),
+            "last_message": None,
+            "unread_count": 0,
+            "can_manage": can_manage,
+        }
         if room_data.get("meeting"):
             room_data["meeting"]["can_manage"] = can_manage
         approved_participants = (
@@ -148,27 +329,11 @@ def messages(room_id):
             .all()
         )
         room_data["participants"] = [participant_item(item) for item in approved_participants]
-        ordered_messages = sorted(room.messages, key=lambda message: (message.created_at, message.id))
-        read_ids = {
-            row.chat_message_id
-            for row in ChatMessageRead.query
-            .filter_by(user_id=user_id)
-            .join(ChatMessage, ChatMessage.id == ChatMessageRead.chat_message_id)
-            .filter(ChatMessage.chat_room_id == room.id)
-            .all()
-        }
-        first_unread = next(
-            (
-                message
-                for message in ordered_messages
-                if message.user_id != user_id and message.id not in read_ids
-            ),
-            None
-        )
         room_data["first_unread_message_id"] = first_unread.id if first_unread else None
-        mark_room_messages_read(room, user_id)
-        attach_read_counts(ordered_messages)
-        return jsonify({"room": room_data, "items": [message.to_dict() for message in ordered_messages]})
+        response["room"] = room_data
+        return jsonify(response)
+    except ValueError as error:
+        return jsonify({"message": str(error)}), 400
     except PermissionError as error:
         return jsonify({"message": str(error)}), 403
 
@@ -206,8 +371,38 @@ def direct_messages(room_id):
     user_id = int(get_jwt_identity())
     try:
         room = ensure_direct_room_access(room_id, user_id)
-        ordered_messages = sorted(room.messages, key=lambda message: (message.created_at, message.id))
-        return jsonify({"room": room.to_dict(current_user_id=user_id), "items": [message.to_dict() for message in ordered_messages]})
+        page = pagination_args()
+        if page is None:
+            ordered_messages = sorted(room.messages, key=lambda message: (message.created_at, message.id))
+            return jsonify({"room": room.to_dict(current_user_id=user_id), "items": [message.to_dict() for message in ordered_messages]})
+
+        limit, before_id, after_id = page
+        message_query = (
+            DirectChatMessage.query
+            .options(joinedload(DirectChatMessage.sender).joinedload(User.profile))
+            .filter(DirectChatMessage.direct_chat_room_id == room.id)
+        )
+        ordered_messages, has_more = page_messages(
+            message_query, DirectChatMessage, limit, before_id=before_id, after_id=after_id
+        )
+        response = {
+            "items": [message.to_dict() for message in ordered_messages],
+            "has_more": has_more,
+            "latest_id": ordered_messages[-1].id if ordered_messages else after_id,
+            "next_before_id": ordered_messages[0].id if has_more and ordered_messages else None,
+        }
+        if not after_id:
+            other_user = room.other_user(user_id)
+            response["room"] = {
+                "id": room.id,
+                "other_user": other_user.to_dict() if other_user else None,
+                "last_message": None,
+                "created_at": room.created_at.isoformat() if room.created_at else None,
+                "updated_at": room.updated_at.isoformat() if room.updated_at else None,
+            }
+        return jsonify(response)
+    except ValueError as error:
+        return jsonify({"message": str(error)}), 400
     except PermissionError as error:
         return jsonify({"message": str(error)}), 403
 

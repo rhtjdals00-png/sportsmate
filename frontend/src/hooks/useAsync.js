@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export function useAsync(callback, dependencies = []) {
   const [state, setState] = useState({ data: null, loading: true, error: null });
@@ -15,6 +15,13 @@ export function useAsync(callback, dependencies = []) {
     }
   };
 
+  const setData = useCallback((updater) => {
+    setState((previous) => ({
+      ...previous,
+      data: typeof updater === "function" ? updater(previous.data) : updater
+    }));
+  }, []);
+
   useEffect(() => {
     let mounted = true;
     setState((prev) => ({ ...prev, loading: true, error: null }));
@@ -26,6 +33,6 @@ export function useAsync(callback, dependencies = []) {
     };
   }, dependencies);
 
-  return { ...state, execute };
+  return { ...state, execute, setData };
 }
 

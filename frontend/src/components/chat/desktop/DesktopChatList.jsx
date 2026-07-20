@@ -85,7 +85,7 @@ function DesktopChatList() {
       if (document.hidden) return;
       setRefreshKey((value) => value + 1);
       setDirectRefreshKey((value) => value + 1);
-    }, 3000);
+    }, 30000);
     return () => window.clearInterval(timer);
   }, []);
 

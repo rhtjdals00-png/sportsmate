@@ -99,6 +99,7 @@ class Config:
     SUPABASE_URL = os.getenv("SUPABASE_URL", "")
     SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
     SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    SUPABASE_CHAT_BUCKET = os.getenv("SUPABASE_CHAT_BUCKET", "chat-images")
     VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
     VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
     VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "")
