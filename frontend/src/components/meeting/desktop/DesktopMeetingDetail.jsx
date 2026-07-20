@@ -296,6 +296,7 @@ function DesktopMeetingDetail() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const [joining, setJoining] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [message, setMessage] = useState({ text: "", tone: "notice" });
   const [refreshKey, setRefreshKey] = useState(0);
   const [mapClientId, setMapClientId] = useState("");
@@ -326,6 +327,7 @@ function DesktopMeetingDetail() {
   const isClosed = meeting.status !== "open";
   const isFull = Number(meeting.current_participants || 0) >= Number(meeting.max_participants || 0);
   const hasApplied = Boolean(myParticipant && myParticipant.role !== "host" && myParticipant.status !== "cancelled");
+  const canCancelApplication = myParticipant?.status === "pending" && !cancelling;
   const canJoin = !isHost && !hasApplied && !isClosed && !isFull && !joining;
   const chatRoomId = meeting.chat_room_id;
 
@@ -351,9 +353,28 @@ function DesktopMeetingDetail() {
     }
   };
 
+  const cancelJoinRequest = async () => {
+    if (myParticipant?.status !== "pending") return;
+    const ok = window.confirm("참가 신청을 취소하시겠습니까?");
+    if (!ok) return;
+
+    setCancelling(true);
+    setMessage({ text: "", tone: "notice" });
+    try {
+      await meetingApi.cancelJoin(meeting.id);
+      setRefreshKey((value) => value + 1);
+    } catch (error) {
+      setMessage({ text: error.response?.data?.message || "신청 취소를 처리하지 못했습니다.", tone: "error" });
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const statusLabel = getStatusLabel(meeting.status);
   const participantLabel = getParticipantLabel(myParticipant);
-  const actionLabel = getActionLabel({ joining, isClosed, isFull, isHost, myParticipant });
+  const actionLabel = getActionLabel({ joining, cancelling, isClosed, isFull, isHost, myParticipant });
+  const actionHandler = canCancelApplication ? cancelJoinRequest : joinMeeting;
+  const actionDisabled = canCancelApplication ? false : !canJoin;
   const hostSummary = meeting.host_summary || {};
   const coverImage = getMeetingCoverImage(meeting);
 
@@ -463,7 +484,7 @@ function DesktopMeetingDetail() {
             {isHost ? (
               <Link className="primary-btn full" to={`/host/meetings/${meeting.id}`}>방장 관리</Link>
             ) : (
-              <button className="primary-btn full" type="button" onClick={joinMeeting} disabled={!canJoin}>
+              <button className="primary-btn full" type="button" onClick={actionHandler} disabled={actionDisabled}>
                 {actionLabel}
               </button>
             )}
@@ -504,10 +525,11 @@ function getParticipantLabel(participant) {
   return "";
 }
 
-function getActionLabel({ joining, isClosed, isFull, isHost, myParticipant }) {
+function getActionLabel({ joining, cancelling, isClosed, isFull, isHost, myParticipant }) {
   if (joining) return "신청 중...";
+  if (cancelling) return "취소 중...";
   if (isHost) return "방장 관리";
-  if (myParticipant?.status === "pending") return "승인 대기중";
+  if (myParticipant?.status === "pending") return "신청 취소";
   if (myParticipant?.status === "approved") return "참여중";
   if (myParticipant?.status === "rejected") return "신청 거절됨";
   if (isFull) return "모집마감";

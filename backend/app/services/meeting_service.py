@@ -839,7 +839,25 @@ def join_meeting(meeting_id, user_id, join_message=""):
         raise ValueError("모집 중인 모임만 신청할 수 있습니다.")
     if meeting.current_participants >= meeting.max_participants:
         raise ValueError("모집 정원이 마감되었습니다.")
-    if Participant.query.filter_by(meeting_id=meeting.id, user_id=user_id).first():
+    existing_participant = Participant.query.filter_by(meeting_id=meeting.id, user_id=user_id).first()
+    if existing_participant:
+        if existing_participant.status == "cancelled":
+            existing_participant.status = "pending"
+            existing_participant.join_message = join_message
+            existing_participant.requested_at = kst_now()
+            existing_participant.approved_at = None
+            existing_participant.rejected_at = None
+            create_notification(meeting.host_id, "join_request", "참여 신청", f"{applicant_name}님이 {meeting.title}에 참여 신청을 보냈습니다.", f"/host/meetings/{meeting.id}/applicants", send_push=False)
+            db.session.commit()
+            try:
+                send_web_push(meeting.host_id, "참여 신청", f"{applicant_name}님이 {meeting.title}에 참여 신청을 보냈습니다.", f"/host/meetings/{meeting.id}/applicants")
+            except Exception as error:
+                current_app.logger.warning("Join request push notification failed: %s", error)
+            return existing_participant
+        if existing_participant.status == "rejected":
+            raise ValueError("이미 거절된 신청입니다.")
+        if existing_participant.status == "kicked":
+            raise ValueError("다시 신청할 수 없는 모임입니다.")
         raise ValueError("이미 신청한 모임입니다.")
 
     participant = Participant(meeting_id=meeting.id, user_id=user_id, status="pending", join_message=join_message)
