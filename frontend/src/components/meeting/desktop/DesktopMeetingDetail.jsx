@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Bike, CalendarClock, CircleDot, Dumbbell, Eye, Footprints, LocateFixed, Map, MapPin, MessageSquareText, Mountain, Navigation, Pin, Route, Search, Star, Trophy, UserRound, UsersRound } from "lucide-react";
+import { Bike, CalendarClock, CircleDot, Dumbbell, Eye, Footprints, LocateFixed, Map, MapPin, MessageSquareText, Mountain, Navigation, Pin, Route, Search, Star, Trophy, UserRound, UsersRound, X } from "lucide-react";
 import EmptyState from "../../common/EmptyState.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import { meetingApi } from "../../../api/meetingApi";
@@ -12,6 +12,7 @@ import { getMeetingCoverImage } from "../../../utils/sportThumbnails";
 
 const DEFAULT_MAP_CENTER = { latitude: 37.5665, longitude: 126.9780 };
 const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
+const JOIN_MESSAGE_MAX_LENGTH = 200;
 
 function getDisplayStartAt(meeting) {
   return meeting?.meeting_type === "regular" ? meeting?.next_session?.start_at || meeting?.start_at : meeting?.start_at;
@@ -318,6 +319,10 @@ function DesktopMeetingDetail() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [mapClientId, setMapClientId] = useState("");
   const [hostProfileOpen, setHostProfileOpen] = useState(false);
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+  const [joinMessage, setJoinMessage] = useState("");
+  const [joinError, setJoinError] = useState("");
+  const joinTextareaRef = useRef(null);
   const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId, refreshKey]);
 
   useEffect(() => {
@@ -325,6 +330,23 @@ function DesktopMeetingDetail() {
       .then((data) => setMapClientId(data.naver_dynamic_map_client_id || ""))
       .catch(() => setMapClientId(""));
   }, []);
+
+  useEffect(() => {
+    if (!isJoinModalOpen) return undefined;
+    const timer = window.setTimeout(() => joinTextareaRef.current?.focus(), 0);
+    const onKeyDown = (event) => {
+      if (event.key === "Escape" && !joining) {
+        setIsJoinModalOpen(false);
+        setJoinMessage("");
+        setJoinError("");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isJoinModalOpen, joining]);
 
   if (detail.loading) return <LoadingCards count={3} />;
   if (detail.error || !detail.data?.meeting) {
@@ -352,23 +374,52 @@ function DesktopMeetingDetail() {
   const canJoin = !isHost && !hasApplied && !isClosed && !isFull && !joining;
   const chatRoomId = meeting.chat_room_id;
 
-  const joinMeeting = async () => {
+  const closeJoinModal = () => {
+    if (joining) return;
+    setIsJoinModalOpen(false);
+    setJoinMessage("");
+    setJoinError("");
+  };
+
+  const openJoinModal = () => {
+    if (!isAuthenticated) {
+      navigate("/login", { state: { from: `/meetings/${meeting.id}` } });
+      return;
+    }
+    if (!canJoin) return;
+    setJoinMessage("");
+    setJoinError("");
+    setIsJoinModalOpen(true);
+  };
+
+  const joinMeeting = async (event) => {
+    event?.preventDefault();
+    if (joining) return;
     if (!isAuthenticated) {
       navigate("/login", { state: { from: `/meetings/${meeting.id}` } });
       return;
     }
 
+    const trimmedMessage = joinMessage.trim();
+    if (trimmedMessage.length > JOIN_MESSAGE_MAX_LENGTH) {
+      setJoinError(`참가 메시지는 ${JOIN_MESSAGE_MAX_LENGTH}자 이내로 입력해 주세요.`);
+      return;
+    }
+
     setJoining(true);
     setMessage({ text: "", tone: "notice" });
+    setJoinError("");
     try {
-      await meetingApi.join(meeting.id, { join_message: "참여 신청합니다." });
+      await meetingApi.join(meeting.id, { join_message: trimmedMessage });
+      setIsJoinModalOpen(false);
+      setJoinMessage("");
       setMessage({
         text: "참가 신청이 접수됐습니다. 방장 승인 후 참여가 확정됩니다.",
         tone: "notice"
       });
       setRefreshKey((value) => value + 1);
     } catch (error) {
-      setMessage({ text: error.response?.data?.message || "참가 신청을 처리하지 못했습니다.", tone: "error" });
+      setJoinError(error.response?.data?.message || "참가 신청을 처리하지 못했습니다.");
     } finally {
       setJoining(false);
     }
@@ -420,7 +471,7 @@ function DesktopMeetingDetail() {
     status: meeting.status,
     myParticipant
   });
-  const actionHandler = canCancelApplication ? cancelJoinRequest : canLeaveMeeting ? leaveMeeting : joinMeeting;
+  const actionHandler = canCancelApplication ? cancelJoinRequest : canLeaveMeeting ? leaveMeeting : openJoinModal;
   const actionDisabled = canCancelApplication || canLeaveMeeting ? false : !canJoin;
   const hostSummary = meeting.host_summary || {};
   const coverImage = getMeetingCoverImage(meeting);
@@ -544,6 +595,47 @@ function DesktopMeetingDetail() {
           </section>
         </aside>
       </div>
+
+      {isJoinModalOpen && (
+        <div className="desktop-meeting-join-modal" role="dialog" aria-modal="true" aria-labelledby="desktop-meeting-join-title">
+          <button className="desktop-meeting-join-modal__backdrop" type="button" onClick={closeJoinModal} aria-label="닫기" disabled={joining} />
+          <form className="desktop-meeting-join-modal__panel" onSubmit={joinMeeting}>
+            <div className="desktop-meeting-join-modal__head">
+              <div>
+                <h2 id="desktop-meeting-join-title">참가 신청</h2>
+                <p>방장에게 전달할 메시지를 작성해 주세요.</p>
+              </div>
+              <button type="button" onClick={closeJoinModal} aria-label="닫기" disabled={joining}>
+                <X size={18} />
+              </button>
+            </div>
+            <label className="desktop-meeting-join-modal__field" htmlFor="desktop-meeting-join-message">
+              <span>참가 메시지</span>
+              <textarea
+                id="desktop-meeting-join-message"
+                ref={joinTextareaRef}
+                rows={5}
+                maxLength={JOIN_MESSAGE_MAX_LENGTH}
+                value={joinMessage}
+                onChange={(event) => {
+                  setJoinMessage(event.target.value);
+                  if (joinError) setJoinError("");
+                }}
+                placeholder="간단한 자기소개나 참가하고 싶은 이유를 적어 주세요."
+                disabled={joining}
+              />
+            </label>
+            <div className="desktop-meeting-join-modal__meta">
+              <span>{joinMessage.length} / {JOIN_MESSAGE_MAX_LENGTH}</span>
+            </div>
+            {joinError && <p className="desktop-meeting-join-modal__error">{joinError}</p>}
+            <div className="desktop-meeting-join-modal__actions">
+              <button type="button" onClick={closeJoinModal} disabled={joining}>취소</button>
+              <button type="submit" disabled={joining}>{joining ? "신청 중..." : "신청하기"}</button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

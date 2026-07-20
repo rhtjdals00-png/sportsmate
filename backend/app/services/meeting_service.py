@@ -20,6 +20,18 @@ def parse_datetime(value):
 
 WEEKDAY_ORDER = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
 WEEKDAY_INDEX = {day: index for index, day in enumerate(WEEKDAY_ORDER)}
+JOIN_MESSAGE_MAX_LENGTH = 200
+
+
+def _normalize_join_message(value):
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise ValueError("참가 메시지는 문자열로 입력해 주세요.")
+    message = value.strip()
+    if len(message) > JOIN_MESSAGE_MAX_LENGTH:
+        raise ValueError(f"참가 메시지는 {JOIN_MESSAGE_MAX_LENGTH}자 이내로 입력해 주세요.")
+    return message
 
 
 def _parse_schedule_date(value):
@@ -830,6 +842,7 @@ def create_meeting(data, host_id):
 
 def join_meeting(meeting_id, user_id, join_message=""):
     close_expired_one_time_meetings()
+    join_message = _normalize_join_message(join_message)
     meeting = Meeting.query.get_or_404(meeting_id)
     applicant = User.query.options(joinedload(User.profile)).get(user_id)
     applicant_name = applicant.nickname if applicant and getattr(applicant, "nickname", None) else (applicant.name if applicant else "신청자")
