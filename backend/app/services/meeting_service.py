@@ -10,6 +10,7 @@ from sqlalchemy.orm import joinedload
 from app.extensions import db
 from app.models import ChatMessage, ChatRoom, Meeting, MeetingSession, Participant, Review, Sport, User, Attendance
 from app.services.notification_service import create_notification, send_web_push
+from app.utils.meeting_state import is_meeting_operation_ended, validate_meeting_can_reopen_recruitment
 from app.utils.timezone import kst_now, parse_client_datetime
 
 
@@ -681,6 +682,13 @@ def update_meeting(meeting_id, host_id, data):
     if meeting.host_id != host_id:
         raise PermissionError("방장만 수정할 수 있습니다.")
 
+    if "status" in data:
+        requested_status = str(data["status"])
+        if requested_status not in {"open", "full", "closed", "cancelled", "suspended"}:
+            raise ValueError("올바르지 않은 모집 상태입니다.")
+        if requested_status == "open":
+            validate_meeting_can_reopen_recruitment(meeting)
+
     if "max_participants" in data:
         from app.utils.settings import load_system_settings
         settings = load_system_settings()
@@ -825,6 +833,8 @@ def join_meeting(meeting_id, user_id, join_message=""):
     meeting = Meeting.query.get_or_404(meeting_id)
     applicant = User.query.options(joinedload(User.profile)).get(user_id)
     applicant_name = applicant.nickname if applicant and getattr(applicant, "nickname", None) else (applicant.name if applicant else "신청자")
+    if is_meeting_operation_ended(meeting):
+        raise ValueError("종료된 모임에는 참가 신청할 수 없습니다.")
     if meeting.status != "open":
         raise ValueError("모집 중인 모임만 신청할 수 있습니다.")
     if meeting.current_participants >= meeting.max_participants:

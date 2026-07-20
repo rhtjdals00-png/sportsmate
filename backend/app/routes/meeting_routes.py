@@ -170,6 +170,8 @@ def update(meeting_id):
         return jsonify({"meeting": meeting.to_dict()})
     except PermissionError as error:
         return jsonify({"message": str(error)}), 403
+    except ValueError as error:
+        return jsonify({"message": str(error)}), 400
 
 
 @meeting_bp.delete("/<int:meeting_id>")
