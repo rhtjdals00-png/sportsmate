@@ -350,6 +350,8 @@ function DesktopMeetingDetail() {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [isJoinModalOpen, joining]);
+
+  useEffect(() => {
     let active = true;
     const meeting = detail.data?.meeting;
     const at = getDisplayStartAt(meeting);
