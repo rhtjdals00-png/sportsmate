@@ -4,7 +4,7 @@ from sqlalchemy import text
 
 from app.extensions import db
 from app.models import User
-from app.services.auth_service import login_user, login_with_supabase, register_user, sync_supabase_user
+from app.services.auth_service import InvalidStoredProviderError, LoginProviderMismatchError, LoginProviderRequiredError, login_user, login_with_supabase, register_user, sync_supabase_user, verify_supabase_user
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -19,6 +19,8 @@ FIELD_LABELS = {
     "nickname": "닉네임",
     "phone_number": "핸드폰 번호",
 }
+
+SUPPORTED_LOGIN_PROVIDERS = {"email", "google", "kakao"}
 
 
 def normalize_phone_number(value):
@@ -94,8 +96,75 @@ def request_email_verification():
 
 @auth_bp.post("/sync")
 def sync_user():
+    access_token = (request.headers.get("X-Supabase-Access-Token") or "").strip()
+    if not access_token:
+        return jsonify({"message": "Supabase 인증 토큰이 필요합니다."}), 401
+
     try:
-        return jsonify(sync_supabase_user(request.get_json() or {}))
+        supabase_user = verify_supabase_user(access_token)
+    except ValueError:
+        return jsonify({"message": "Supabase 인증 토큰이 유효하지 않습니다."}), 401
+
+    verified_auth_user_id = (supabase_user.get("id") or "").strip()
+    verified_email = (supabase_user.get("email") or "").strip().lower()
+    if not verified_auth_user_id:
+        return jsonify({"message": "Supabase 사용자 정보를 확인할 수 없습니다."}), 401
+    if not verified_email:
+        return jsonify({"message": "Supabase 계정 이메일을 확인할 수 없습니다."}), 400
+
+    data = request.get_json() or {}
+    requested_login_provider = data.get("login_provider")
+    if requested_login_provider is not None:
+        if not isinstance(requested_login_provider, str):
+            return jsonify({"message": "login_provider 형식이 올바르지 않습니다."}), 400
+        requested_login_provider = requested_login_provider.strip().lower()
+        if requested_login_provider not in SUPPORTED_LOGIN_PROVIDERS:
+            return jsonify({"message": "login_provider 형식이 올바르지 않습니다."}), 400
+
+        verified_identity_providers = {
+            (identity.get("provider") or "").strip().lower()
+            for identity in (supabase_user.get("identities") or [])
+        }
+        if requested_login_provider not in verified_identity_providers:
+            return jsonify({"message": "선택한 로그인 방식을 Supabase 계정에서 확인할 수 없습니다."}), 401
+        data["login_provider"] = requested_login_provider
+    else:
+        # Session restoration has no newly selected login method. Existing
+        # users may restore their session, while new users are still rejected
+        # by sync_supabase_user until an explicit provider is supplied.
+        data.pop("login_provider", None)
+
+    requested_auth_user_id = (data.get("auth_user_id") or data.get("id") or "").strip()
+    requested_email = (data.get("email") or "").strip().lower()
+    if requested_auth_user_id and requested_auth_user_id != verified_auth_user_id:
+        return jsonify({"message": "인증 사용자 정보가 일치하지 않습니다."}), 401
+    if requested_email and requested_email != verified_email:
+        return jsonify({"message": "인증 이메일 정보가 일치하지 않습니다."}), 401
+
+    data["auth_user_id"] = verified_auth_user_id
+    data["email"] = verified_email
+
+    try:
+        return jsonify(sync_supabase_user(data))
+    except LoginProviderRequiredError as error:
+        return jsonify({
+            "success": False,
+            "code": "LOGIN_PROVIDER_REQUIRED",
+            "message": str(error),
+        }), 400
+    except LoginProviderMismatchError as error:
+        return jsonify({
+            "success": False,
+            "code": "LOGIN_PROVIDER_MISMATCH",
+            "registered_provider": error.registered_provider,
+            "message": str(error),
+        }), 409
+    except InvalidStoredProviderError as error:
+        return jsonify({
+            "success": False,
+            "code": "LOGIN_PROVIDER_INVALID",
+            "message": str(error),
+        }), 409
     except ValueError as error:
         msg = str(error)
         if "서비스 점검" in msg:

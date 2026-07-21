@@ -3,9 +3,11 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "concurrently -k -n backend,frontend -c cyan,green \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev": "concurrently -k -n backend,pc,mobile -c cyan,green,magenta \"npm run dev:backend\" \"npm run dev:pc\" \"npm run dev:mobile\"",
     "dev:backend": "cd backend && if exist .venv\\Scripts\\python.exe (.venv\\Scripts\\python.exe -m flask --app run.py run) else (py -3.12 -m flask --app run.py run)",
-    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:frontend": "npm run dev:pc",
+    "dev:pc": "npm --prefix frontend run dev -- --port 5173 --strictPort --open /",
+    "dev:mobile": "npm --prefix frontend run dev -- --port 5174 --strictPort --open /?device=mobile",
     "install:frontend": "npm --prefix frontend install",
     "build": "npm --prefix frontend run build"
   },

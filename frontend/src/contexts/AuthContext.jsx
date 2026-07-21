@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { authApi } from "../api/authApi";
 import { isSupabaseConfigured, supabase } from "../api/supabaseClient";
 
@@ -8,6 +8,49 @@ const SUPABASE_CONFIG_ERROR = "Supabase 환경변수가 설정되지 않아 인�
 const SUPABASE_AUTH_PROVIDERS = ["google", "kakao"];
 const AUTH_PROVIDER_ORDER = ["email", "google", "kakao"];
 const SUPABASE_TOKEN_ERROR_MESSAGE = "인증번호가 만료되었거나 올바르지 않습니다. 메일함의 최신 인증번호를 다시 입력해주세요.";
+const SYNC_RESULT_TTL_MS = 1500;
+const LOGIN_PROVIDERS = ["email", "google", "kakao"];
+const PENDING_LOGIN_PROVIDER_KEY = "sportsmate_pending_login_provider";
+
+function normalizeLoginProvider(provider) {
+  if (typeof provider !== "string") return null;
+  const normalized = provider.trim().toLowerCase();
+  return LOGIN_PROVIDERS.includes(normalized) ? normalized : null;
+}
+
+function readPendingLoginProvider() {
+  const storedProvider = window.sessionStorage.getItem(PENDING_LOGIN_PROVIDER_KEY)
+    || window.localStorage.getItem(PENDING_LOGIN_PROVIDER_KEY);
+  if (!storedProvider) return null;
+  const normalized = normalizeLoginProvider(storedProvider);
+  if (!normalized) clearPendingLoginProvider();
+  return normalized;
+}
+
+function storePendingLoginProvider(provider) {
+  const normalized = normalizeLoginProvider(provider);
+  clearPendingLoginProvider();
+  if (normalized) {
+    window.sessionStorage.setItem(PENDING_LOGIN_PROVIDER_KEY, normalized);
+    window.localStorage.setItem(PENDING_LOGIN_PROVIDER_KEY, normalized);
+  }
+  return normalized;
+}
+
+function clearPendingLoginProvider() {
+  window.sessionStorage.removeItem(PENDING_LOGIN_PROVIDER_KEY);
+  window.localStorage.removeItem(PENDING_LOGIN_PROVIDER_KEY);
+}
+
+function isLoginProviderMismatchError(error) {
+  return error?.response?.data?.code === "LOGIN_PROVIDER_MISMATCH";
+}
+
+function createLoginProviderMismatchError(responseData) {
+  const error = new Error(responseData?.message || "가입한 방식으로 로그인해 주세요.");
+  error.response = { status: 409, data: responseData };
+  return error;
+}
 
 function requireSupabase() {
   if (!isSupabaseConfigured || !supabase) {
@@ -68,7 +111,8 @@ function metadataFromSupabaseUser(user, fallback = {}) {
     provider_id: providerId,
     profile_image_url: metadata.avatar_url || metadata.picture || "",
     allow_nickname_suffix: Boolean(fallback.allow_nickname_suffix),
-    force_profile_update: Boolean(fallback.force_profile_update)
+    force_profile_update: Boolean(fallback.force_profile_update),
+    login_provider: normalizeLoginProvider(fallback.login_provider)
   };
 }
 
@@ -78,36 +122,139 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const [backendTokenReady, setBackendTokenReady] = useState(false);
+  const activeSyncsRef = useRef(new Map());
+  const currentSyncTokenRef = useRef("");
+  const providerMismatchRef = useRef(null);
 
-  const syncProfile = async (supabaseUser, fallback = {}) => {
-    if (!supabaseUser) return null;
-    setAuthError("");
-    const data = await authApi.sync(metadataFromSupabaseUser(supabaseUser, fallback));
-    if (data.access_token) {
-      // 2026-07-01: 보호 API 호출은 백엔드 토큰 발급 이후에만 허용.
-      localStorage.setItem("sportsmate_token", data.access_token);
-      setBackendTokenReady(true);
-    } else {
-      localStorage.removeItem("sportsmate_token");
-      setBackendTokenReady(false);
+  const clearSyncCache = () => {
+    activeSyncsRef.current.forEach((entry) => {
+      if (entry.cleanupTimer) window.clearTimeout(entry.cleanupTimer);
+    });
+    activeSyncsRef.current.clear();
+  };
+
+  const clearAuthenticationAfterProviderMismatch = (error, supabaseAccessToken) => {
+    const message = error?.response?.data?.message || "가입한 방식으로 로그인해 주세요.";
+    providerMismatchRef.current = {
+      accessToken: supabaseAccessToken,
+      responseData: error?.response?.data || { code: "LOGIN_PROVIDER_MISMATCH", message }
+    };
+    clearPendingLoginProvider();
+    currentSyncTokenRef.current = "";
+    clearSyncCache();
+    localStorage.removeItem("sportsmate_token");
+    setBackendTokenReady(false);
+    setUser(null);
+    setSession(null);
+    // This helper can run inside Supabase's onAuthStateChange callback. Awaiting
+    // signOut there deadlocks because signOut waits for the current auth event
+    // callback to finish. Schedule it after the callback has unwound instead.
+    if (supabase) {
+      window.setTimeout(() => {
+        supabase.auth.signOut().catch(() => {});
+      }, 0);
     }
-    if (typeof data.is_new_user === "boolean") {
-      const currentRedirect = localStorage.getItem("sportsmate_post_auth_redirect");
-      const needsProfile = data.profile_intro_required ?? (data.is_new_user || data.profile_complete === false);
-      if (needsProfile) {
-        localStorage.setItem("sportsmate_post_auth_redirect", "/profile/intro");
-      } else if (currentRedirect !== "/profile/intro" && currentRedirect !== "/profile/setup") {
-        localStorage.setItem("sportsmate_post_auth_redirect", "/");
+    setAuthError(message);
+    sessionStorage.setItem("sportsmate_auth_error", message);
+  };
+
+  const syncProfile = (supabaseUser, fallback = {}, supabaseAccessToken = "") => {
+    if (!supabaseUser) return Promise.resolve(null);
+    if (!supabaseAccessToken) {
+      return Promise.reject(new Error("Supabase 로그인 세션을 확인할 수 없습니다."));
+    }
+    const providerMismatch = providerMismatchRef.current;
+    if (providerMismatch?.accessToken === supabaseAccessToken) {
+      return Promise.reject(createLoginProviderMismatchError(providerMismatch.responseData));
+    }
+
+    const syncPayload = metadataFromSupabaseUser(supabaseUser, fallback);
+    const sessionKey = `${supabaseUser.id}:${supabaseAccessToken}:${JSON.stringify(syncPayload)}`;
+    const activeSync = activeSyncsRef.current.get(sessionKey);
+    if (activeSync) {
+      const isReusable = activeSync.status === "pending"
+        || Date.now() - activeSync.completedAt < SYNC_RESULT_TTL_MS;
+      if (isReusable) return activeSync.promise;
+      if (activeSync.cleanupTimer) window.clearTimeout(activeSync.cleanupTimer);
+      activeSyncsRef.current.delete(sessionKey);
+    }
+
+    currentSyncTokenRef.current = supabaseAccessToken;
+    const syncEntry = {
+      promise: null,
+      status: "pending",
+      completedAt: 0,
+      cleanupTimer: null
+    };
+    const syncRequest = (async () => {
+      let data;
+      try {
+        data = await authApi.sync(syncPayload, supabaseAccessToken);
+      } catch (error) {
+        if (isLoginProviderMismatchError(error)) {
+          clearAuthenticationAfterProviderMismatch(error, supabaseAccessToken);
+          throw createLoginProviderMismatchError(error.response.data);
+        }
+        throw error;
       }
-    }
-    setUser(data.user);
-    return data;
+
+      // 로그아웃 또는 다른 세션 전환 뒤 도착한 이전 응답은 인증 상태에 반영하지 않는다.
+      if (currentSyncTokenRef.current !== supabaseAccessToken) return data;
+
+      if (data.access_token) {
+        // 2026-07-01: 보호 API 호출은 백엔드 토큰 발급 이후에만 허용.
+        localStorage.setItem("sportsmate_token", data.access_token);
+        setBackendTokenReady(true);
+      } else {
+        localStorage.removeItem("sportsmate_token");
+        setBackendTokenReady(false);
+      }
+      if (typeof data.is_new_user === "boolean") {
+        const currentRedirect = localStorage.getItem("sportsmate_post_auth_redirect");
+        const needsProfile = data.profile_intro_required ?? (data.is_new_user || data.profile_complete === false);
+        if (needsProfile) {
+          localStorage.setItem("sportsmate_post_auth_redirect", "/profile/intro");
+        } else if (currentRedirect !== "/profile/intro" && currentRedirect !== "/profile/setup") {
+          localStorage.setItem("sportsmate_post_auth_redirect", "/");
+        }
+      }
+      setUser(data.user);
+      setAuthError("");
+      sessionStorage.removeItem("sportsmate_auth_error");
+      return data;
+    })();
+
+    const finishSync = (status) => {
+      syncEntry.status = status;
+      syncEntry.completedAt = Date.now();
+      if (activeSyncsRef.current.get(sessionKey) !== syncEntry) return;
+      syncEntry.cleanupTimer = window.setTimeout(() => {
+        if (activeSyncsRef.current.get(sessionKey) === syncEntry) {
+          activeSyncsRef.current.delete(sessionKey);
+        }
+      }, SYNC_RESULT_TTL_MS);
+    };
+    const sharedSyncRequest = syncRequest.then(
+      (data) => {
+        finishSync("fulfilled");
+        return data;
+      },
+      (error) => {
+        finishSync("rejected");
+        throw error;
+      }
+    );
+    syncEntry.promise = sharedSyncRequest;
+    activeSyncsRef.current.set(sessionKey, syncEntry);
+    return sharedSyncRequest;
   };
 
   useEffect(() => {
     let mounted = true;
 
     if (!isSupabaseConfigured || !supabase) {
+      currentSyncTokenRef.current = "";
+      clearSyncCache();
       setSession(null);
       setUser(null);
       setBackendTokenReady(false);
@@ -120,14 +267,22 @@ export function AuthProvider({ children }) {
     supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
       const currentSession = data.session;
+      const isOAuthCallback = window.location.pathname === "/auth/callback";
       setSession(currentSession);
       localStorage.removeItem("sportsmate_token");
       setBackendTokenReady(false);
-      if (currentSession?.user) {
+      // OAuth 콜백에서는 exchangeCodeForSession/onAuthStateChange가 provider와 함께 동기화한다.
+      // 초기 세션 복원이 먼저 provider 없는 /auth/sync를 보내고 세션을 로그아웃시키는 경쟁을 막는다.
+      if (currentSession?.user && !isOAuthCallback) {
         try {
-          await syncProfile(currentSession.user, { allow_nickname_suffix: true });
+          await syncProfile(currentSession.user, { allow_nickname_suffix: true }, currentSession.access_token);
         } catch (error) {
           const msg = error?.response?.data?.message || error?.message || "로그인 동기화에 실패했습니다.";
+          if (isLoginProviderMismatchError(error)) {
+            setAuthError(msg);
+            setLoading(false);
+            return;
+          }
           if (msg === "정지된 회원입니다.") {
             alert("정지된 회원입니다.");
           }
@@ -142,36 +297,66 @@ export function AuthProvider({ children }) {
       setLoading(false);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       localStorage.removeItem("sportsmate_token");
       setBackendTokenReady(false);
+
+      // The callback page completes OAuth and reports provider mismatches itself.
+      // Starting another sync from the auth event makes setSession wait for this
+      // callback, so the page cannot receive the 409 and navigate to /login.
+      if (nextSession?.user && window.location.pathname === "/auth/callback") {
+        setLoading(false);
+        return;
+      }
+
       if (nextSession?.user) {
-        try {
-          await syncProfile(nextSession.user, { allow_nickname_suffix: true });
-        } catch (error) {
-          const msg = error?.response?.data?.message || error?.message || "로그인 동기화에 실패했습니다.";
-          if (msg === "정지된 회원입니다.") {
-            alert("정지된 회원입니다.");
+        // Never await asynchronous work from inside onAuthStateChange. Supabase
+        // auth methods may wait for this callback to return before resolving.
+        window.setTimeout(async () => {
+          if (!mounted) return;
+          try {
+            await syncProfile(nextSession.user, {
+              allow_nickname_suffix: true,
+              login_provider: readPendingLoginProvider()
+            }, nextSession.access_token);
+          } catch (error) {
+            const msg = error?.response?.data?.message || error?.message || "로그인 동기화에 실패했습니다.";
+            if (isLoginProviderMismatchError(error)) {
+              setAuthError(msg);
+              setLoading(false);
+              return;
+            }
+            if (msg === "정지된 회원입니다.") {
+              alert("정지된 회원입니다.");
+            }
+            setAuthError(msg);
+            setBackendTokenReady(false);
+            setUser(null);
+            if (supabase) {
+              await supabase.auth.signOut().catch(() => {});
+            }
           }
-          setAuthError(msg);
-          setBackendTokenReady(false);
-          setUser(null);
-          if (supabase) {
-            await supabase.auth.signOut().catch(() => {});
-          }
-        }
+          setLoading(false);
+        }, 0);
       } else {
+        if (window.location.pathname !== "/auth/callback") {
+          clearPendingLoginProvider();
+        }
+        currentSyncTokenRef.current = "";
+        clearSyncCache();
         setAuthError("");
         setBackendTokenReady(false);
         setUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => {
       mounted = false;
       listener.subscription.unsubscribe();
+      currentSyncTokenRef.current = "";
+      clearSyncCache();
     };
   }, []);
 
@@ -186,39 +371,60 @@ export function AuthProvider({ children }) {
       async login(payload) {
         localStorage.removeItem("sportsmate_post_auth_redirect");
         const client = requireSupabase();
-        const { data, error } = await client.auth.signInWithPassword({
-          email: payload.email,
-          password: payload.password
-        });
-        if (error) throw error;
+        providerMismatchRef.current = null;
+        setAuthError("");
+        sessionStorage.removeItem("sportsmate_auth_error");
+        storePendingLoginProvider("email");
         try {
-          await syncProfile(data.user, { allow_nickname_suffix: true });
-        } catch (syncError) {
-          await client.auth.signOut().catch(() => {});
-          throw syncError;
+          const { data, error } = await client.auth.signInWithPassword({
+            email: payload.email,
+            password: payload.password
+          });
+          if (error) throw error;
+          try {
+            await syncProfile(data.user, {
+              allow_nickname_suffix: true,
+              login_provider: "email"
+            }, data.session?.access_token);
+          } catch (syncError) {
+            if (!isLoginProviderMismatchError(syncError)) {
+              await client.auth.signOut().catch(() => {});
+            }
+            throw syncError;
+          }
+          return data;
+        } finally {
+          providerMismatchRef.current = null;
+          clearPendingLoginProvider();
         }
-        return data;
       },
       async register(payload) {
         localStorage.removeItem("sportsmate_post_auth_redirect");
         const client = requireSupabase();
-        const { data, error } = await client.auth.signUp({
-          email: payload.email,
-          password: payload.password,
-          options: {
-            emailRedirectTo: getAuthRedirectUrl("/auth/callback"),
-            data: {
-              name: payload.name,
-              nickname: payload.nickname,
-              phone_number: payload.phone_number
+        setAuthError("");
+        sessionStorage.removeItem("sportsmate_auth_error");
+        storePendingLoginProvider("email");
+        try {
+          const { data, error } = await client.auth.signUp({
+            email: payload.email,
+            password: payload.password,
+            options: {
+              emailRedirectTo: getAuthRedirectUrl("/auth/callback"),
+              data: {
+                name: payload.name,
+                nickname: payload.nickname,
+                phone_number: payload.phone_number
+              }
             }
+          });
+          if (error) throw error;
+          if (data.user && data.session?.access_token) {
+            await syncProfile(data.user, { ...payload, login_provider: "email" }, data.session.access_token);
           }
-        });
-        if (error) throw error;
-        if (data.user) {
-          await syncProfile(data.user, payload);
+          return data;
+        } finally {
+          clearPendingLoginProvider();
         }
-        return data;
       },
 
       async requestSignupEmailVerification(email) {
@@ -235,76 +441,108 @@ export function AuthProvider({ children }) {
       },
       async verifySignupEmailCode(email, token) {
         const client = requireSupabase();
-        const { data, error } = await client.auth.verifyOtp({
-          email,
-          token,
-          type: "email"
-        });
-        if (error) {
-          const { data: signupData, error: signupError } = await client.auth.verifyOtp({
+        storePendingLoginProvider("email");
+        try {
+          const { data, error } = await client.auth.verifyOtp({
             email,
             token,
-            type: "signup"
+            type: "email"
           });
-          if (signupError) {
-            const message = signupError.message || "";
-            if (message.toLowerCase().includes("token")) {
-              throw new Error(SUPABASE_TOKEN_ERROR_MESSAGE);
+          if (error) {
+            const { data: signupData, error: signupError } = await client.auth.verifyOtp({
+              email,
+              token,
+              type: "signup"
+            });
+            if (signupError) {
+              const message = signupError.message || "";
+              if (message.toLowerCase().includes("token")) {
+                throw new Error(SUPABASE_TOKEN_ERROR_MESSAGE);
+              }
+              throw signupError;
             }
-            throw signupError;
+            const nextSession = signupData.session || (await client.auth.getSession()).data.session;
+            setSession(nextSession);
+            return signupData;
           }
-          const nextSession = signupData.session || (await client.auth.getSession()).data.session;
+          const nextSession = data.session || (await client.auth.getSession()).data.session;
           setSession(nextSession);
-          return signupData;
+          return data;
+        } catch (error) {
+          clearPendingLoginProvider();
+          throw error;
         }
-        const nextSession = data.session || (await client.auth.getSession()).data.session;
-        setSession(nextSession);
-        return data;
       },
       async registerVerifiedEmail(payload) {
         const client = requireSupabase();
-        const { data: sessionData } = await client.auth.getSession();
-        const currentSession = sessionData.session;
-        const currentUser = currentSession?.user;
-        const confirmedAt = currentUser?.email_confirmed_at || currentUser?.confirmed_at;
-        if (!currentUser || currentUser.email?.toLowerCase() !== payload.email.toLowerCase() || !confirmedAt) {
-          throw new Error("이메일 인증을 완료해주세요.");
-        }
-        const { data, error } = await client.auth.updateUser({
-          password: payload.password,
-          data: {
-            name: payload.name,
-            nickname: payload.nickname,
-            phone_number: payload.phone_number
+        storePendingLoginProvider("email");
+        try {
+          const { data: sessionData } = await client.auth.getSession();
+          const currentSession = sessionData.session;
+          const currentUser = currentSession?.user;
+          const confirmedAt = currentUser?.email_confirmed_at || currentUser?.confirmed_at;
+          if (!currentUser || currentUser.email?.toLowerCase() !== payload.email.toLowerCase() || !confirmedAt) {
+            throw new Error("이메일 인증을 완료해주세요.");
           }
-        });
-        if (error) throw error;
-        const synced = await syncProfile(data.user || currentUser, { ...payload, force_profile_update: true });
-        return synced;
+          const { data, error } = await client.auth.updateUser({
+            password: payload.password,
+            data: {
+              name: payload.name,
+              nickname: payload.nickname,
+              phone_number: payload.phone_number
+            }
+          });
+          if (error) throw error;
+          const synced = await syncProfile(data.user || currentUser, {
+            ...payload,
+            force_profile_update: true,
+            login_provider: "email"
+          }, currentSession.access_token);
+          return synced;
+        } finally {
+          clearPendingLoginProvider();
+        }
       },
       async socialLogin(provider) {
         localStorage.removeItem("sportsmate_post_auth_redirect");
         const client = requireSupabase();
+        providerMismatchRef.current = null;
+        setAuthError("");
+        sessionStorage.removeItem("sportsmate_auth_error");
+        clearPendingLoginProvider();
         const nextProvider = normalizeAuthProvider(provider);
-        const { data, error } = await client.auth.signInWithOAuth({
-          provider: nextProvider,
-          options: {
-            redirectTo: getAuthRedirectUrl("/auth/callback")
-          }
-        });
-        if (error) throw error;
-        return data;
+        storePendingLoginProvider(nextProvider);
+        try {
+          const { data, error } = await client.auth.signInWithOAuth({
+            provider: nextProvider,
+            options: {
+              redirectTo: getAuthRedirectUrl(`/auth/callback?login_provider=${encodeURIComponent(nextProvider)}`)
+            }
+          });
+          if (error) throw error;
+          return data;
+        } catch (error) {
+          clearPendingLoginProvider();
+          throw error;
+        }
       },
       async completeOAuthCallback(callbackUrl = window.location.href) {
         const client = requireSupabase();
         const url = new URL(callbackUrl);
         const searchParams = url.searchParams;
+        const callbackProvider = normalizeLoginProvider(searchParams.get("login_provider"));
+        const pendingProvider = callbackProvider || readPendingLoginProvider();
+        const loginProvider = SUPABASE_AUTH_PROVIDERS.includes(pendingProvider) ? pendingProvider : null;
         let nextUser = null;
+        let nextAccessToken = "";
 
+        try {
         if (searchParams.has("code")) {
-          const { data, error } = await client.auth.exchangeCodeForSession(callbackUrl);
+          const authCode = searchParams.get("code");
+          const { data, error } = await client.auth.exchangeCodeForSession(authCode);
           if (error) throw error;
           nextUser = data.session?.user || data.user || null;
+          nextAccessToken = data.session?.access_token || "";
         }
 
         if (!nextUser) {
@@ -320,20 +558,29 @@ export function AuthProvider({ children }) {
 
             if (error) throw error;
             nextUser = data.session?.user || data.user || null;
+            nextAccessToken = data.session?.access_token || "";
           }
         }
 
-        if (!nextUser) {
+        if (!nextUser || !nextAccessToken) {
           await new Promise((resolve) => window.setTimeout(resolve, 300));
           const { data } = await client.auth.getSession();
-          nextUser = data.session?.user || null;
+          nextUser = nextUser || data.session?.user || null;
+          nextAccessToken = nextAccessToken || data.session?.access_token || "";
         }
 
         if (!nextUser) {
           throw new Error("로그인 세션을 확인하지 못했습니다. 다시 로그인해주세요.");
         }
 
-        return syncProfile(nextUser, { allow_nickname_suffix: true });
+        return await syncProfile(nextUser, {
+          allow_nickname_suffix: true,
+          login_provider: loginProvider
+        }, nextAccessToken);
+        } finally {
+          providerMismatchRef.current = null;
+          clearPendingLoginProvider();
+        }
       },
       async resendSignupEmail(email) {
         const client = requireSupabase();
@@ -348,12 +595,17 @@ export function AuthProvider({ children }) {
         return data;
       },
       async logout() {
+        providerMismatchRef.current = null;
+        clearPendingLoginProvider();
+        currentSyncTokenRef.current = "";
+        clearSyncCache();
         if (isSupabaseConfigured && supabase) {
           await supabase.auth.signOut();
         }
         localStorage.removeItem("sportsmate_token");
         setBackendTokenReady(false);
         setAuthError("");
+        sessionStorage.removeItem("sportsmate_auth_error");
         setUser(null);
         setSession(null);
       },

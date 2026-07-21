@@ -1,4 +1,5 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { useEffect } from "react";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import ResponsiveLayout from "../layouts/ResponsiveLayout.jsx";
 import HomePage from "../pages/HomePage.jsx";
 import LoginPage from "../pages/LoginPage.jsx";
@@ -15,7 +16,6 @@ import ChatRoomPage from "../pages/ChatRoomPage.jsx";
 import ChatbotPage from "../pages/ChatbotPage.jsx";
 import MyPage from "../pages/MyPage.jsx";
 import ProfileEditPage from "../pages/ProfileEditPage.jsx";
-import AccountLinkPage from "../pages/AccountLinkPage.jsx";
 import ProfileIntroPage from "../pages/ProfileIntroPage.jsx";
 import ProfileSetupPage from "../pages/ProfileSetupPage.jsx";
 import MyMeetingsPage from "../pages/MyMeetingsPage.jsx";
@@ -44,6 +44,7 @@ import NotFoundPage from "../pages/NotFoundPage.jsx";
 import NotificationsPage from "../pages/NotificationsPage.jsx";
 import MapPage from "../pages/MapPage.jsx";
 import AppSettingsPage from "../pages/AppSettingsPage.jsx";
+import WeatherPage from "../pages/WeatherPage.jsx";
 import SupportPage from "../pages/SupportPage.jsx";
 import ProtectedRoute from "../components/common/ProtectedRoute.jsx";
 import AdminRoute from "../components/common/AdminRoute.jsx";
@@ -53,7 +54,21 @@ import { useResponsive } from "../hooks/useResponsive.js";
 import MobileAdminNoticesPage from "../components/admin/mobile/MobileAdminNoticesPage.jsx";
 import MobileAdminReportDetailPage from "../components/admin/mobile/MobileAdminReportDetailPage.jsx";
 import MobileAdminSupportPage from "../components/admin/mobile/MobileAdminSupportPage.jsx";
+import MobileTermsPage from "../components/profile/mobile/MobileTermsPage.jsx";
+
 const protect = (element) => <ProtectedRoute>{element}</ProtectedRoute>;
+
+function DesktopScrollToTop() {
+  const { isMobile } = useResponsive();
+  const { pathname, search } = useLocation();
+
+  useEffect(() => {
+    if (isMobile) return;
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [isMobile, pathname, search]);
+
+  return null;
+}
 
 const AdminNoticesRoute = () => {
   const { isMobile } = useResponsive();
@@ -72,8 +87,10 @@ const AdminSupportRoute = () => {
 
 function AppRouter() {
   return (
-    <Routes>
-      <Route element={<ResponsiveLayout />}>
+    <>
+      <DesktopScrollToTop />
+      <Routes>
+        <Route element={<ResponsiveLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
@@ -92,13 +109,14 @@ function AppRouter() {
         <Route path="/support" element={protect(<SupportPage />)} />
         <Route path="/settings" element={protect(<AppSettingsPage />)} />
         <Route path="/map" element={<MapPage />} />
+        <Route path="/weather" element={protect(<WeatherPage />)} />
         <Route path="/mypage" element={protect(<MyPage />)} />
         <Route path="/mypage/profile" element={protect(<ProfileEditPage />)} />
-        <Route path="/mypage/account-link" element={protect(<AccountLinkPage />)} />
         <Route path="/profile/intro" element={protect(<ProfileIntroPage />)} />
         <Route path="/profile/setup" element={protect(<ProfileSetupPage />)} />
         <Route path="/mypage/meetings" element={protect(<MyMeetingsPage />)} />
         <Route path="/mypage/reviews" element={protect(<MyReviewsPage />)} />
+        <Route path="/terms/:type" element={<MobileTermsPage />} />
         <Route path="/host" element={protect(<HostDashboardPage />)} />
         <Route path="/host/meetings/:meetingId" element={protect(<HostMeetingManagePage />)} />
         <Route path="/host/meetings/:meetingId/applicants" element={protect(<HostApplicantsPage />)} />
@@ -110,23 +128,24 @@ function AppRouter() {
         <Route path="*" element={<NotFoundPage />} />
       </Route>
 
-      {/* 관리자 권한이 있는 계정만 접근할 수 있는 라우트입니다. */}
-      <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
-        <Route index element={<AdminPage />} />
-        <Route path="users" element={<AdminUsersPage />} />
-        <Route path="users/:userId" element={<AdminUserDetailPage />} />
-        <Route path="meetings" element={<AdminMeetingsPage />} />
-        <Route path="meetings/:meetingId" element={<AdminMeetingDetailPage />} />
-        <Route path="reports" element={<AdminReportsPage />} />
-        <Route path="reports/:reportId" element={<AdminReportDetailRoute />} />
-        <Route path="broadcast" element={<AdminBroadcastPage />} />
-        <Route path="analytics" element={<AdminAnalyticsPage />} />
-        <Route path="audit-logs" element={<AdminAuditLogsPage />} />
-        <Route path="support" element={<AdminSupportRoute />} />
-        <Route path="notices" element={<AdminNoticesRoute />} />
-        <Route path="settings" element={<AdminSettingsPage />} />
-      </Route>
-    </Routes>
+        {/* 관리자 권한이 있는 계정만 접근할 수 있는 라우트입니다. */}
+        <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+          <Route index element={<AdminPage />} />
+          <Route path="users" element={<AdminUsersPage />} />
+          <Route path="users/:userId" element={<AdminUserDetailPage />} />
+          <Route path="meetings" element={<AdminMeetingsPage />} />
+          <Route path="meetings/:meetingId" element={<AdminMeetingDetailPage />} />
+          <Route path="reports" element={<AdminReportsPage />} />
+          <Route path="reports/:reportId" element={<AdminReportDetailRoute />} />
+          <Route path="broadcast" element={<AdminBroadcastPage />} />
+          <Route path="analytics" element={<AdminAnalyticsPage />} />
+          <Route path="audit-logs" element={<AdminAuditLogsPage />} />
+          <Route path="support" element={<AdminSupportRoute />} />
+          <Route path="notices" element={<AdminNoticesRoute />} />
+          <Route path="settings" element={<AdminSettingsPage />} />
+        </Route>
+      </Routes>
+    </>
   );
 }
 

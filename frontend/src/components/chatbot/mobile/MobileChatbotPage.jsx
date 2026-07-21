@@ -1,4 +1,4 @@
-import { ArrowLeft, Bot, MessageSquare, Plus, Send, Trash2, User, Edit2, Check, X, CalendarDays, ArrowRight, Search, Headphones } from "lucide-react";
+import { ArrowLeft, Bot, CloudSun, MessageSquare, Plus, Send, Trash2, User, Edit2, Check, X, CalendarDays, ArrowRight, Search, Headphones } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { chatbotApi } from "../../../api/chatbotApi";
@@ -16,7 +16,7 @@ function formatChatTime(value) {
 }
 
 function isMyNearbyRequest(content) {
-  return /내\s*(주변|근처|위치)|현재\s*위치|주변\s*모임/.test(content || "");
+  return /내\s*(주변|근처|위치)|현재\s*위치|주변\s*모임|날씨|기온|온도|강수|비\s*(올|와)|눈\s*올|우산|습도|풍속|미세먼지|예보/.test(content || "");
 }
 
 function requestBrowserLocation() {
@@ -44,6 +44,7 @@ function ChatbotActionIcon({ type }) {
   if (type === "schedule") return <CalendarDays size={15} />;
   if (type === "meeting_search") return <Search size={15} />;
   if (type === "support") return <Headphones size={15} />;
+  if (type === "weather") return <CloudSun size={15} />;
   return <ArrowRight size={15} />;
 }
 

@@ -30,7 +30,7 @@ def create_notification(user_id, type, title, message, link_url=None, commit=Fal
 
 def send_web_push(user_id, title, body, url=None):
     public_key = current_app.config.get("VAPID_PUBLIC_KEY")
-    private_key = (current_app.config.get("VAPID_PRIVATE_KEY") or "").replace("\\n", "\n")
+    private_key = current_app.config.get("VAPID_PRIVATE_KEY")
     subject = current_app.config.get("VAPID_SUBJECT") or current_app.config.get("FRONTEND_ORIGIN", [""])[0]
     if not webpush or not public_key or not private_key:
         return {"sent": 0, "skipped": "web_push_not_configured"}

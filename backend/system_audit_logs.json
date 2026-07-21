@@ -61,5 +61,12 @@
     "action_type": "회원 관리",
     "description": "회원 고성민(ID 22)의 계정 활성화 상태 변경 작업을 수행했습니다.",
     "target_id": 22
+  },
+  {
+    "timestamp": "2026-07-20 14:33:38",
+    "admin": "임승찬",
+    "action_type": "회원 관리",
+    "description": "회원 강경근naver(ID 54)의 계정 활성화 상태 변경 작업을 수행했습니다.",
+    "target_id": 54
   }
 ]

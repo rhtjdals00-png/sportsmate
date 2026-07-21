@@ -236,6 +236,56 @@
   box-shadow: 0 16px 30px rgba(79, 70, 229, 0.12);
 }
 
+.mobile-shell .mobile-hero-swiper {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  gap: 16px;
+  padding-bottom: 8px; /* For potential scrollbar or shadow space */
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Firefox */
+}
+.mobile-shell .mobile-hero-swiper::-webkit-scrollbar {
+  display: none; /* Safari and Chrome */
+}
+
+.mobile-shell .mobile-hero-slide {
+  flex: 0 0 100%;
+  scroll-snap-align: center;
+  position: relative;
+  min-height: 180px;
+  border: 1px solid rgba(199, 210, 254, 0.7);
+  border-radius: 28px;
+  background: linear-gradient(135deg, rgba(238, 242, 255, 0.98), rgba(236, 253, 245, 0.86)), #fff;
+  color: var(--mobile-text);
+  padding: 24px 20px;
+  box-shadow: 0 14px 34px rgba(79, 70, 229, 0.10);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.mobile-shell .mobile-hero-slide span {
+  color: var(--mobile-primary);
+  font-size: 13px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.mobile-shell .mobile-hero-slide h1 {
+  margin: 0;
+  color: var(--mobile-text);
+  font-size: 26px;
+  line-height: 1.25;
+}
+
+.mobile-shell .mobile-hero-slide p {
+  margin-top: 8px;
+  color: var(--mobile-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .mobile-shell .quick-actions {
   gap: 12px;
   margin: 18px 0 26px;
@@ -693,7 +743,7 @@
 
 .mobile-shell {
   width: min(100%, 430px);
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .mobile-shell .mobile-main,
@@ -723,19 +773,24 @@
   padding: 0 8px;
 }
 
-.mobile-shell .mobile-icon-input .meeting-date-select {
-  grid-template-columns: minmax(66px, 1fr) minmax(46px, 0.72fr) minmax(46px, 0.72fr);
+.mobile-shell .meeting-date-select {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
 }
 
-.mobile-shell .mobile-icon-input .meeting-time-select {
-  grid-template-columns: minmax(52px, 0.9fr) minmax(42px, 0.75fr) minmax(52px, 0.85fr);
+.mobile-shell .meeting-time-select {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
 }
 
 .mobile-shell .meeting-date-select select,
 .mobile-shell .meeting-time-select select {
   min-width: 0;
-  padding-inline: 4px;
-  font-size: 12px;
+  padding: 0 12px 0 8px !important;
+  font-size: 13px !important;
+  min-height: 42px !important;
 }
 
 @media (min-width: 410px) {
@@ -4556,6 +4611,10 @@
 .mobile-shell select,
 .mobile-shell textarea {
   font-size: 16px;
+}
+
+.mobile-shell select {
+  padding-right: 36px !important;
 }
 
 

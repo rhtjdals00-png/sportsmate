@@ -1,5 +1,5 @@
 import { Headphones, ImagePlus, Send, X, Megaphone, ChevronDown, ChevronUp } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import EmptyState from "../components/common/EmptyState.jsx";
 import LoadingCards from "../components/common/LoadingCards.jsx";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
@@ -55,6 +55,10 @@ function SupportPage() {
   const [noticePage, setNoticePage] = useState(1);
   const inquiries = useAsync(() => supportApi.inquiries(), [refreshKey]);
   const notices = useAsync(() => supportApi.getNotices(), [refreshKey]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   const updateForm = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));

@@ -4,9 +4,36 @@ import Badge from "../../common/Badge.jsx";
 import { formatDateTime, formatMeetingType } from "../../../utils/formatters";
 import { getMeetingCoverImage, isUsingSportThumbnail } from "../../../utils/sportThumbnails";
 
+const WEEKDAY_MAP = {
+  MO: "월",
+  TU: "화",
+  WE: "수",
+  TH: "목",
+  FR: "금",
+  SA: "토",
+  SU: "일"
+};
+
+const parseRepeatDays = (rule) => {
+  if (!rule) return null;
+  const match = rule.match(/BYDAY=([^;]+)/);
+  if (!match) return null;
+  const days = match[1].split(",");
+  const koreanDays = days.map(d => WEEKDAY_MAP[d]).filter(Boolean);
+  if (koreanDays.length === 0) return null;
+  return `매주 ${koreanDays.join(", ")}`;
+};
+
 
 function MeetingCard({ meeting, compact = false }) {
-  const isPast = new Date(meeting.start_at) < new Date();
+  let isPast = false;
+  if (meeting.meeting_type === "regular") {
+    if (meeting.end_at) {
+      isPast = new Date(meeting.end_at) < new Date();
+    }
+  } else {
+    isPast = new Date(meeting.start_at) < new Date();
+  }
   const actualStatus = meeting.status === "cancelled" ? "cancelled" : (isPast ? "closed" : meeting.status);
   const statusLabel = getStatusLabel(actualStatus);
   const coverImage = getMeetingCoverImage(meeting);
@@ -31,6 +58,11 @@ function MeetingCard({ meeting, compact = false }) {
               {meeting.sport?.name || meeting.sport_name}
             </Badge>
             <span className="badge badge--type">{formatMeetingType(meeting.meeting_type)}</span>
+            {meeting.meeting_type === "regular" && parseRepeatDays(meeting.repeat_rule) && (
+              <span className="badge badge--type" style={{ marginLeft: '4px', backgroundColor: '#eef2ff', color: '#4f46e5' }}>
+                {parseRepeatDays(meeting.repeat_rule)}
+              </span>
+            )}
           </div>
           <span className="meeting-card__title">
             {meeting.title}
@@ -41,11 +73,11 @@ function MeetingCard({ meeting, compact = false }) {
       <dl className="meeting-card__meta">
         <div>
           <MapPin size={16} />
-          <span>{meeting.location_name || meeting.address}</span>
+          <span>{meeting.location_name || meeting.address || "장소 미정"}</span>
         </div>
         <div>
           <CalendarClock size={16} />
-          <span>{formatDateTime(meeting.start_at)}</span>
+          <span>{meeting.start_at ? formatDateTime(meeting.start_at) : "일정 미정"}</span>
         </div>
         <div>
           <Users size={16} />

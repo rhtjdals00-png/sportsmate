@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Bike, CalendarClock, CircleDot, Dumbbell, Eye, Footprints, LocateFixed, Map, MapPin, MessageSquareText, Mountain, Navigation, Pin, Route, Search, Star, Trophy, UserRound, UsersRound } from "lucide-react";
+import { Bike, CalendarClock, CircleDot, Dumbbell, Eye, Footprints, LocateFixed, Map, MapPin, MessageSquareText, Mountain, Navigation, Pin, Route, Search, Star, Trophy, UserRound, UsersRound, X } from "lucide-react";
 import EmptyState from "../../common/EmptyState.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import { meetingApi } from "../../../api/meetingApi";
 import { locationApi } from "../../../api/locationApi";
+import { weatherApi } from "../../../api/weatherApi";
 import { useAsync } from "../../../hooks/useAsync";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { formatDateTime, formatMeetingType, formatRegularMeetingSchedule } from "../../../utils/formatters";
 import { getMeetingCoverImage } from "../../../utils/sportThumbnails";
+import DesktopWeatherCard from "./DesktopWeatherCard.jsx";
 
 const DEFAULT_MAP_CENTER = { latitude: 37.5665, longitude: 126.9780 };
 const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
+const JOIN_MESSAGE_MAX_LENGTH = 200;
 
 function getDisplayStartAt(meeting) {
   return meeting?.meeting_type === "regular" ? meeting?.next_session?.start_at || meeting?.start_at : meeting?.start_at;
@@ -20,6 +23,23 @@ function getDisplayStartAt(meeting) {
 function getNextSessionLabel(meeting) {
   if (meeting?.meeting_type !== "regular") return formatDateTime(getDisplayStartAt(meeting));
   return meeting?.next_session?.start_at ? formatDateTime(meeting.next_session.start_at) : "예정된 회차 없음";
+}
+
+function parseMeetingDateTime(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isMeetingOperationEnded(meeting) {
+  if (!meeting) return false;
+  if (meeting.meeting_type === "regular") {
+    if (meeting.next_session?.start_at) return false;
+    const endAt = parseMeetingDateTime(meeting.end_at);
+    return Boolean(endAt && Date.now() >= endAt.getTime());
+  }
+  const endAt = parseMeetingDateTime(meeting.end_at || meeting.start_at);
+  return Boolean(endAt && Date.now() >= endAt.getTime());
 }
 
 function loadNaverMapScript(clientId) {
@@ -296,10 +316,16 @@ function DesktopMeetingDetail() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const [joining, setJoining] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [message, setMessage] = useState({ text: "", tone: "notice" });
   const [refreshKey, setRefreshKey] = useState(0);
   const [mapClientId, setMapClientId] = useState("");
   const [hostProfileOpen, setHostProfileOpen] = useState(false);
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+  const [joinMessage, setJoinMessage] = useState("");
+  const [joinError, setJoinError] = useState("");
+  const joinTextareaRef = useRef(null);
+  const [weather, setWeather] = useState({ loading: true, forecast: null });
   const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId, refreshKey]);
 
   useEffect(() => {
@@ -307,6 +333,51 @@ function DesktopMeetingDetail() {
       .then((data) => setMapClientId(data.naver_dynamic_map_client_id || ""))
       .catch(() => setMapClientId(""));
   }, []);
+
+  useEffect(() => {
+    if (!isJoinModalOpen) return undefined;
+    const timer = window.setTimeout(() => joinTextareaRef.current?.focus(), 0);
+    const onKeyDown = (event) => {
+      if (event.key === "Escape" && !joining) {
+        setIsJoinModalOpen(false);
+        setJoinMessage("");
+        setJoinError("");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isJoinModalOpen, joining]);
+
+  useEffect(() => {
+    let active = true;
+    const meeting = detail.data?.meeting;
+    const at = getDisplayStartAt(meeting);
+    const latitude = Number(meeting?.latitude);
+    const longitude = Number(meeting?.longitude);
+    if (!meeting || !at || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      setWeather({
+        loading: false,
+        forecast: meeting ? { available: false, message: "일정 또는 장소 좌표가 없어 예보를 확인할 수 없습니다." } : null,
+      });
+      return () => { active = false; };
+    }
+    setWeather({ loading: true, forecast: null });
+    weatherApi.forecast({ latitude, longitude, at, address: meeting.address || meeting.location_name || "" })
+      .then((data) => {
+        if (active) setWeather({ loading: false, forecast: data.forecast });
+      })
+      .catch((error) => {
+        if (!active) return;
+        setWeather({
+          loading: false,
+          forecast: { available: false, message: error.response?.data?.message || "예보를 불러오지 못했습니다." },
+        });
+      });
+    return () => { active = false; };
+  }, [detail.data?.meeting, meetingId, refreshKey]);
 
   if (detail.loading) return <LoadingCards count={3} />;
   if (detail.error || !detail.data?.meeting) {
@@ -325,35 +396,114 @@ function DesktopMeetingDetail() {
   const isHost = user?.id === meeting.host?.id || myParticipant?.role === "host";
   const isClosed = meeting.status !== "open";
   const isFull = Number(meeting.current_participants || 0) >= Number(meeting.max_participants || 0);
+  const isOperationEnded = isMeetingOperationEnded(meeting);
+  const isLeaveBlockedStatus = meeting.status === "cancelled" || meeting.status === "suspended";
   const hasApplied = Boolean(myParticipant && myParticipant.role !== "host" && myParticipant.status !== "cancelled");
+  const isMutatingParticipation = joining || cancelling;
+  const canCancelApplication = myParticipant?.status === "pending" && !isMutatingParticipation;
+  const canLeaveMeeting = myParticipant?.status === "approved" && !isHost && !isOperationEnded && !isLeaveBlockedStatus && !isMutatingParticipation;
   const canJoin = !isHost && !hasApplied && !isClosed && !isFull && !joining;
   const chatRoomId = meeting.chat_room_id;
 
-  const joinMeeting = async () => {
+  const closeJoinModal = () => {
+    if (joining) return;
+    setIsJoinModalOpen(false);
+    setJoinMessage("");
+    setJoinError("");
+  };
+
+  const openJoinModal = () => {
+    if (!isAuthenticated) {
+      navigate("/login", { state: { from: `/meetings/${meeting.id}` } });
+      return;
+    }
+    if (!canJoin) return;
+    setJoinMessage("");
+    setJoinError("");
+    setIsJoinModalOpen(true);
+  };
+
+  const joinMeeting = async (event) => {
+    event?.preventDefault();
+    if (joining) return;
     if (!isAuthenticated) {
       navigate("/login", { state: { from: `/meetings/${meeting.id}` } });
       return;
     }
 
+    const trimmedMessage = joinMessage.trim();
+    if (trimmedMessage.length > JOIN_MESSAGE_MAX_LENGTH) {
+      setJoinError(`참가 메시지는 ${JOIN_MESSAGE_MAX_LENGTH}자 이내로 입력해 주세요.`);
+      return;
+    }
+
     setJoining(true);
     setMessage({ text: "", tone: "notice" });
+    setJoinError("");
     try {
-      await meetingApi.join(meeting.id, { join_message: "참여 신청합니다." });
+      await meetingApi.join(meeting.id, { join_message: trimmedMessage });
+      setIsJoinModalOpen(false);
+      setJoinMessage("");
       setMessage({
         text: "참가 신청이 접수됐습니다. 방장 승인 후 참여가 확정됩니다.",
         tone: "notice"
       });
       setRefreshKey((value) => value + 1);
     } catch (error) {
-      setMessage({ text: error.response?.data?.message || "참가 신청을 처리하지 못했습니다.", tone: "error" });
+      setJoinError(error.response?.data?.message || "참가 신청을 처리하지 못했습니다.");
     } finally {
       setJoining(false);
     }
   };
 
+  const cancelJoinRequest = async () => {
+    if (myParticipant?.status !== "pending" || isMutatingParticipation) return;
+    const ok = window.confirm("참가 신청을 취소하시겠습니까?");
+    if (!ok) return;
+
+    setCancelling(true);
+    setMessage({ text: "", tone: "notice" });
+    try {
+      await meetingApi.cancelJoin(meeting.id);
+      setRefreshKey((value) => value + 1);
+    } catch (error) {
+      setMessage({ text: error.response?.data?.message || "신청 취소를 처리하지 못했습니다.", tone: "error" });
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const leaveMeeting = async () => {
+    if (myParticipant?.status !== "approved" || !canLeaveMeeting) return;
+    const ok = window.confirm("모임에서 나가시겠습니까?");
+    if (!ok) return;
+
+    setCancelling(true);
+    setMessage({ text: "", tone: "notice" });
+    try {
+      await meetingApi.cancelJoin(meeting.id);
+      setRefreshKey((value) => value + 1);
+    } catch (error) {
+      setMessage({ text: error.response?.data?.message || "모임 나가기를 처리하지 못했습니다.", tone: "error" });
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const statusLabel = getStatusLabel(meeting.status);
   const participantLabel = getParticipantLabel(myParticipant);
-  const actionLabel = getActionLabel({ joining, isClosed, isFull, isHost, myParticipant });
+  const actionLabel = getActionLabel({
+    joining,
+    cancelling,
+    isClosed,
+    isFull,
+    isHost,
+    isOperationEnded,
+    status: meeting.status,
+    myParticipant
+  });
+  const actionHandler = canCancelApplication ? cancelJoinRequest : canLeaveMeeting ? leaveMeeting : openJoinModal;
+  const actionDisabled = canCancelApplication || canLeaveMeeting ? false : !canJoin;
   const hostSummary = meeting.host_summary || {};
   const coverImage = getMeetingCoverImage(meeting);
 
@@ -385,6 +535,14 @@ function DesktopMeetingDetail() {
               <span className="desktop-meeting-detail__approval-chip">방장 승인 필요</span>
               {participantLabel && <span className="desktop-meeting-relation-badge">{participantLabel}</span>}
             </div>
+          </section>
+
+          <section className="desktop-section desktop-meeting-detail__weather">
+            <div className="desktop-section__head">
+              <h2>모임 날씨</h2>
+              <span>{meeting.meeting_type === "regular" ? "다음 회차 기준" : formatDateTime(getDisplayStartAt(meeting))}</span>
+            </div>
+            <DesktopWeatherCard forecast={weather.forecast} loading={weather.loading} />
           </section>
 
           <section className="desktop-section desktop-meeting-detail__map">
@@ -463,7 +621,7 @@ function DesktopMeetingDetail() {
             {isHost ? (
               <Link className="primary-btn full" to={`/host/meetings/${meeting.id}`}>방장 관리</Link>
             ) : (
-              <button className="primary-btn full" type="button" onClick={joinMeeting} disabled={!canJoin}>
+              <button className="primary-btn full" type="button" onClick={actionHandler} disabled={actionDisabled}>
                 {actionLabel}
               </button>
             )}
@@ -476,6 +634,47 @@ function DesktopMeetingDetail() {
           </section>
         </aside>
       </div>
+
+      {isJoinModalOpen && (
+        <div className="desktop-meeting-join-modal" role="dialog" aria-modal="true" aria-labelledby="desktop-meeting-join-title">
+          <button className="desktop-meeting-join-modal__backdrop" type="button" onClick={closeJoinModal} aria-label="닫기" disabled={joining} />
+          <form className="desktop-meeting-join-modal__panel" onSubmit={joinMeeting}>
+            <div className="desktop-meeting-join-modal__head">
+              <div>
+                <h2 id="desktop-meeting-join-title">참가 신청</h2>
+                <p>방장에게 전달할 메시지를 작성해 주세요.</p>
+              </div>
+              <button type="button" onClick={closeJoinModal} aria-label="닫기" disabled={joining}>
+                <X size={18} />
+              </button>
+            </div>
+            <label className="desktop-meeting-join-modal__field" htmlFor="desktop-meeting-join-message">
+              <span>참가 메시지</span>
+              <textarea
+                id="desktop-meeting-join-message"
+                ref={joinTextareaRef}
+                rows={5}
+                maxLength={JOIN_MESSAGE_MAX_LENGTH}
+                value={joinMessage}
+                onChange={(event) => {
+                  setJoinMessage(event.target.value);
+                  if (joinError) setJoinError("");
+                }}
+                placeholder="간단한 자기소개나 참가하고 싶은 이유를 적어 주세요."
+                disabled={joining}
+              />
+            </label>
+            <div className="desktop-meeting-join-modal__meta">
+              <span>{joinMessage.length} / {JOIN_MESSAGE_MAX_LENGTH}</span>
+            </div>
+            {joinError && <p className="desktop-meeting-join-modal__error">{joinError}</p>}
+            <div className="desktop-meeting-join-modal__actions">
+              <button type="button" onClick={closeJoinModal} disabled={joining}>취소</button>
+              <button type="submit" disabled={joining}>{joining ? "신청 중..." : "신청하기"}</button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
@@ -504,11 +703,18 @@ function getParticipantLabel(participant) {
   return "";
 }
 
-function getActionLabel({ joining, isClosed, isFull, isHost, myParticipant }) {
+function getActionLabel({ joining, cancelling, isClosed, isFull, isHost, isOperationEnded, status, myParticipant }) {
   if (joining) return "신청 중...";
+  if (cancelling && myParticipant?.status === "approved") return "나가는 중...";
+  if (cancelling) return "취소 중...";
   if (isHost) return "방장 관리";
-  if (myParticipant?.status === "pending") return "승인 대기중";
-  if (myParticipant?.status === "approved") return "참여중";
+  if (myParticipant?.status === "pending") return "신청 취소";
+  if (myParticipant?.status === "approved") {
+    if (status === "cancelled") return "취소됨";
+    if (status === "suspended") return "운영중지";
+    if (isOperationEnded) return "운영 종료";
+    return "모임 나가기";
+  }
   if (myParticipant?.status === "rejected") return "신청 거절됨";
   if (isFull) return "모집마감";
   if (isClosed) return "모집종료";

@@ -58,6 +58,12 @@ function LoginPage() {
   }, [authLoading, isAuthenticated, location.state?.from, navigate]);
   const submit = async (event) => {
     event.preventDefault();
+    
+    if (isMobile && (!form.email.trim() || !form.password.trim())) {
+      setError("이메일과 비밀번호를 입력해주세요.");
+      return;
+    }
+
     setError("");
     setLoading(true);
     try {

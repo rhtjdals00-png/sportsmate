@@ -9,6 +9,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 
 const NICKNAME_MAX_LENGTH = 12;
 const MAX_PREFERRED_REGIONS = 2;
+const MAX_INTEREST_SPORTS = 6;
 const DEFAULT_MAP_CENTER = { latitude: 37.5665, longitude: 126.978 };
 const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
 
@@ -321,6 +322,14 @@ function tagLabel(user) {
   return normalized ? `#${normalized}` : "";
 }
 
+function uniqueSportNames(items) {
+  return Array.from(new Set(items.map((item) => String(item || "").trim()).filter(Boolean)));
+}
+
+function isEmailOnlyProvider(user) {
+  return String(user?.provider || "").trim().toLowerCase() === "email";
+}
+
 function buildFormFromUser(user) {
   const profile = user?.profile || {};
   const selectedLocations = [
@@ -465,6 +474,7 @@ function DesktopProfileEdit() {
   const activeSportGroup = sportCategoryGroups.find((group) => String(group.id) === String(activeCategoryId)) || sportCategoryGroups[0];
   const selectableSports = activeSportGroup?.sports || [];
   const displayTag = tagLabel(loadedUser);
+  const canChangePassword = isEmailOnlyProvider(loadedUser || user);
   const savedIntro = loadedUser?.profile?.bio || "아직 한 줄 소개가 없습니다.";
   const newPasswordChecks = getPasswordCheckItems(passwordForm.next);
   const newPasswordStrength = getPasswordStrength(passwordForm.next);
@@ -602,8 +612,8 @@ function DesktopProfileEdit() {
     if (!sportName) return;
     setForm((current) => {
       if (current.preferred_sports.includes(sportName)) return current;
-      if (current.preferred_sports.length >= 6) {
-        alert("선호 종목은 최대 6개까지만 선택할 수 있습니다.");
+      if (uniqueSportNames(current.preferred_sports).length >= MAX_INTEREST_SPORTS) {
+        alert("관심 종목은 최대 6개까지 선택할 수 있습니다.");
         return current;
       }
       return {
@@ -755,6 +765,12 @@ function DesktopProfileEdit() {
       return;
     }
 
+    const normalizedSports = uniqueSportNames(form.preferred_sports);
+    if (normalizedSports.length > MAX_INTEREST_SPORTS) {
+      setSaveError("관심 종목은 최대 6개까지 선택할 수 있습니다.");
+      return;
+    }
+
     setSaving(true);
     try {
       // 2026-07-01: PC 프로필 수정 저장을 백엔드 users/me PATCH와 연결.
@@ -769,7 +785,7 @@ function DesktopProfileEdit() {
         region_2_latitude: form.region_2_latitude,
         region_2_longitude: form.region_2_longitude,
         exercise_level: form.exercise_level,
-        preferred_sports: form.preferred_sports.join(", "),
+        preferred_sports: normalizedSports.join(", "),
         preferred_sport_levels: useSportLevels
           ? { ...form.preferred_sport_levels, all: form.exercise_level }
           : { all: form.exercise_level }
@@ -975,7 +991,7 @@ function DesktopProfileEdit() {
         <div className="desktop-profile-sport-section">
           <div className="desktop-profile-sport-head">
             <span className="desktop-subsection-title">관심 종목</span>
-            <em>{form.preferred_sports.length}개 선택</em>
+            <em>{uniqueSportNames(form.preferred_sports).length}/{MAX_INTEREST_SPORTS}</em>
           </div>
           <div className="desktop-sport-select-row">
             <label>
@@ -1056,13 +1072,15 @@ function DesktopProfileEdit() {
         <div className="section-head">
           <h2>계정 보안</h2>
         </div>
-        <div className="desktop-security-section">
-          <span>
-            <strong>비밀번호</strong>
-            <small>현재 비밀번호 확인 후 새 비밀번호로 변경합니다.</small>
-          </span>
-          <button type="button" onClick={() => setPasswordModalOpen(true)}>비밀번호 변경</button>
-        </div>
+        {canChangePassword && (
+          <div className="desktop-security-section">
+            <span>
+              <strong>비밀번호</strong>
+              <small>현재 비밀번호 확인 후 새 비밀번호로 변경합니다.</small>
+            </span>
+            <button type="button" onClick={() => setPasswordModalOpen(true)}>비밀번호 변경</button>
+          </div>
+        )}
         <div className="desktop-security-section desktop-security-section--danger">
           <span>
             <strong>회원 탈퇴</strong>
@@ -1072,7 +1090,7 @@ function DesktopProfileEdit() {
         </div>
       </section>
 
-      {passwordModalOpen && (
+      {canChangePassword && passwordModalOpen && (
         <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closePasswordModal()}>
           <section className="profile-auth-modal password-change-modal">
             <button className="schedule-modal-close" type="button" onClick={closePasswordModal} disabled={passwordSaving}><X size={18} /></button>

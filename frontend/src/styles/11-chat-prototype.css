@@ -3595,6 +3595,22 @@
   width: min(1120px, calc(100% - 48px));
   margin: 38px auto 80px;
   color: #0f172a;
+  animation: supportSlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.mobile-support-container {
+  animation: supportSlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes supportSlideUp {
+  from {
+    transform: translateY(60px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .support-center-hero {

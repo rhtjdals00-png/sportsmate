@@ -117,7 +117,7 @@
 
 .profile-setup__fields {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -138,17 +138,28 @@
 .profile-setup textarea,
 .profile-setup select {
   width: 100%;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #fff;
+  border: 2px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
   color: #0f172a;
   font: inherit;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.profile-setup input:focus,
+.profile-setup textarea:focus,
+.profile-setup select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
 }
 
 .profile-setup input,
 .profile-setup select {
-  height: 46px;
-  padding: 0 14px;
+  height: 48px;
+  padding: 0 16px;
 }
 
 .profile-setup textarea {
@@ -232,24 +243,34 @@
 .profile-setup__categories button,
 .profile-setup__sport-list button,
 .profile-setup__selected button {
-  border: 1px solid #cbd5e1;
+  border: 2px solid #e2e8f0;
   background: #fff;
   color: #334155;
   font-weight: 800;
   cursor: pointer;
+  border-radius: 16px;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.profile-setup__level-buttons button:active,
+.profile-setup__categories button:active,
+.profile-setup__sport-list button:active {
+  transform: scale(0.96);
 }
 
 .profile-setup__level-buttons button {
   min-height: 48px;
-  border-radius: 8px;
+  border-radius: 16px;
 }
 
 .profile-setup__level-buttons button.is-active,
 .profile-setup__categories button.is-active,
 .profile-setup__sport-list button.is-selected {
-  border-color: #2563eb;
-  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  border-color: #3b82f6;
+  background: linear-gradient(135deg, #3b82f6, #60a5fa);
   color: #fff;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  transform: translateY(-2px);
 }
 
 .profile-setup__section-head {
@@ -324,10 +345,41 @@
   font-weight: 900;
 }
 
+.profile-setup__level-toggle span {
+  display: inline-block;
+  margin-bottom: 0;
+}
+
 .profile-setup__level-toggle input {
-  width: 18px;
-  height: 18px;
-  accent-color: #2563eb;
+  appearance: none;
+  width: 44px;
+  height: 24px;
+  background: #cbd5e1;
+  border-radius: 99px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.profile-setup__level-toggle input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.profile-setup__level-toggle input:checked {
+  background: #3b82f6;
+}
+
+.profile-setup__level-toggle input:checked::after {
+  transform: translateX(20px);
 }
 
 .profile-setup__sport-levels {
@@ -441,169 +493,6 @@
   gap: 10px;
 }
 
-/* 2026-07-02: 소셜 로그인 사용자의 이메일 계정 연동 페이지 구성. */
-.account-link-page {
-  display: block;
-  padding-top: 34px;
-}
-
-.account-link-shell {
-  width: min(760px, 100%);
-  gap: 18px;
-}
-
-.account-link-intro {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 18px;
-  padding: 30px;
-}
-
-.account-link-intro h1 {
-  max-width: 560px;
-  font-size: 1.65rem;
-  line-height: 1.35;
-}
-
-.account-link-intro p:not(.profile-setup__eyebrow) {
-  max-width: 560px;
-}
-
-.account-link-intro > div:first-child {
-  min-width: 0;
-}
-
-.account-link-intro .profile-setup__status {
-  justify-self: start;
-  margin-top: 0;
-}
-
-.account-link-panel {
-  padding: 30px;
-  gap: 22px;
-}
-
-.account-link-fields {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.account-link-fields label {
-  grid-column: auto;
-}
-
-.account-link-email,
-.account-link-password-fields label {
-  grid-column: 1 / -1;
-}
-
-.account-link-panel input[readonly] {
-  background: #f8fafc;
-  color: #64748b;
-}
-
-.account-link-password-input {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 46px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #fff;
-  padding: 0 14px;
-}
-
-.account-link-password-input:focus-within {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
-}
-
-.account-link-password-input svg {
-  color: #94a3b8;
-  flex: 0 0 auto;
-}
-
-.account-link-password-input input {
-  height: 100%;
-  padding: 0;
-  border: 0;
-  box-shadow: none;
-}
-
-.account-link-password-input input:focus {
-  outline: 0;
-}
-
-.account-link-password-input.is-valid {
-  border-color: #2563eb;
-}
-
-.account-link-password-input.is-invalid {
-  border-color: #ef4444;
-}
-
-.account-link-password-meter {
-  margin-top: -10px;
-  border-color: transparent;
-  background: #f8fafc;
-  box-shadow: none;
-}
-
-.account-link-password-fields {
-  margin-top: 4px;
-}
-
-.account-link-agree {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-height: auto;
-  margin-top: 4px;
-  padding: 11px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  color: #475569;
-  font-size: 12px;
-  line-height: 1.5;
-  font-weight: 600;
-  background: #fff;
-}
-
-.account-link-agree input {
-  width: 16px;
-  height: 16px;
-  margin-top: 2px;
-  flex: 0 0 auto;
-}
-
-.account-link-panel .profile-setup__actions {
-  align-items: center;
-  padding-top: 12px;
-}
-
-.account-link-panel .button--primary {
-  background: #2563eb;
-  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.22);
-}
-
-.account-link-panel .button--primary:hover {
-  background: #1d4ed8;
-}
-
-@media (max-width: 860px) {
-  .account-link-fields {
-    grid-template-columns: 1fr;
-  }
-
-  .account-link-fields label,
-  .account-link-email {
-    grid-column: auto;
-  }
-
-  .account-link-password-meter .desktop-auth-password-rules {
-    grid-template-columns: 1fr;
-  }
-}
 
 @media (max-width: 760px) {
   .profile-setup-page {

@@ -17,9 +17,9 @@ function DesktopFooter() {
 
         <div className="desktop-footer__content">
           <nav className="desktop-footer__links" aria-label="푸터 메뉴">
-            <span>이용약관</span>
-            <span>개인정보 처리방침</span>
-            <span>사업자 정보 확인</span>
+            <Link to="/terms/service">이용약관</Link>
+            <Link to="/terms/privacy">개인정보처리방침</Link>
+            <Link to="/terms/location">위치기반서비스</Link>
             <Link className="is-support" to="/support">
               <Headphones size={15} />
               고객센터

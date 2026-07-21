@@ -4,24 +4,20 @@ import {
   Camera,
   ChevronLeft,
   ChevronRight,
-  CircleDot,
   Crown,
   FileText,
   LayoutDashboard,
   MessageCircle,
   Pencil,
-  ShieldCheck,
   Sparkles,
   Users,
   X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { userApi } from "../../../api/userApi";
 import { meetingApi } from "../../../api/meetingApi";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { useAsync } from "../../../hooks/useAsync";
-import { markProfileEditVerified } from "../../../utils/profileEditAccess";
 import { getMeetingCoverImage } from "../../../utils/sportThumbnails";
 import { formatRegularMeetingSchedule } from "../../../utils/formatters";
 
@@ -37,7 +33,7 @@ const MEETING_FILTERS = [
 ];
 
 const levelLabels = {
-  // 2026-07-01: 紐⑤컮???꾨줈??湲곗?怨??숈씪?섍쾶 ?대룞 ?섏? 紐낆묶???듭씪.
+  // 2026-07-01: 모바일 프로필 기준과 동일하게 운동 수준 명칭을 통일.
   beginner: "입문",
   intermediate: "중급",
   advanced: "상급"
@@ -107,6 +103,13 @@ function getDday(value) {
   return diff > 0 ? `D-${diff}` : "종료됨";
 }
 
+function isSameDay(a, b) {
+  return Boolean(a && b)
+    && a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate();
+}
+
 function isUpcomingSchedule(value) {
   if (!value) return false;
   const target = new Date(value);
@@ -148,26 +151,50 @@ function sortSessionsByStart(sessions) {
   });
 }
 
-function isPastByDay(value) {
-  const date = validDate(value);
-  if (!date) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  date.setHours(0, 0, 0, 0);
-  return date < today;
-}
-
 function isPastDateTime(value) {
   const date = validDate(value);
   return date ? date < new Date() : false;
 }
 
-function isMeetingEnded(item) {
-  if (["closed", "completed", "cancelled", "suspended"].includes(item.status)) return true;
-  if (item.meetingType === "regular") {
-    return item.operationEndAt ? isPastDateTime(item.operationEndAt) : false;
+function getScheduleState(item) {
+  const status = String(item.status || "");
+  if (status === "cancelled" || item.sessionStatus === "cancelled") {
+    return { label: "취소됨", isEnded: true, state: "cancelled" };
   }
-  return isPastByDay(item.endTime || item.rawTime);
+  if (status === "suspended") {
+    return { label: "운영중지", isEnded: true, state: "suspended" };
+  }
+  if (status === "completed") {
+    return { label: "종료됨", isEnded: true, state: "ended" };
+  }
+
+  const now = new Date();
+  const start = validDate(item.rawTime);
+  const end = validDate(item.endTime);
+  const operationEnd = validDate(item.operationEndAt);
+
+  if (!start) {
+    if (operationEnd && operationEnd < now) {
+      return { label: "종료됨", isEnded: true, state: "ended" };
+    }
+    return { label: "예정 없음", isEnded: false, state: "unscheduled" };
+  }
+
+  if (end) {
+    if (now >= end) return { label: "종료됨", isEnded: true, state: "ended" };
+    if (now >= start) return { label: "진행 중", isEnded: false, state: "active" };
+  } else if (now > start) {
+    return { label: "종료됨", isEnded: true, state: "ended" };
+  }
+
+  if (isSameDay(start, now)) {
+    return { label: "D-DAY", isEnded: false, state: "today" };
+  }
+  return { label: getDday(item.rawTime), isEnded: false, state: "upcoming" };
+}
+
+function isMeetingEnded(item) {
+  return getScheduleState(item).isEnded;
 }
 
 function filterMeetingItems(items, filter) {
@@ -183,23 +210,24 @@ function tagLabel(user) {
   return normalized ? `#${normalized}` : "";
 }
 
-function hasLinkedEmailProvider(user) {
-  return (user?.provider || "")
-    .split(",")
-    .map((item) => item.trim())
-    .includes("email");
-}
-
 function normalizeMeeting(meeting, state) {
   const isRegular = meeting.meeting_type === "regular";
   const allSessions = sortSessionsByStart(meeting.sessions || []);
   const scheduledSessions = allSessions.filter((session) => session.status === "scheduled");
-  const fallbackNextSession = scheduledSessions.find((session) => isUpcomingSchedule(session.start_at));
+  const now = new Date();
+  const currentSession = scheduledSessions.find((session) => {
+    const start = validDate(session.start_at);
+    const end = validDate(session.end_at);
+    return start && end && start <= now && now < end;
+  });
+  const fallbackNextSession = currentSession || scheduledSessions.find((session) => isUpcomingSchedule(session.start_at));
   const nextSession = isRegular ? meeting.next_session || fallbackNextSession || null : null;
   const lastSession = isRegular ? [...scheduledSessions].reverse().find((session) => validDate(session.start_at)) : null;
-  // 2026-07-13: ?뺢린紐⑥엫? Meeting.start_at留뚯쑝濡?醫낅즺 ?먮떒?섏? ?딄퀬 ?ㅼ젣 ?뚯감 ?곗씠?곕? ?곗꽑?쒕떎.
-  const scheduleStart = isRegular ? (nextSession?.start_at || lastSession?.start_at || null) : meeting.start_at;
-  const scheduleEnd = isRegular ? (nextSession?.end_at || lastSession?.end_at || null) : meeting.end_at;
+  // 2026-07-13: 정기모임은 Meeting.start_at만으로 종료 판단하지 않고 실제 회차 데이터를 우선한다.
+  const operationEndAt = meeting.end_at || null;
+  const shouldUseLastSession = isRegular && !nextSession && operationEndAt && isPastDateTime(operationEndAt);
+  const scheduleStart = isRegular ? (nextSession?.start_at || (shouldUseLastSession ? lastSession?.start_at : null) || null) : meeting.start_at;
+  const scheduleEnd = isRegular ? (nextSession?.end_at || (shouldUseLastSession ? lastSession?.end_at : null) || null) : meeting.end_at;
   return {
     id: meeting.id,
     title: meeting.title || "제목 없는 모임",
@@ -214,7 +242,7 @@ function normalizeMeeting(meeting, state) {
     time: formatDateTime(scheduleStart),
     rawTime: scheduleStart || null,
     endTime: scheduleEnd || null,
-    operationEndAt: meeting.end_at || null,
+    operationEndAt,
     sessions: allSessions,
     member: meetingMemberText(meeting),
     state,
@@ -284,6 +312,14 @@ function ScheduleTag({ children, tone = "sport" }) {
   return <span className={`profile-schedule-tag is-${tone}`}>{children}</span>;
 }
 
+function recruitmentTag(status) {
+  if (status === "open") return { label: "모집중", tone: "sport" };
+  if (status === "full" || status === "closed") return { label: "모집마감", tone: "one-time" };
+  if (status === "cancelled") return { label: "취소됨", tone: "one-time" };
+  if (status === "suspended") return { label: "운영중지", tone: "one-time" };
+  return null;
+}
+
 function MeetingFilterChips({ value, onChange }) {
   return (
     <div className="profile-meeting-filters" aria-label="모임 유형 필터">
@@ -305,7 +341,8 @@ function MeetingFilterChips({ value, onChange }) {
 function ScheduleItem({ item, variant = "schedule" }) {
   const isHost = item.state === "host";
   const showTypeTag = Boolean(item.meetingTypeLabel);
-  const isEnded = isMeetingEnded(item);
+  const scheduleState = getScheduleState(item);
+  const recruitment = recruitmentTag(item.status);
   return (
     <article className={`proto-schedule-item proto-schedule-item--profile ${isHost ? "proto-schedule-item--host" : ""}`}>
       {isHost && (
@@ -316,15 +353,16 @@ function ScheduleItem({ item, variant = "schedule" }) {
       )}
       <img src={item.img} alt={item.title} />
       <div>
-        {(showTypeTag || item.sportName) && (
+        {(showTypeTag || item.sportName || recruitment) && (
           <div className="profile-schedule-tags">
             {showTypeTag && <ScheduleTag tone={item.meetingType === "regular" ? "regular" : "one-time"}>{item.meetingTypeLabel}</ScheduleTag>}
             {item.sportName && <ScheduleTag tone="sport">{item.sportName}</ScheduleTag>}
+            {recruitment && <ScheduleTag tone={recruitment.tone}>{recruitment.label}</ScheduleTag>}
           </div>
         )}
         <div className="schedule-meta-row">
           <span className="schedule-date">{item.time}</span>
-          <span className={`schedule-dday ${isEnded ? "is-ended" : ""}`}>{isEnded ? "종료됨" : getDday(item.rawTime)}</span>
+          <span className={`schedule-dday ${scheduleState.isEnded ? "is-ended" : ""}`}>{scheduleState.label}</span>
         </div>
         <h3>{item.title}</h3>
         {item.repeatLabel && <p>{item.repeatLabel}</p>}
@@ -718,10 +756,6 @@ function DesktopMyPage() {
   const [activeActivity, setActiveActivity] = useState("schedule");
   const [introEdit, setIntroEdit] = useState(false);
   const [introDraft, setIntroDraft] = useState("");
-  const [authOpen, setAuthOpen] = useState(false);
-  const [authPassword, setAuthPassword] = useState("");
-  const [authError, setAuthError] = useState("");
-  const [authChecking, setAuthChecking] = useState(false);
   const [savingIntro, setSavingIntro] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarHighlight, setCalendarHighlight] = useState({ meetingId: "", chatRoomId: "", source: "", autoOpen: false });
@@ -741,8 +775,9 @@ function DesktopMyPage() {
 
   useEffect(() => {
     const panel = searchParams.get("panel");
-    if (panel && ["schedule", "hosted", "joined", "favorite", "reviews"].includes(panel)) {
-      setActiveActivity(panel);
+    if (panel) {
+      const validPanels = ["schedule", "hosted", "joined", "reviews"];
+      setActiveActivity(validPanels.includes(panel) ? panel : "schedule");
     }
     if (searchParams.get("calendar") === "1") {
       setActiveActivity("schedule");
@@ -765,7 +800,7 @@ function DesktopMyPage() {
   const canUseProtectedUserApi = Boolean(authUser && backendTokenReady);
 
   const profileState = useAsync(
-    // 2026-07-01: 諛깆뿏??JWT 以鍮???蹂댄샇 API ?몄텧濡?諛쒖깮?섎뜕 401 諛섎났??諛⑹?.
+    // 2026-07-01: 백엔드 JWT 준비 전 보호 API 호출로 발생하던 401 반복을 방지.
     () => (canUseProtectedUserApi ? userApi.me() : Promise.resolve({ user: null })),
     [canUseProtectedUserApi, authUser?.id, refreshKey]
   );
@@ -925,20 +960,15 @@ function DesktopMyPage() {
     schedule: { label: "다가오는 일정", count: scheduled.length, items: scheduled },
     hosted: { label: "내가 만든 모임", count: filteredHostedMeetings.length, items: filteredHostedMeetings, sourceCount: hostedMeetings.length, filter: createdMeetingFilter, setFilter: setCreatedMeetingFilter },
     joined: { label: "참여한 모임", count: filteredJoinedMeetings.length, items: filteredJoinedMeetings, sourceCount: joinedMeetings.length, filter: joinedMeetingFilter, setFilter: setJoinedMeetingFilter },
-    favorite: { label: "관심 모임", count: 0, items: [] },
     reviews: { label: "후기 관리", count: writtenReviews.length + receivedReviews.length, items: [] }
   };
   const activityMenu = [
     { key: "schedule", label: "다가오는 일정", icon: CalendarDays },
     { key: "hosted", label: "내가 만든 모임", icon: Crown },
     { key: "joined", label: "참여한 모임", icon: Users },
-    { key: "favorite", label: "관심 모임", icon: CircleDot },
     { key: "reviews", label: "후기 관리", icon: FileText }
   ];
   const activePanel = activityPanels[activeActivity];
-  // 2026-07-02: PC ?꾨줈???섏젙 蹂댄샇??SportsMate DB provider??email ?곕룞???ㅼ젣 諛섏쁺??寃쎌슦?먮쭔 ?듦낵.
-  const canVerifyPassword = hasLinkedEmailProvider(user);
-
   const startIntroEdit = () => {
     setIntroDraft(savedIntro.slice(0, PROFILE_INTRO_MAX_LENGTH));
     setIntroEdit(true);
@@ -949,7 +979,7 @@ function DesktopMyPage() {
     const nextIntro = introDraft.trim().slice(0, PROFILE_INTRO_MAX_LENGTH);
     setSavingIntro(true);
     try {
-      // 2026-07-01: PC ???뺣낫 ??以??뚭컻瑜?諛깆뿏???꾨줈??bio? ?곌껐.
+      // 2026-07-01: PC 내 정보 한 줄 소개를 백엔드 프로필 bio와 연결.
       const data = await userApi.updateMe({ bio: nextIntro });
       setCurrentUser?.(data.user);
       setRefreshKey((key) => key + 1);
@@ -1016,7 +1046,7 @@ function DesktopMyPage() {
     const reader = new FileReader();
     reader.onload = async () => {
       const imageUrl = reader.result;
-      // 2026-07-01: ?ㅼ젣 ?뚯씪 ?낅줈??API ?꾩엯 ?꾧퉴吏 ?꾨줈???대?吏 URL ?꾨뱶??誘몃━蹂닿린 媛믪쓣 ???
+      // 2026-07-01: 실제 파일 업로드 API 도입 전까지 프로필 이미지 URL 필드를 미리보기 값으로 저장.
       const data = await userApi.updateMe({ profile_image_url: imageUrl });
       setCurrentUser?.(data.user);
       setRefreshKey((key) => key + 1);
@@ -1025,14 +1055,7 @@ function DesktopMyPage() {
   };
 
   const openProtectedEdit = () => {
-    setAuthError("");
-    if (!canVerifyPassword) {
-      setAuthPassword("");
-      setAuthOpen("account-link");
-      return;
-    }
-    setAuthOpen(true);
-    setAuthPassword("");
+    navigate("/mypage/profile");
   };
 
   useEffect(() => {
@@ -1043,37 +1066,6 @@ function DesktopMyPage() {
       openProtectedEdit();
     }
   }, [searchParams, setSearchParams]);
-
-  const confirmProtectedEdit = async () => {
-    if (!authPassword.trim()) {
-      setAuthError("비밀번호를 입력해 주세요.");
-      return;
-    }
-
-    setAuthChecking(true);
-    setAuthError("");
-    try {
-      if (!isSupabaseConfigured || !supabase) {
-        throw new Error("인증 서비스 설정을 확인해 주세요.");
-      }
-      // 2026-07-02: 鍮꾨?踰덊샇 ?먮낯? Supabase Auth???덉쑝誘濡?Supabase 濡쒓렇??寃利앹쓣 癒쇱? ?섑뻾.
-      const { error: supabaseError } = await supabase.auth.signInWithPassword({
-        email: user?.email || "",
-        password: authPassword
-      });
-      if (supabaseError) {
-        throw new Error("비밀번호가 올바르지 않습니다.");
-      }
-      await userApi.verifyPassword({ password: authPassword });
-      markProfileEditVerified();
-      setAuthOpen(false);
-      navigate("/mypage/profile");
-    } catch (error) {
-      setAuthError(error?.response?.data?.message || "비밀번호 확인에 실패했습니다.");
-    } finally {
-      setAuthChecking(false);
-    }
-  };
 
   if (!authUser && !profileState.loading) {
     return (
@@ -1304,10 +1296,7 @@ function DesktopMyPage() {
                 )}
               </div>
             )}
-            {!meetingsState.loading && !reviewsLoading && activeActivity === "favorite" && (
-              <p className="empty-schedule">관심 모임 기능은 아직 준비 중입니다.</p>
-            )}
-            {!meetingsState.loading && !reviewsLoading && !["reviews", "favorite"].includes(activeActivity) && (
+            {!meetingsState.loading && !reviewsLoading && activeActivity !== "reviews" && (
               activePanel.items.length
                 ? activePanel.items.map((item) => <ScheduleItem key={`${item.state}-${item.id}`} item={item} variant={activeActivity} />)
                 : <p className="empty-schedule">
@@ -1324,44 +1313,6 @@ function DesktopMyPage() {
         </section>
       </div>
 
-      {authOpen === true && (
-        <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setAuthOpen(false)}>
-          <form
-            className="profile-auth-modal"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!authChecking) confirmProtectedEdit();
-            }}
-          >
-            <button className="schedule-modal-close" type="button" onClick={() => setAuthOpen(false)}><X size={18} /></button>
-            <ShieldCheck size={26} />
-            <h2>프로필 수정 확인</h2>
-            <p>중요한 프로필 정보를 수정하기 전에 비밀번호 확인이 필요합니다.</p>
-            <input type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} placeholder="비밀번호 입력" />
-            {authError && <em className="nickname-check warn">{authError}</em>}
-            <div className="profile-auth-actions">
-              <button className="ghost-btn" type="button" onClick={() => setAuthOpen(false)}>취소</button>
-              <button className="primary-small" type="submit" disabled={authChecking}>
-                {authChecking ? "확인 중..." : "확인"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-      {authOpen === "account-link" && (
-        <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setAuthOpen(false)}>
-          <section className="profile-auth-modal">
-            <button className="schedule-modal-close" type="button" onClick={() => setAuthOpen(false)}><X size={18} /></button>
-            <ShieldCheck size={26} />
-            <h2>계정 연동이 필요합니다</h2>
-            <p>소셜 로그인 계정은 이름, 핸드폰 번호, 이메일 로그인 정보를 등록한 뒤 프로필 수정을 이용할 수 있습니다.</p>
-            <div className="profile-auth-actions">
-              <button className="ghost-btn" type="button" onClick={() => setAuthOpen(false)}>나중에 하기</button>
-              <button className="primary-small" type="button" onClick={() => navigate("/mypage/account-link")}>연동하기</button>
-            </div>
-          </section>
-        </div>
-      )}
       {writingReview && (
         <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setWritingReview(null)}>
           <form

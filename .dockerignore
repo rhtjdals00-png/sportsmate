@@ -1,0 +1,12 @@
+node_modules/
+frontend/node_modules/
+.venv/
+backend/.venv/
+__pycache__/
+*.pyc
+.git/
+.DS_Store
+frontend/dist/
+instance/
+backend/sportsmate.db
+backend/chat_mutes.db
