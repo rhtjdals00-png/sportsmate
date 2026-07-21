@@ -430,10 +430,18 @@ def list_meetings(params, current_user_id=None):
     is_recommend = params.get("recommend") in {"1", "true", "yes"}
     if is_recommend:
         query = query.filter(Meeting.status == "open")
-        candidates = query.all()
         preferred_sports_list = []
         user_regions = []
         if current_user_id:
+            # 내가 호스트(생성자)인 모임 제외
+            query = query.filter(Meeting.host_id != current_user_id)
+            # 내가 승인되어 참가 확정(approved)된 모임만 제외 (신청 대기 pending 모임은 포함)
+            joined_subquery = db.session.query(Participant.meeting_id).filter(
+                Participant.user_id == current_user_id,
+                Participant.status == "approved"
+            ).subquery()
+            query = query.filter(~Meeting.id.in_(joined_subquery))
+
             user_obj = User.query.options(joinedload(User.profile)).get(current_user_id)
             if user_obj and user_obj.profile:
                 if user_obj.profile.preferred_sports:
@@ -445,6 +453,8 @@ def list_meetings(params, current_user_id=None):
                         r.strip() for r in user_obj.profile.region.split() if len(r.strip()) > 1
                     ]
 
+
+        candidates = query.all()
 
         def get_recommend_key(meeting):
             # 1순위: 내 관심 종목

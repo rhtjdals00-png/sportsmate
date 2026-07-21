@@ -149,16 +149,22 @@ def update_profile_intro_preference():
 @jwt_required()
 def delete_me():
     user = user_query().get_or_404(int(get_jwt_identity()))
+    from app.utils.timezone import kst_now
     
     try:
-        db.session.delete(user)
+        user.status = "withdrawn_pending"
+        user.withdrawn_at = kst_now()
         db.session.commit()
-        return jsonify({"message": "Successfully deleted account"})
+        return jsonify({
+            "message": "30일 탈퇴 유예 기간이 시작되었습니다. 30일 이내 재로그인 시 계정을 복구할 수 있습니다.",
+            "status": "withdrawn_pending",
+            "withdrawn_at": user.withdrawn_at.isoformat()
+        })
     except Exception as e:
         db.session.rollback()
         from flask import current_app
-        current_app.logger.error(f"Error deleting user {user.id}: {str(e)}")
-        return jsonify({"message": "계정 탈퇴 중 오류가 발생했습니다."}), 500
+        current_app.logger.error(f"Error requesting withdrawal for user {user.id}: {str(e)}")
+        return jsonify({"message": "계정 탈퇴 처리 중 오류가 발생했습니다."}), 500
 
 
 @user_bp.post("/me/verify-password")

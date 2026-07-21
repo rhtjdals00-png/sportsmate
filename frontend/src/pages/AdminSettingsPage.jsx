@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings, Save, RefreshCw, Shield, Bell, HeartHandshake, Database, Search, Calendar, ChevronDown, X } from "lucide-react";
+import { Settings, Save, RefreshCw, Shield, Bell, HeartHandshake, Database, Search, Calendar, ChevronDown, X, Eye, EyeOff } from "lucide-react";
 import { adminApi } from "../api/adminApi";
 import { useResponsive } from "../hooks/useResponsive";
 import MobileAdminSettingsPage from "../components/admin/mobile/MobileAdminSettingsPage.jsx";
@@ -22,14 +22,16 @@ function AdminSettingsPage() {
     autoBanReportCount: 5,
     sessionExpiryMinutes: 60,
     termsVersion: "v1.4",
-    supabaseUrl: "https://rhtjdals00-png.supabase.co",
-    kakaoApiKey: "8f7b2a9d6e4c3f5b8a0d2f9e4c1b5a7d",
+    supabaseUrl: "https://ssuncptlzlmuulqmtnqf.supabase.co",
+    kakaoApiKey: "5d3ec3100e15e07c16c5a3799a090f1c",
     googleClientId: "40413-t9tr8ha.apps.googleusercontent.com"
   });
   const [lastSync, setLastSync] = useState(null);
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [showKakaoApiKey, setShowKakaoApiKey] = useState(false);
+  const [showGoogleClientId, setShowGoogleClientId] = useState(false);
 
   // States for log filtering & pagination
   const [logSearchQuery, setLogSearchQuery] = useState("");
@@ -361,25 +363,45 @@ function AdminSettingsPage() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>Kakao Developers API Key</label>
-                  <input 
-                    type="password" 
-                    name="kakaoApiKey" 
-                    value={settings.kakaoApiKey} 
-                    onChange={handleChange}
-                    style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "13px", fontFamily: "monospace", color: "#334155", outline: "none" }}
-                    required
-                  />
+                  <div style={{ position: "relative" }}>
+                    <input 
+                      type={showKakaoApiKey ? "text" : "password"} 
+                      name="kakaoApiKey" 
+                      value={settings.kakaoApiKey} 
+                      onChange={handleChange}
+                      style={{ width: "100%", padding: "8px 36px 8px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "13px", fontFamily: "monospace", color: "#334155", outline: "none" }}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowKakaoApiKey(prev => !prev)}
+                      title={showKakaoApiKey ? "API 키 숨기기" : "API 키 보기"}
+                      style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: "4px", display: "flex", alignItems: "center" }}
+                    >
+                      {showKakaoApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>Google Cloud Client ID</label>
-                  <input 
-                    type="password" 
-                    name="googleClientId" 
-                    value={settings.googleClientId} 
-                    onChange={handleChange}
-                    style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "13px", fontFamily: "monospace", color: "#334155", outline: "none" }}
-                    required
-                  />
+                  <div style={{ position: "relative" }}>
+                    <input 
+                      type={showGoogleClientId ? "text" : "password"} 
+                      name="googleClientId" 
+                      value={settings.googleClientId} 
+                      onChange={handleChange}
+                      style={{ width: "100%", padding: "8px 36px 8px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "13px", fontFamily: "monospace", color: "#334155", outline: "none" }}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowGoogleClientId(prev => !prev)}
+                      title={showGoogleClientId ? "클라이언트 ID 숨기기" : "클라이언트 ID 보기"}
+                      style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: "4px", display: "flex", alignItems: "center" }}
+                    >
+                      {showGoogleClientId ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

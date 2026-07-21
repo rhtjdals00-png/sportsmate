@@ -30,15 +30,6 @@ function MobileHome() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("one_time"); // "one_time" | "regular"
   const oneTimeMeetings = useAsync(
-<<<<<<< HEAD
-    () => meetingApi.list({ limit: 5, status: "open", recommend: true, meeting_type: "one_time" }),
-    [user?.profile?.preferred_sports, user?.profile?.region]
-  );
-  const regularMeetings = useAsync(
-    () => meetingApi.list({ limit: 5, status: "open", recommend: true, meeting_type: "regular" }),
-    [user?.profile?.preferred_sports, user?.profile?.region]
-  );
-=======
     () => meetingApi.list({ limit: 5, status: "open", meeting_type: "one_time", recommend: true }),
     [user?.profile?.preferred_sports, user?.profile?.region]
   );
@@ -47,7 +38,6 @@ function MobileHome() {
     [user?.profile?.preferred_sports, user?.profile?.region]
   );
   const sportsList = useAsync(() => sportApi.sports(), []);
->>>>>>> main
   const preferredSports = useMemo(
     () => splitPreferredSports(user?.profile?.preferred_sports),
     [user?.profile?.preferred_sports]

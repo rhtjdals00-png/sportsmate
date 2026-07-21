@@ -1,4 +1,4 @@
-import { CalendarClock, MapPin, Plus, Search, Users } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, MapPin, Plus, Search, Users } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMemo, useRef, useState } from "react";
 import EmptyState from "../../common/EmptyState.jsx";
@@ -86,9 +86,25 @@ function DesktopHome() {
   );
   const sports = useAsync(() => sportApi.sports(), []);
   const navigate = useNavigate();
-  const dragStateRef = useRef(null);
-  const dragMovedRef = useRef(false);
+  const oneTimeCarouselRef = useRef(null);
+  const regularCarouselRef = useRef(null);
   const sportItems = sports.data?.items || [];
+
+  const scrollCarousel = (ref, direction) => {
+    if (!ref.current) return;
+    const cardWidth = ref.current.querySelector(".home-card-drag-target")?.clientWidth || 280;
+    const scrollAmount = (cardWidth + 18) * 2;
+    ref.current.scrollBy({
+      left: direction === "left" ? -scrollAmount : scrollAmount,
+      behavior: "smooth"
+    });
+  };
+
+  const oneTimeItems = recommendedOneTime.data?.items || [];
+  const hasOneTimeNav = oneTimeItems.length > 4;
+
+  const regularItems = recommendedRegular.data?.items || [];
+  const hasRegularNav = regularItems.length > 4;
 
   const preferredSports = useMemo(() => {
     if (!user?.profile?.preferred_sports) return [];
@@ -121,50 +137,6 @@ function DesktopHome() {
     }
     return mapped;
   }, [isAuthenticated, preferredSports, sportItems]);
-
-  const startCarouselDrag = (event) => {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    const target = event.currentTarget.closest(".home-card-carousel");
-    if (!target || target.scrollWidth <= target.clientWidth) return;
-    dragMovedRef.current = false;
-    dragStateRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      scrollLeft: target.scrollLeft
-    };
-    target.classList.add("is-dragging");
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  };
-
-  const moveCarouselDrag = (event) => {
-    const target = event.currentTarget.closest(".home-card-carousel");
-    const state = dragStateRef.current;
-    if (!target || !state || state.pointerId !== event.pointerId) return;
-    const deltaX = event.clientX - state.startX;
-    if (Math.abs(deltaX) > 5) {
-      dragMovedRef.current = true;
-      event.preventDefault();
-    }
-    target.scrollLeft = state.scrollLeft - deltaX;
-  };
-
-  const endCarouselDrag = (event) => {
-    if (dragStateRef.current?.pointerId !== event.pointerId) return;
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-    dragStateRef.current = null;
-    const target = event.currentTarget.closest(".home-card-carousel");
-    if (target) {
-      target.classList.remove("is-dragging");
-    }
-  };
-
-  const openRecommendedMeeting = (meetingId) => {
-    if (dragMovedRef.current) {
-      dragMovedRef.current = false;
-      return;
-    }
-    navigate(`/meetings/${meetingId}`);
-  };
 
   const handleRecommendedKeyDown = (event, meetingId) => {
     if (event.key !== "Enter" && event.key !== " ") return;
@@ -249,9 +221,9 @@ function DesktopHome() {
             const { asset, label, sport } = item;
             return (
               <Link key={label} to={`/meetings?sport=${sport?.id || encodeURIComponent(label)}`}>
-                {asset.thumbnail && <img className="home-category-card__image" src={asset.thumbnail} alt="" aria-hidden="true" />}
+                {asset?.thumbnail && <img className="home-category-card__image" src={asset.thumbnail} alt="" aria-hidden="true" />}
                 <span className="home-category-card__hover">
-                  {asset.icon && <img className="home-category-card__icon" src={asset.icon} alt="" aria-hidden="true" />}
+                  {asset?.icon && <img className="home-category-card__icon" src={asset.icon} alt="" aria-hidden="true" />}
                   <strong>{label}</strong>
                   <em>관심 종목 보기</em>
                 </span>
@@ -270,24 +242,42 @@ function DesktopHome() {
           <LoadingCards count={4} />
         ) : recommendedOneTime.error ? (
           <EmptyState title="추천 모임을 불러오지 못했습니다." description="백엔드 서버와 DB 연결 상태를 확인해주세요." actionLabel="모임 게시판" actionTo="/meetings" />
-        ) : recommendedOneTime.data?.items?.length ? (
-          <div className="home-card-carousel">
-            {recommendedOneTime.data.items.map((meeting) => (
-              <div
-                key={meeting.id}
-                className="home-card-drag-target"
-                role="link"
-                tabIndex={0}
-                onClick={() => openRecommendedMeeting(meeting.id)}
-                onKeyDown={(event) => handleRecommendedKeyDown(event, meeting.id)}
-                onPointerDown={startCarouselDrag}
-                onPointerMove={moveCarouselDrag}
-                onPointerUp={endCarouselDrag}
-                onPointerCancel={endCarouselDrag}
+        ) : oneTimeItems.length ? (
+          <div className="home-carousel-wrapper">
+            {hasOneTimeNav && (
+              <button
+                type="button"
+                className="carousel-nav-btn prev"
+                onClick={() => scrollCarousel(oneTimeCarouselRef, "left")}
+                aria-label="이전 모임"
               >
-                <HomeRecommendedCard meeting={meeting} />
-              </div>
-            ))}
+                <ChevronLeft size={20} />
+              </button>
+            )}
+            <div className={`home-card-carousel ${!hasOneTimeNav ? "no-scroll" : ""}`} ref={oneTimeCarouselRef}>
+              {oneTimeItems.map((meeting) => (
+                <div
+                  key={meeting.id}
+                  className="home-card-drag-target"
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => navigate(`/meetings/${meeting.id}`)}
+                  onKeyDown={(event) => handleRecommendedKeyDown(event, meeting.id)}
+                >
+                  <HomeRecommendedCard meeting={meeting} />
+                </div>
+              ))}
+            </div>
+            {hasOneTimeNav && (
+              <button
+                type="button"
+                className="carousel-nav-btn next"
+                onClick={() => scrollCarousel(oneTimeCarouselRef, "right")}
+                aria-label="다음 모임"
+              >
+                <ChevronRight size={20} />
+              </button>
+            )}
           </div>
         ) : (
           <EmptyState title="아직 등록된 일회성 모임이 없습니다." actionLabel="모임 만들기" actionTo="/meetings/create" />
@@ -303,24 +293,42 @@ function DesktopHome() {
           <LoadingCards count={4} />
         ) : recommendedRegular.error ? (
           <EmptyState title="추천 모임을 불러오지 못했습니다." description="백엔드 서버와 DB 연결 상태를 확인해주세요." actionLabel="모임 게시판" actionTo="/meetings" />
-        ) : recommendedRegular.data?.items?.length ? (
-          <div className="home-card-carousel">
-            {recommendedRegular.data.items.map((meeting) => (
-              <div
-                key={meeting.id}
-                className="home-card-drag-target"
-                role="link"
-                tabIndex={0}
-                onClick={() => openRecommendedMeeting(meeting.id)}
-                onKeyDown={(event) => handleRecommendedKeyDown(event, meeting.id)}
-                onPointerDown={startCarouselDrag}
-                onPointerMove={moveCarouselDrag}
-                onPointerUp={endCarouselDrag}
-                onPointerCancel={endCarouselDrag}
+        ) : regularItems.length ? (
+          <div className="home-carousel-wrapper">
+            {hasRegularNav && (
+              <button
+                type="button"
+                className="carousel-nav-btn prev"
+                onClick={() => scrollCarousel(regularCarouselRef, "left")}
+                aria-label="이전 모임"
               >
-                <HomeRecommendedCard meeting={meeting} />
-              </div>
-            ))}
+                <ChevronLeft size={20} />
+              </button>
+            )}
+            <div className={`home-card-carousel ${!hasRegularNav ? "no-scroll" : ""}`} ref={regularCarouselRef}>
+              {regularItems.map((meeting) => (
+                <div
+                  key={meeting.id}
+                  className="home-card-drag-target"
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => navigate(`/meetings/${meeting.id}`)}
+                  onKeyDown={(event) => handleRecommendedKeyDown(event, meeting.id)}
+                >
+                  <HomeRecommendedCard meeting={meeting} />
+                </div>
+              ))}
+            </div>
+            {hasRegularNav && (
+              <button
+                type="button"
+                className="carousel-nav-btn next"
+                onClick={() => scrollCarousel(regularCarouselRef, "right")}
+                aria-label="다음 모임"
+              >
+                <ChevronRight size={20} />
+              </button>
+            )}
           </div>
         ) : (
           <EmptyState title="아직 등록된 정기 모임이 없습니다." actionLabel="모임 만들기" actionTo="/meetings/create" />

@@ -327,3 +327,33 @@ const sportIconRules = [
 export function getSportIcon(sportName) {
   return sportIconRules.find((rule) => rule.pattern.test(sportName || ""))?.icon || Landmark;
 }
+
+const SPORT_EMOJI_RULES = [
+  { pattern: /축구|풋살|족구/, emoji: "⚽" },
+  { pattern: /농구/, emoji: "🏀" },
+  { pattern: /배구/, emoji: "🏐" },
+  { pattern: /야구/, emoji: "⚾" },
+  { pattern: /배드민턴/, emoji: "🏸" },
+  { pattern: /탁구/, emoji: "🏓" },
+  { pattern: /테니스|스쿼시/, emoji: "🎾" },
+  { pattern: /러닝|마라톤|달리기/, emoji: "🏃" },
+  { pattern: /등산|산악/, emoji: "🏔️" },
+  { pattern: /트레킹|트래킹|하이킹/, emoji: "🥾" },
+  { pattern: /자전거|라이딩|사이클/, emoji: "🚴" },
+  { pattern: /산책|워킹|걷기/, emoji: "🚶" },
+  { pattern: /헬스|웨이트|피트니스|크로스핏/, emoji: "🏋️" },
+  { pattern: /클라이밍|암벽/, emoji: "🧗" },
+  { pattern: /요가|필라테스/, emoji: "🧘" },
+  { pattern: /볼링/, emoji: "🎳" },
+  { pattern: /당구|포켓볼/, emoji: "🎱" },
+  { pattern: /골프/, emoji: "⛳" },
+  { pattern: /수영|스위밍/, emoji: "🏊" },
+  { pattern: /스케이트|보드/, emoji: "🛹" },
+  { pattern: /스키|스노우보드/, emoji: "🏂" },
+];
+
+export function getSportEmoji(sportName) {
+  const name = String(sportName || "").trim();
+  if (!name) return "👟";
+  return SPORT_EMOJI_RULES.find((rule) => rule.pattern.test(name))?.emoji || "👟";
+}

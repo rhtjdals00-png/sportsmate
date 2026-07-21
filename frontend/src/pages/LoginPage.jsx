@@ -68,7 +68,7 @@ function LoginPage() {
     setLoading(true);
     try {
       await login(form);
-      sessionStorage.setItem("sportsmate_flash", "로그인하셨습니다.");
+      sessionStorage.setItem("sportsmate_flash", "로그인 되었습니다.");
       navigate(location.state?.from || "/");
     } catch (submitError) {
       setError(loginErrorMessage(submitError));

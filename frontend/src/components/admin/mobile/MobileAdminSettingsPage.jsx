@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings, Save, RefreshCw, Shield, Bell, Database, ClipboardList } from "lucide-react";
+import { Settings, Save, RefreshCw, Shield, Bell, Database, ClipboardList, Eye, EyeOff } from "lucide-react";
 import { adminApi } from "../../../api/adminApi";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 
@@ -15,13 +15,15 @@ function MobileAdminSettingsPage() {
     autoBanReportCount: 5,
     sessionExpiryMinutes: 60,
     termsVersion: "v1.4",
-    supabaseUrl: "https://rhtjdals00-png.supabase.co",
-    kakaoApiKey: "8f7b2a9d6e4c3f5b8a0d2f9e4c1b5a7d",
+    supabaseUrl: "https://ssuncptlzlmuulqmtnqf.supabase.co",
+    kakaoApiKey: "5d3ec3100e15e07c16c5a3799a090f1c",
     googleClientId: "40413-t9tr8ha.apps.googleusercontent.com"
   });
   const [lastSync, setLastSync] = useState(null);
   const [showLogs, setShowLogs] = useState(false);
   const [logs, setLogs] = useState([]);
+  const [showKakaoApiKey, setShowKakaoApiKey] = useState(false);
+  const [showGoogleClientId, setShowGoogleClientId] = useState(false);
   const [logsLoading, setLogsLoading] = useState(false);
 
   const fetchSettings = async () => {
@@ -251,13 +253,43 @@ function MobileAdminSettingsPage() {
               </div>
               <div style={{ display: 'grid', gap: '4px' }}>
                 <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}>Kakao Developers REST Key</label>
-                <input 
-                  type="password" 
-                  name="kakaoApiKey" 
-                  value={settings.kakaoApiKey} 
-                  onChange={handleChange}
-                  style={{ height: '36px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 10px', fontSize: '13px' }}
-                />
+                <div style={{ position: 'relative' }}>
+                  <input 
+                    type={showKakaoApiKey ? "text" : "password"} 
+                    name="kakaoApiKey" 
+                    value={settings.kakaoApiKey} 
+                    onChange={handleChange}
+                    style={{ width: '100%', height: '36px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 36px 0 10px', fontSize: '13px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKakaoApiKey(prev => !prev)}
+                    title={showKakaoApiKey ? "API 키 숨기기" : "API 키 보기"}
+                    style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px', display: 'flex', alignItems: 'center' }}
+                  >
+                    {showKakaoApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gap: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}>Google Cloud Client ID</label>
+                <div style={{ position: 'relative' }}>
+                  <input 
+                    type={showGoogleClientId ? "text" : "password"} 
+                    name="googleClientId" 
+                    value={settings.googleClientId} 
+                    onChange={handleChange}
+                    style={{ width: '100%', height: '36px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 36px 0 10px', fontSize: '13px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowGoogleClientId(prev => !prev)}
+                    title={showGoogleClientId ? "클라이언트 ID 숨기기" : "클라이언트 ID 보기"}
+                    style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px', display: 'flex', alignItems: 'center' }}
+                  >
+                    {showGoogleClientId ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
               </div>
             </div>
           </article>

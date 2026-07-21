@@ -177,51 +177,157 @@ def _short_item(values, forecast_at):
     }
 
 
-def get_daily_forecast(latitude, longitude):
+def _fetch_open_meteo_daily(latitude, longitude):
     now = datetime.now()
-    grouped = _group_short_rows(_short_rows(latitude, longitude, now))
-    parsed = []
-    for timestamp, values in sorted(grouped.items()):
-        try:
-            forecast_at = datetime.strptime(timestamp, "%Y%m%d%H%M")
-        except ValueError:
-            continue
-        item = _short_item(values, forecast_at)
-        if item.get("temperature_c") is not None:
-            parsed.append(item)
+    url = (
+        f"https://api.open-meteo.com/v1/forecast?"
+        f"latitude={latitude}&longitude={longitude}"
+        f"&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m"
+        f"&hourly=temperature_2m,precipitation_probability,weather_code,wind_speed_10m"
+        f"&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+        f"&timezone=Asia%2FSeoul"
+    )
+    request = Request(url, headers={"User-Agent": "SportsMate/1.0"})
+    try:
+        with urlopen(request, timeout=8) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except Exception as e:
+        raise WeatherServiceError("날씨 정보를 불러오지 못했습니다.") from e
 
-    if not parsed:
-        raise WeatherServiceError("오늘의 예보 데이터가 없습니다.")
+    def map_wmo_code(code):
+        if code == 0:
+            return "clear", "맑음"
+        elif code in (1, 2, 3):
+            return "partly_cloudy", "구름많음"
+        elif code in (45, 48):
+            return "cloudy", "안개"
+        elif code in (51, 53, 55, 61, 63, 65, 80, 81, 82):
+            return "rain", "비"
+        elif code in (71, 73, 75, 77, 85, 86):
+            return "snow", "눈"
+        elif code in (95, 96, 99):
+            return "shower", "소나기"
+        return "cloudy", "흐림"
 
-    current = min(parsed, key=lambda item: abs(datetime.fromisoformat(item["forecast_at"]) - now))
-    hourly = [item for item in parsed if now - timedelta(hours=1) <= datetime.fromisoformat(item["forecast_at"]) <= now + timedelta(hours=24)][:24]
-    by_date = {}
-    for item in parsed:
-        date_value = item["forecast_at"][:10]
-        day = by_date.setdefault(date_value, [])
-        day.append(item)
+    cur = data.get("current", {})
+    cur_temp = cur.get("temperature_2m")
+    cur_code = cur.get("weather_code", 0)
+    cur_cond, cur_label = map_wmo_code(cur_code)
+    cur_wind = cur.get("wind_speed_10m")
+    cur_pop = 0
 
-    daily = []
-    for date_value, items in sorted(by_date.items())[:3]:
-        temperatures = [item["temperature_c"] for item in items if item.get("temperature_c") is not None]
-        representative = min(items, key=lambda item: abs(datetime.fromisoformat(item["forecast_at"]).hour - 14))
-        daily.append({
-            "date": date_value,
-            "condition": representative["condition"],
-            "condition_label": representative["condition_label"],
-            "temperature_min_c": min(temperatures) if temperatures else None,
-            "temperature_max_c": max(temperatures) if temperatures else None,
-            "precipitation_probability": max((item.get("precipitation_probability") or 0) for item in items),
+    current_item = {
+        "forecast_at": now.isoformat(),
+        "condition": cur_cond,
+        "condition_label": cur_label,
+        "temperature_c": cur_temp,
+        "precipitation_probability": cur_pop,
+        "precipitation_mm": 0,
+        "humidity": cur.get("relative_humidity_2m"),
+        "wind_speed_ms": cur_wind,
+        "message": _advice(cur_label, cur_pop, cur_wind, cur_temp)
+    }
+
+    hourly_list = []
+    hourly_data = data.get("hourly", {})
+    times = hourly_data.get("time", [])
+    temps = hourly_data.get("temperature_2m", [])
+    pops = hourly_data.get("precipitation_probability", [])
+    codes = hourly_data.get("weather_code", [])
+    winds = hourly_data.get("wind_speed_10m", [])
+
+    for i in range(min(24, len(times))):
+        h_cond, h_label = map_wmo_code(codes[i] if i < len(codes) else 0)
+        hourly_list.append({
+            "forecast_at": times[i] if i < len(times) else now.isoformat(),
+            "condition": h_cond,
+            "condition_label": h_label,
+            "temperature_c": temps[i] if i < len(temps) else None,
+            "precipitation_probability": pops[i] if i < len(pops) else 0,
+            "wind_speed_ms": winds[i] if i < len(winds) else None,
+        })
+
+    daily_list = []
+    daily_data = data.get("daily", {})
+    d_times = daily_data.get("time", [])
+    d_codes = daily_data.get("weather_code", [])
+    d_mins = daily_data.get("temperature_2m_min", [])
+    d_maxs = daily_data.get("temperature_2m_max", [])
+    d_pops = daily_data.get("precipitation_probability_max", [])
+
+    for i in range(min(3, len(d_times))):
+        d_cond, d_label = map_wmo_code(d_codes[i] if i < len(d_codes) else 0)
+        daily_list.append({
+            "date": d_times[i],
+            "condition": d_cond,
+            "condition_label": d_label,
+            "temperature_min_c": d_mins[i] if i < len(d_mins) else None,
+            "temperature_max_c": d_maxs[i] if i < len(d_maxs) else None,
+            "precipitation_probability": d_pops[i] if i < len(d_pops) else 0,
         })
 
     return {
         "available": True,
-        "current": current,
-        "hourly": hourly,
-        "daily": daily,
-        "source": "기상청",
+        "current": current_item,
+        "hourly": hourly_list,
+        "daily": daily_list,
+        "source": "Open-Meteo",
         "fetched_at": now.isoformat(timespec="seconds"),
     }
+
+
+def get_daily_forecast(latitude, longitude):
+    key = current_app.config.get("KMA_API_KEY", "").strip()
+    if not key:
+        return _fetch_open_meteo_daily(latitude, longitude)
+
+    try:
+        now = datetime.now()
+        grouped = _group_short_rows(_short_rows(latitude, longitude, now))
+        parsed = []
+        for timestamp, values in sorted(grouped.items()):
+            try:
+                forecast_at = datetime.strptime(timestamp, "%Y%m%d%H%M")
+            except ValueError:
+                continue
+            item = _short_item(values, forecast_at)
+            if item.get("temperature_c") is not None:
+                parsed.append(item)
+
+        if not parsed:
+            return _fetch_open_meteo_daily(latitude, longitude)
+
+        current = min(parsed, key=lambda item: abs(datetime.fromisoformat(item["forecast_at"]) - now))
+        hourly = [item for item in parsed if now - timedelta(hours=1) <= datetime.fromisoformat(item["forecast_at"]) <= now + timedelta(hours=24)][:24]
+        by_date = {}
+        for item in parsed:
+            date_value = item["forecast_at"][:10]
+            day = by_date.setdefault(date_value, [])
+            day.append(item)
+
+        daily = []
+        for date_value, items in sorted(by_date.items())[:3]:
+            temperatures = [item["temperature_c"] for item in items if item.get("temperature_c") is not None]
+            representative = min(items, key=lambda item: abs(datetime.fromisoformat(item["forecast_at"]).hour - 14))
+            daily.append({
+                "date": date_value,
+                "condition": representative["condition"],
+                "condition_label": representative["condition_label"],
+                "temperature_min_c": min(temperatures) if temperatures else None,
+                "temperature_max_c": max(temperatures) if temperatures else None,
+                "precipitation_probability": max((item.get("precipitation_probability") or 0) for item in items),
+            })
+
+        return {
+            "available": True,
+            "current": current,
+            "hourly": hourly,
+            "daily": daily,
+            "source": "기상청",
+            "fetched_at": now.isoformat(timespec="seconds"),
+        }
+    except Exception:
+        return _fetch_open_meteo_daily(latitude, longitude)
 
 
 MID_REGIONS = [
@@ -282,8 +388,18 @@ def get_forecast(latitude, longitude, target, address=""):
     now = datetime.now()
     if target < now - timedelta(hours=2):
         return {"available": False, "forecast_type": "unavailable", "forecast_at": target.isoformat(), "message": "지난 일정의 예보는 제공하지 않습니다."}
-    days = (target.date() - now.date()).days
-    result = _short_forecast(latitude, longitude, target, now) if days <= 3 else _mid_forecast(target, address, now) if days <= 10 else None
-    if result is None:
-        result = {"available": False, "forecast_type": "unavailable", "forecast_at": target.isoformat(), "message": "아직 발표되지 않은 예보입니다. 일정이 가까워지면 확인할 수 있습니다."}
-    return {**result, "source": "기상청", "fetched_at": now.isoformat(timespec="seconds")}
+    
+    key = current_app.config.get("KMA_API_KEY", "").strip()
+    if not key:
+        daily_res = _fetch_open_meteo_daily(latitude, longitude)
+        return {**daily_res["current"], "source": "Open-Meteo", "fetched_at": now.isoformat(timespec="seconds")}
+
+    try:
+        days = (target.date() - now.date()).days
+        result = _short_forecast(latitude, longitude, target, now) if days <= 3 else _mid_forecast(target, address, now) if days <= 10 else None
+        if result is None:
+            result = {"available": False, "forecast_type": "unavailable", "forecast_at": target.isoformat(), "message": "아직 발표되지 않은 예보입니다. 일정이 가까워지면 확인할 수 있습니다."}
+        return {**result, "source": "기상청", "fetched_at": now.isoformat(timespec="seconds")}
+    except Exception:
+        daily_res = _fetch_open_meteo_daily(latitude, longitude)
+        return {**daily_res["current"], "source": "Open-Meteo", "fetched_at": now.isoformat(timespec="seconds")}

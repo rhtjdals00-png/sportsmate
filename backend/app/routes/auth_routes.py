@@ -4,7 +4,7 @@ from sqlalchemy import text
 
 from app.extensions import db
 from app.models import User
-from app.services.auth_service import InvalidStoredProviderError, LoginProviderMismatchError, LoginProviderRequiredError, login_user, login_with_supabase, register_user, sync_supabase_user, verify_supabase_user
+from app.services.auth_service import InvalidStoredProviderError, LoginProviderMismatchError, LoginProviderRequiredError, login_user, login_with_supabase, register_user, restore_user, sync_supabase_user, verify_supabase_user
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -212,3 +212,13 @@ def logout():
 def me():
     user = User.query.get_or_404(int(get_jwt_identity()))
     return jsonify({"user": user.to_dict()})
+
+
+@auth_bp.post("/restore")
+@jwt_required()
+def restore():
+    try:
+        user_id = int(get_jwt_identity())
+        return jsonify(restore_user(user_id))
+    except ValueError as error:
+        return jsonify({"message": str(error)}), 400
