@@ -12,14 +12,29 @@ function value(value, suffix) {
   return value === null || value === undefined ? null : `${Math.round(Number(value) * 10) / 10}${suffix}`;
 }
 
-export default function DesktopWeatherCard({ forecast, loading = false, title = "모임 날씨" }) {
+function forecastDateLabel(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+export default function DesktopWeatherCard({ forecast, loading = false, title = "모임 날씨", selectedAt = "" }) {
   if (loading) return <div className="desktop-weather-card is-loading">기상청 예보를 확인하고 있습니다.</div>;
   if (!forecast) return null;
+  const targetLabel = forecastDateLabel(forecast.forecast_at || selectedAt);
   if (!forecast.available) {
+    const unavailableMessage = forecast.forecast_type === "unavailable" ? "기상정보가 없습니다." : forecast.message;
     return (
       <div className="desktop-weather-card is-unavailable">
         <Cloud size={26} />
-        <div><strong>{title}</strong><p>{forecast.message}</p></div>
+        <div><strong>{title}{targetLabel ? ` · ${targetLabel}` : ""}</strong><p>{unavailableMessage}</p></div>
       </div>
     );
   }
@@ -31,7 +46,7 @@ export default function DesktopWeatherCard({ forecast, loading = false, title = 
     <div className="desktop-weather-card">
       <div className="desktop-weather-card__summary">
         <span><WeatherIcon condition={forecast.condition} /></span>
-        <div><small>{title} · 기상청 {forecast.forecast_type === "mid" ? "중기" : "단기"}예보</small><strong>{forecast.condition_label}{temperature ? ` ${temperature}` : ""}</strong></div>
+        <div><small>{title}{targetLabel ? ` · ${targetLabel}` : ""} · 기상청 {forecast.forecast_type === "mid" ? "중기" : "단기"}예보</small><strong>{forecast.condition_label}{temperature ? ` ${temperature}` : ""}</strong></div>
       </div>
       <div className="desktop-weather-card__metrics">
         {range && <span>최저/최고 <strong>{range}</strong></span>}

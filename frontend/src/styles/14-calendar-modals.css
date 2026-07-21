@@ -187,6 +187,65 @@
   object-fit: cover;
 }
 
+.schedule-modal-item > div {
+  position: relative;
+  min-width: 0;
+}
+
+.schedule-modal-item > div:has(.profile-calendar-weather) {
+  min-height: 86px;
+  padding-right: 196px;
+}
+
+.profile-calendar-weather {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  width: 184px;
+  max-width: 184px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 0;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.profile-calendar-weather > svg {
+  flex: 0 0 auto;
+}
+
+.profile-calendar-weather strong {
+  color: #172554;
+  font-size: 13px;
+}
+
+.profile-calendar-weather span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #475569;
+}
+
+@media (max-width: 680px) {
+  .schedule-modal-item > div:has(.profile-calendar-weather) {
+    min-height: 0;
+    padding-right: 0;
+  }
+
+  .profile-calendar-weather {
+    position: static;
+    width: fit-content;
+    max-width: 100%;
+    margin-top: 9px;
+  }
+}
+
 .schedule-modal-status {
   display: flex;
   align-items: center;

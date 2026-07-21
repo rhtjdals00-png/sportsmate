@@ -2,11 +2,19 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   CalendarDays,
   Camera,
+  Cloud,
+  CloudRain,
+  ChevronLeft,
+  ChevronRight,
   Crown,
+  Droplets,
   FileText,
   LayoutDashboard,
   MessageCircle,
   Pencil,
+  Snowflake,
+  Sparkles,
+  Sun,
   Users,
   X
 } from "lucide-react";
@@ -20,6 +28,7 @@ import DesktopScheduleCalendarModal, {
   normalizeDesktopScheduleMeeting
 } from "../../schedule/desktop/DesktopScheduleCalendarModal.jsx";
 import { getDesktopScheduleState } from "../../schedule/desktop/DesktopScheduleCard.jsx";
+import { weatherApi } from "../../../api/weatherApi";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { useAsync } from "../../../hooks/useAsync";
 
@@ -102,6 +111,50 @@ function tagLabel(user) {
   return normalized ? `#${normalized}` : "";
 }
 
+function normalizeMeeting(meeting, state) {
+  const isRegular = meeting.meeting_type === "regular";
+  const allSessions = sortSessionsByStart(meeting.sessions || []);
+  const scheduledSessions = allSessions.filter((session) => session.status === "scheduled");
+  const now = new Date();
+  const currentSession = scheduledSessions.find((session) => {
+    const start = validDate(session.start_at);
+    const end = validDate(session.end_at);
+    return start && end && start <= now && now < end;
+  });
+  const fallbackNextSession = currentSession || scheduledSessions.find((session) => isUpcomingSchedule(session.start_at));
+  const nextSession = isRegular ? meeting.next_session || fallbackNextSession || null : null;
+  const lastSession = isRegular ? [...scheduledSessions].reverse().find((session) => validDate(session.start_at)) : null;
+  // 2026-07-13: 정기모임은 Meeting.start_at만으로 종료 판단하지 않고 실제 회차 데이터를 우선한다.
+  const operationEndAt = meeting.end_at || null;
+  const shouldUseLastSession = isRegular && !nextSession && operationEndAt && isPastDateTime(operationEndAt);
+  const scheduleStart = isRegular ? (nextSession?.start_at || (shouldUseLastSession ? lastSession?.start_at : null) || null) : meeting.start_at;
+  const scheduleEnd = isRegular ? (nextSession?.end_at || (shouldUseLastSession ? lastSession?.end_at : null) || null) : meeting.end_at;
+  return {
+    id: meeting.id,
+    title: meeting.title || "제목 없는 모임",
+    place: meeting.location_name || meeting.address || "장소 미정",
+    address: meeting.address || meeting.location_name || "",
+    latitude: meeting.latitude,
+    longitude: meeting.longitude,
+    meetingType: meeting.meeting_type || "one_time",
+    meetingTypeLabel: meetingTypeLabel(meeting.meeting_type),
+    status: meeting.status || "",
+    sportName: sportNameOf(meeting),
+    nextSession,
+    repeatRule: meeting.repeat_rule || "",
+    repeatLabel: isRegular ? formatRegularMeetingSchedule({ ...meeting, next_session: nextSession, sessions: scheduledSessions }, "") : "",
+    time: formatDateTime(scheduleStart),
+    rawTime: scheduleStart || null,
+    endTime: scheduleEnd || null,
+    operationEndAt,
+    sessions: allSessions,
+    member: meetingMemberText(meeting),
+    state,
+    chatRoomId: meeting.chat_room_id,
+    img: meetingImage(meeting)
+  };
+}
+
 function uniqueMeetingsById(items) {
   const byId = new Map();
   items.forEach((item) => {
@@ -127,6 +180,71 @@ function pageTitle(title, desc) {
 
 function ScheduleTag({ children, tone = "sport" }) {
   return <span className={`profile-schedule-tag is-${tone}`}>{children}</span>;
+}
+
+function CalendarWeatherIcon({ condition }) {
+  if (["rain", "rain_snow", "shower"].includes(condition)) return <CloudRain size={17} />;
+  if (condition === "snow") return <Snowflake size={17} />;
+  if (condition === "clear") return <Sun size={17} />;
+  return <Cloud size={17} />;
+}
+
+function CalendarMeetingWeather({ item }) {
+  const [forecast, setForecast] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    const target = validDate(item.rawTime);
+    const latitude = Number(item.latitude);
+    const longitude = Number(item.longitude);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const targetDay = target ? new Date(target.getFullYear(), target.getMonth(), target.getDate()) : null;
+    const daysAway = targetDay ? Math.round((targetDay - today) / 86400000) : null;
+
+    setForecast(null);
+    if (
+      item.sessionStatus === "cancelled"
+      || !target
+      || target < new Date(now.getTime() - 2 * 60 * 60 * 1000)
+      || daysAway < 0
+      || daysAway > 10
+      || !Number.isFinite(latitude)
+      || !Number.isFinite(longitude)
+    ) {
+      return () => { active = false; };
+    }
+
+    weatherApi.forecast({
+      latitude,
+      longitude,
+      at: item.rawTime,
+      address: item.address || item.place || "",
+    })
+      .then((data) => {
+        if (active && data.forecast?.available) setForecast(data.forecast);
+      })
+      .catch(() => {
+        if (active) setForecast(null);
+      });
+
+    return () => { active = false; };
+  }, [item.address, item.latitude, item.longitude, item.place, item.rawTime, item.sessionStatus]);
+
+  if (!forecast) return null;
+  const temperature = forecast.temperature_c != null ? `${Math.round(forecast.temperature_c)}°` : "";
+  const temperatureRange = forecast.temperature_min_c != null || forecast.temperature_max_c != null
+    ? `${forecast.temperature_min_c != null ? `${Math.round(forecast.temperature_min_c)}°` : "-"} / ${forecast.temperature_max_c != null ? `${Math.round(forecast.temperature_max_c)}°` : "-"}`
+    : "";
+
+  return (
+    <div className="profile-calendar-weather" aria-label="모임 날씨">
+      <CalendarWeatherIcon condition={forecast.condition} />
+      <strong>{forecast.condition_label}{temperature ? ` ${temperature}` : ""}</strong>
+      {temperatureRange ? <span>최저/최고 {temperatureRange}</span> : null}
+      {forecast.precipitation_probability != null ? <span><Droplets size={13} /> 강수 {Math.round(forecast.precipitation_probability)}%</span> : null}
+    </div>
+  );
 }
 
 function recruitmentTag(status) {

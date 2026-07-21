@@ -504,7 +504,6 @@ export function AuthProvider({ children }) {
         }
       },
       async socialLogin(provider) {
-        localStorage.removeItem("sportsmate_post_auth_redirect");
         const client = requireSupabase();
         providerMismatchRef.current = null;
         setAuthError("");

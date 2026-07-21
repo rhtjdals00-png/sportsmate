@@ -562,8 +562,14 @@ def update_user(user_id):
         user.role = new_role
         if new_role == "suspended":
             user.is_active = False
-        elif user.is_active == False:
-            user.is_active = True
+        elif new_role == "pending_withdrawal":
+            # user.is_active = False # 탈퇴 대기 상태도 로그인 가능하도록
+            from app.utils.time_utils import kst_now
+            user.deleted_at = user.deleted_at or kst_now()
+        else:
+            if user.is_active == False:
+                user.is_active = True
+            user.deleted_at = None
     
     # Update User fields
     user_fields = ["name", "email", "phone_number", "nickname"]
@@ -576,8 +582,9 @@ def update_user(user_id):
         user.is_active = is_active
         if not is_active:
             user.role = "suspended"
-        elif user.role == "suspended":
+        elif user.role in ["suspended", "pending_withdrawal"]:
             user.role = "user"
+            user.deleted_at = None
             
     # Update UserProfile fields
     if "region" in data or "preferred_sports" in data:

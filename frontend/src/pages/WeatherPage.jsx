@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Cloud, CloudRain, CloudSun, Droplets, LocateFixed, MapPin, Search, Snowflake, Sun, Wind } from "lucide-react";
+import { ChevronDown, Cloud, CloudRain, CloudSun, Droplets, LocateFixed, MapPin, Search, Snowflake, Sun, Wind } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { locationApi } from "../api/locationApi";
 import { weatherApi } from "../api/weatherApi";
@@ -34,11 +34,21 @@ export default function WeatherPage() {
   const [keyword, setKeyword] = useState("");
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const [extendedOpen, setExtendedOpen] = useState(false);
+  const [extendedWeather, setExtendedWeather] = useState(null);
+  const [extendedLoading, setExtendedLoading] = useState(false);
+  const [extendedMessage, setExtendedMessage] = useState("");
   const searchRequestRef = useRef(0);
+  const extendedRequestRef = useRef(0);
 
   const loadWeather = async (nextLocation, persist = true) => {
     setLoading(true);
     setMessage("");
+    extendedRequestRef.current += 1;
+    setExtendedOpen(false);
+    setExtendedWeather(null);
+    setExtendedLoading(false);
+    setExtendedMessage("");
     setLocation(nextLocation);
     if (persist) saveWeatherLocation(nextLocation);
     try {
@@ -60,13 +70,15 @@ export default function WeatherPage() {
       .then(async (current) => {
         if (!active) return;
         let label = "내 위치";
+        let address = "";
         try {
           const data = await locationApi.reverseGeocode({ latitude: current.latitude, longitude: current.longitude });
           label = data.item?.address || data.item?.title || label;
+          address = data.item?.address || data.item?.road_address || label;
         } catch {
           // 좌표만으로도 예보 조회는 가능하다.
         }
-        if (active) loadWeather({ ...current, label });
+        if (active) loadWeather({ ...current, label, address });
       })
       .catch(() => {});
     return () => { active = false; };
@@ -102,13 +114,15 @@ export default function WeatherPage() {
     try {
       const current = await requestCurrentPosition();
       let label = "내 위치";
+      let address = "";
       try {
         const data = await locationApi.reverseGeocode({ latitude: current.latitude, longitude: current.longitude });
         label = data.item?.address || data.item?.title || label;
+        address = data.item?.address || data.item?.road_address || label;
       } catch {
         // 역지오코딩 실패 시에도 좌표 예보는 사용할 수 있다.
       }
-      await loadWeather({ ...current, label });
+      await loadWeather({ ...current, label, address });
     } catch (error) {
       setMessage(error.message);
     }
@@ -116,9 +130,38 @@ export default function WeatherPage() {
 
   const selectPlace = (place) => {
     const label = (place.title || place.address || place.road_address || "선택 지역").replace(/<[^>]+>/g, "");
+    const address = (place.address || place.road_address || label).replace(/<[^>]+>/g, "");
     setKeyword("");
     setResults([]);
-    loadWeather({ latitude: Number(place.latitude), longitude: Number(place.longitude), label, source: "search" });
+    loadWeather({ latitude: Number(place.latitude), longitude: Number(place.longitude), label, address, source: "search" });
+  };
+
+  const toggleExtendedForecast = async () => {
+    if (extendedOpen) {
+      setExtendedOpen(false);
+      return;
+    }
+    setExtendedOpen(true);
+    if (extendedWeather || extendedLoading) return;
+
+    const requestId = extendedRequestRef.current + 1;
+    extendedRequestRef.current = requestId;
+    setExtendedLoading(true);
+    setExtendedMessage("");
+    try {
+      const data = await weatherApi.extended({ address: location.address || location.label });
+      if (extendedRequestRef.current !== requestId) return;
+      setExtendedWeather(data.weather);
+      if (!(data.weather?.daily || []).length) {
+        setExtendedMessage("현재 지역의 중기예보가 아직 발표되지 않았습니다.");
+      }
+    } catch (error) {
+      if (extendedRequestRef.current === requestId) {
+        setExtendedMessage(error.response?.data?.message || "장기예보를 불러오지 못했습니다.");
+      }
+    } finally {
+      if (extendedRequestRef.current === requestId) setExtendedLoading(false);
+    }
   };
 
   const current = weather?.current;
@@ -166,8 +209,24 @@ export default function WeatherPage() {
           </section>
 
           <section className="desktop-section desktop-weather-daily">
-            <div className="desktop-section__head"><h2>3일 예보</h2><span>기상청 단기예보</span></div>
-            <div>{weather.daily.map((item, index) => <article key={item.date}><strong>{displayDate(item.date, index)}</strong><span><WeatherIcon condition={item.condition} size={25} />{item.condition_label}</span><span>최저 {Math.round(item.temperature_min_c)}° / 최고 {Math.round(item.temperature_max_c)}°</span><span><Droplets size={14} />{Math.round(item.precipitation_probability || 0)}%</span></article>)}</div>
+            <div className="desktop-section__head">
+              <div><h2>3일 예보</h2><span>기상청 단기예보</span></div>
+              <button type="button" className="desktop-weather-daily__toggle" aria-expanded={extendedOpen} onClick={toggleExtendedForecast}>
+                {extendedOpen ? "장기예보 닫기" : "장기예보 보기"}
+                <ChevronDown size={18} />
+              </button>
+            </div>
+            <div className="desktop-weather-daily__list">{weather.daily.map((item, index) => <article key={item.date}><strong>{displayDate(item.date, index)}</strong><span><WeatherIcon condition={item.condition} size={25} />{item.condition_label}</span><span>최저 {Math.round(item.temperature_min_c)}° / 최고 {Math.round(item.temperature_max_c)}°</span><span><Droplets size={14} />{Math.round(item.precipitation_probability || 0)}%</span></article>)}</div>
+            {extendedOpen && (
+              <div className="desktop-weather-extended">
+                <div className="desktop-weather-extended__head"><h3>4~10일 예보</h3><span>기상청 중기예보</span></div>
+                {extendedLoading ? <p>장기예보를 불러오고 있습니다.</p> : null}
+                {extendedMessage ? <p>{extendedMessage}</p> : null}
+                <div className="desktop-weather-daily__list">
+                  {(extendedWeather?.daily || []).map((item, index) => <article key={item.date}><strong>{displayDate(item.date, index + weather.daily.length)}</strong><span><WeatherIcon condition={item.condition} size={25} />{item.condition_label}</span><span>최저 {Math.round(item.temperature_min_c)}° / 최고 {Math.round(item.temperature_max_c)}°</span><span><Droplets size={14} />{Math.round(item.precipitation_probability || 0)}%</span></article>)}
+                </div>
+              </div>
+            )}
           </section>
         </>
       ) : <section className="desktop-weather-loading">날씨 정보가 없습니다.</section>}

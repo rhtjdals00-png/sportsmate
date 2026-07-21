@@ -541,10 +541,9 @@ def _session_notification_recipients(meeting):
     rows = (
         Participant.query
         .filter_by(meeting_id=meeting.id, status="approved")
-        .filter(Participant.user_id != meeting.host_id)
         .all()
     )
-    return sorted({row.user_id for row in rows})
+    return sorted({meeting.host_id, *(row.user_id for row in rows)})
 
 
 def _send_session_pushes(user_ids, title, message, link_url):
