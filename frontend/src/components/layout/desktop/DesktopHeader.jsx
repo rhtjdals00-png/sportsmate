@@ -99,6 +99,7 @@ function DesktopHeader() {
   const confirmLogout = async () => {
     setLoggingOut(true);
     await logout();
+    sessionStorage.setItem("sportsmate_flash", "로그아웃 되었습니다.");
     setLoggingOut(false);
     setShowLogoutConfirm(false);
     navigate("/");

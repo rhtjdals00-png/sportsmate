@@ -184,7 +184,27 @@ def ensure_support_schema(app):
         app.logger.warning("Support inquiry schema compatibility check failed: %s", error)
 
 
+USER_WITHDRAW_COLUMNS = {
+    "status": "VARCHAR(30) NOT NULL DEFAULT 'active'",
+    "withdrawn_at": "TIMESTAMP",
+}
+
+
+def ensure_user_schema(app):
+    try:
+        inspector = inspect(db.engine)
+        if inspector.has_table("users"):
+            existing = {column["name"] for column in inspector.get_columns("users")}
+            with db.engine.begin() as connection:
+                for name, column_type in USER_WITHDRAW_COLUMNS.items():
+                    if name not in existing:
+                        connection.execute(text(f"ALTER TABLE users ADD COLUMN {name} {column_type}"))
+    except Exception as error:
+        app.logger.warning("User schema compatibility check failed: %s", error)
+
+
 def ensure_chat_message_columns(app):
+    ensure_user_schema(app)
     ensure_chat_schema(app)
     ensure_chatbot_schema(app)
     ensure_support_schema(app)

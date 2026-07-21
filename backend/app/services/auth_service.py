@@ -204,6 +204,16 @@ def sync_supabase_user(data):
         )
 
     db.session.commit()
+
+    withdraw_response = check_withdraw_and_login(user)
+    if withdraw_response:
+        withdraw_response["is_new_user"] = is_new_user
+        withdraw_response["profile_complete"] = is_profile_complete(user)
+        linked_provider = "" if is_new_user else newly_linked_social_provider(before_provider, user.provider)
+        withdraw_response["provider_linked"] = bool(linked_provider)
+        withdraw_response["linked_provider"] = linked_provider
+        return withdraw_response
+
     response = build_auth_response(user)
     response["is_new_user"] = is_new_user
     response["profile_complete"] = is_profile_complete(user)
@@ -252,19 +262,60 @@ def register_user(data):
     return build_auth_response(user)
 
 
+def check_withdraw_and_login(user):
+    if not user.is_active:
+        raise ValueError("정지된 회원입니다.")
+
+    from app.utils.settings import load_system_settings
+    settings = load_system_settings()
+    if settings.get("maintenanceMode") is True and user.role not in ["superadmin", "admin"]:
+        raise ValueError("현재 서비스 점검 중입니다. 일반 회원은 로그인할 수 없습니다.")
+
+    if user.status == "withdrawn_pending":
+        if not user.is_in_withdraw_grace_period():
+            try:
+                db.session.delete(user)
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+            raise ValueError("30일 탈퇴 유예 기간이 만료되어 계정이 영구 삭제되었습니다. 신규 회원가입을 이용해 주세요.")
+        
+        response = build_auth_response(user)
+        response["account_restoration_required"] = True
+        response["remaining_days"] = user.remaining_withdraw_days()
+        response["withdrawn_at"] = user.withdrawn_at.isoformat() if user.withdrawn_at else None
+        return response
+    return None
+
+
+def restore_user(user_id):
+    user = User.query.get(user_id)
+    if not user:
+        raise ValueError("사용자를 찾을 수 없습니다.")
+    if user.status == "withdrawn_pending":
+        if not user.is_in_withdraw_grace_period():
+            try:
+                db.session.delete(user)
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+            raise ValueError("30일 탈퇴 유예 기간이 만료되어 복구할 수 없으며 계정이 영구 삭제되었습니다.")
+        user.status = "active"
+        user.withdrawn_at = None
+        db.session.commit()
+    return build_auth_response(user)
+
+
 def login_user(data):
     email = (data.get("email") or "").strip().lower()
     user = User.query.options(joinedload(User.profile)).filter_by(email=email).first()
     if not user or not user.password_hash or not user.check_password(data.get("password") or ""):
         raise ValueError("이메일 또는 비밀번호가 올바르지 않습니다.")
-    if not user.is_active:
-        raise ValueError("정지된 회원입니다.")
-        
-    from app.utils.settings import load_system_settings
-    settings = load_system_settings()
-    if settings.get("maintenanceMode") is True and user.role not in ["superadmin", "admin"]:
-        raise ValueError("현재 서비스 점검 중입니다. 일반 회원은 로그인할 수 없습니다.")
-        
+
+    withdraw_response = check_withdraw_and_login(user)
+    if withdraw_response:
+        return withdraw_response
+
     return build_auth_response(user)
 
 def login_with_supabase(data):
@@ -316,15 +367,14 @@ def login_with_supabase(data):
         if not user.profile:
             user.profile = UserProfile()
 
-    if not user.is_active:
-        raise ValueError("정지된 회원입니다.")
-
-    from app.utils.settings import load_system_settings
-    settings = load_system_settings()
-    if settings.get("maintenanceMode") is True and user.role not in ["superadmin", "admin"]:
-        raise ValueError("현재 서비스 점검 중입니다. 일반 회원은 로그인할 수 없습니다.")
-
     db.session.commit()
+
+    withdraw_response = check_withdraw_and_login(user)
+    if withdraw_response:
+        withdraw_response["is_new_user"] = is_new_user
+        withdraw_response["profile_complete"] = is_profile_complete(user)
+        return withdraw_response
+
     response = build_auth_response(user)
     response["is_new_user"] = is_new_user
     response["profile_complete"] = is_profile_complete(user)

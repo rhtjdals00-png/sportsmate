@@ -362,7 +362,7 @@ function buildFormFromUser(user) {
 
 function DesktopProfileEdit() {
   const navigate = useNavigate();
-  const { user, backendTokenReady, setCurrentUser } = useAuth();
+  const { user, backendTokenReady, setCurrentUser, logout } = useAuth();
   const [form, setForm] = useState(() => (user ? buildFormFromUser(user) : emptyForm));
   const [loadedUser, setLoadedUser] = useState(user);
   const [loading, setLoading] = useState(true);
@@ -744,11 +744,11 @@ function DesktopProfileEdit() {
   };
 
   const submitWithdraw = async () => {
-    if (withdrawText.trim().normalize('NFC') !== "탈퇴합니다".normalize('NFC')) {
+    if (withdrawText.trim() !== "탈퇴합니다") {
       setWithdrawStatus("mismatch");
       return;
     }
-    
+
     try {
       await userApi.deleteMe();
       setWithdrawStatus("success");
@@ -756,14 +756,14 @@ function DesktopProfileEdit() {
         try {
           await logout();
           sessionStorage.setItem("sportsmate_flash", "회원 탈퇴가 완료되었습니다.");
-          window.location.href = "/login";
+          navigate("/login", { replace: true });
         } catch (e) {
-          console.error("Logout failed after deletion", e);
+          console.error("Failed to logout after withdraw:", e);
         }
       }, 1500);
-    } catch (error) {
+    } catch (e) {
+      console.error("Withdraw failed:", e);
       setWithdrawStatus("mismatch");
-      console.error(error);
     }
   };
 
@@ -1100,7 +1100,7 @@ function DesktopProfileEdit() {
         <div className="desktop-security-section desktop-security-section--danger">
           <span>
             <strong>회원 탈퇴</strong>
-            <small>회원 탈퇴는 백엔드 API 연결 후 처리됩니다.</small>
+            <small>계정을 삭제하면 모든 프로필 정보 및 활동 기록이 완전히 삭제되며 복구할 수 없습니다.</small>
           </span>
           <button type="button" onClick={() => setWithdrawModalOpen(true)}>회원 탈퇴</button>
         </div>

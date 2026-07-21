@@ -41,6 +41,8 @@ const meetingDetailDb = {
   }
 };
 
+import { getSportEmoji } from "../../../utils/sportIcons.jsx";
+
 function MobileAdminMeetingDetailPage() {
   const { meetingId } = useParams();
   const navigate = useNavigate();
@@ -70,7 +72,7 @@ function MobileAdminMeetingDetailPage() {
           title: m.title || "제목 없음",
           host: m.host ? (m.host.nickname || m.host.name || `방장 #${m.host.id}`) : "알 수 없음",
           sport: m.sport ? m.sport.name : "일반",
-          emoji: m.sport ? (m.sport.name === "축구" ? "⚽" : m.sport.name === "러닝" ? "🏃" : m.sport.name === "테니스" ? "🎾" : m.sport.name === "농구" ? "🏀" : "👟") : "👟",
+          emoji: getSportEmoji(m.sport ? m.sport.name : ""),
           createdDate: m.created_at ? (() => {
             const d = new Date(m.created_at);
             return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;

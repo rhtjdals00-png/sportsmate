@@ -4,6 +4,7 @@ import { adminApi } from "../api/adminApi";
 import { Trash2, AlertCircle, RotateCcw } from "lucide-react";
 import { useResponsive } from "../hooks/useResponsive";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
+import { getSportEmoji } from "../utils/sportIcons.jsx";
 
 // Mock meetings data
 const mockMeetings = [
@@ -56,7 +57,7 @@ function AdminMeetingsPage() {
             title: m.title || "제목 없음",
             host: m.host ? (m.host.nickname || m.host.name || `방장 #${m.host.id}`) : "알 수 없음",
             sport: m.sport ? m.sport.name : "일반",
-            emoji: m.sport ? (m.sport.name === "축구" ? "⚽" : m.sport.name === "러닝" ? "🏃" : m.sport.name === "테니스" ? "🎾" : m.sport.name === "농구" ? "🏀" : "👟") : "👟",
+            emoji: getSportEmoji(m.sport ? m.sport.name : ""),
             date: m.start_at ? new Date(m.start_at).toLocaleDateString().replace(/\s/g, "").replace(/\.$/, "") : "2023.11.04",
             capacity: `${m.current_participants || 0} / ${m.max_participants || 0}`,
             status: m.status_label || (m.status === "full" || m.current_participants === m.max_participants ? "모집 마감" : m.status === "closed" ? "모집종료" : m.status === "cancelled" ? "취소됨" : "모집중")

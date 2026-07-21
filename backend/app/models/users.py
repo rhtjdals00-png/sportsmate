@@ -22,6 +22,8 @@ class User(db.Model, TimestampMixin):
     role = db.Column(db.String(30), default="user", nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     profile_intro_dismissed = db.Column(db.Boolean, default=False, nullable=False)
+    status = db.Column(db.String(30), default="active", nullable=False)
+    withdrawn_at = db.Column(db.DateTime, nullable=True)
     deleted_at = db.Column(db.DateTime, nullable=True)
 
     profile = db.relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
@@ -32,6 +34,21 @@ class User(db.Model, TimestampMixin):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    def is_in_withdraw_grace_period(self):
+        if self.status != "withdrawn_pending" or not self.withdrawn_at:
+            return False
+        from app.utils.timezone import kst_now
+        diff = kst_now() - self.withdrawn_at
+        return diff.days < 30
+
+    def remaining_withdraw_days(self):
+        if not self.withdrawn_at:
+            return 30
+        from app.utils.timezone import kst_now
+        diff = kst_now() - self.withdrawn_at
+        remaining = 30 - diff.days
+        return max(0, remaining)
 
     def to_dict(self):
         profile = self.profile
@@ -49,6 +66,9 @@ class User(db.Model, TimestampMixin):
             "profile_image_url": self.profile_image_url,
             "role": self.role,
             "is_active": self.is_active,
+            "status": self.status,
+            "withdrawn_at": self.withdrawn_at.isoformat() if self.withdrawn_at else None,
+            "remaining_withdraw_days": self.remaining_withdraw_days() if self.status == "withdrawn_pending" else None,
             "profile_intro_dismissed": self.profile_intro_dismissed,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,

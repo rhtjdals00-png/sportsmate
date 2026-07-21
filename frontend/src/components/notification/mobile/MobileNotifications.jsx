@@ -315,9 +315,7 @@ function MobileNotifications() {
               style={
                 isUnread
                   ? {
-                      background: 'rgba(79, 70, 229, 0.04)',
-                      borderLeft: '4px solid var(--mobile-primary, #4f46e5)',
-                      paddingLeft: '12px'
+                      background: 'rgba(79, 70, 229, 0.04)'
                     }
                   : undefined
               }

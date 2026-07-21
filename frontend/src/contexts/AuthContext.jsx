@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { authApi } from "../api/authApi";
 import { isSupabaseConfigured, supabase } from "../api/supabaseClient";
+import AccountRestorationModal from "../components/auth/AccountRestorationModal.jsx";
 
 const AuthContext = createContext(null);
 
@@ -122,6 +123,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const [backendTokenReady, setBackendTokenReady] = useState(false);
+  const [restorationState, setRestorationState] = useState(null);
   const activeSyncsRef = useRef(new Map());
   const currentSyncTokenRef = useRef("");
   const providerMismatchRef = useRef(null);
@@ -200,6 +202,18 @@ export function AuthProvider({ children }) {
 
       // 로그아웃 또는 다른 세션 전환 뒤 도착한 이전 응답은 인증 상태에 반영하지 않는다.
       if (currentSyncTokenRef.current !== supabaseAccessToken) return data;
+
+      if (data.account_restoration_required) {
+        localStorage.setItem("sportsmate_token", data.access_token);
+        setRestorationState({
+          user: data.user,
+          remainingDays: data.remaining_days,
+          token: data.access_token
+        });
+        setBackendTokenReady(false);
+        setUser(null);
+        return data;
+      }
 
       if (data.access_token) {
         // 2026-07-01: 보호 API 호출은 백엔드 토큰 발급 이후에만 허용.
@@ -638,7 +652,37 @@ export function AuthProvider({ children }) {
     return () => clearInterval(interval);
   }, [user?.id]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const handleAccountRestored = (res) => {
+    setRestorationState(null);
+    if (res?.access_token) {
+      localStorage.setItem("sportsmate_token", res.access_token);
+      setBackendTokenReady(true);
+    }
+    if (res?.user) {
+      setUser(res.user);
+    }
+  };
+
+  const handleCancelRestoration = async () => {
+    setRestorationState(null);
+    localStorage.removeItem("sportsmate_token");
+    setBackendTokenReady(false);
+    setUser(null);
+    if (supabase) {
+      await supabase.auth.signOut().catch(() => {});
+    }
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      <AccountRestorationModal
+        restorationState={restorationState}
+        onRestored={handleAccountRestored}
+        onCancel={handleCancelRestoration}
+      />
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

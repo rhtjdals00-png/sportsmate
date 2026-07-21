@@ -27,7 +27,7 @@ function AuthCallbackPage() {
         await completeOAuthCallbackRef.current(window.location.href);
         const redirectPath = localStorage.getItem("sportsmate_post_auth_redirect") || "/";
         localStorage.removeItem("sportsmate_post_auth_redirect");
-        sessionStorage.setItem("sportsmate_flash", "로그인했습니다.");
+        sessionStorage.setItem("sportsmate_flash", "로그인 되었습니다.");
         navigate(redirectPath, { replace: true });
       } catch (error) {
         const errorMessage = error?.response?.data?.message || error?.message || "로그인 세션을 확인하지 못했습니다. 다시 로그인해주세요.";

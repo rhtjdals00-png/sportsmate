@@ -12,6 +12,7 @@ import {
 import { adminApi } from "../api/adminApi";
 import MobileAdminPanel from "../components/admin/mobile/MobileAdminPanel.jsx";
 import { useResponsive } from "../hooks/useResponsive";
+import { getSportEmoji } from "../utils/sportIcons.jsx";
 
 // 관리자 API 연결 전에도 화면 구조를 확인할 수 있는 기본 통계 데이터입니다.
 const mockStats = {
@@ -118,12 +119,7 @@ function AdminPage() {
               : [];
             const sportName = sportsList[0]?.trim() || "일반";
             
-            const sportEmojis = {
-              "축구": "⚽", "풋살": "⚽", "농구": "🏀", "배구": "🏐", "야구": "⚾",
-              "배드민턴": "🏸", "탁구": "🏓", "테니스": "🎾", "스쿼시": "🏸",
-              "러닝": "🏃", "등산": "⛰️", "클라이밍": "🧗", "요가": "🧘", "필라테스": "🧘"
-            };
-            const emoji = sportEmojis[sportName] || "👟";
+            const emoji = getSportEmoji(sportName);
             const initialName = u.nickname ? u.nickname.slice(0, 2) : "US";
 
             return {

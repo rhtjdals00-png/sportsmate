@@ -23,8 +23,8 @@ def load_system_settings():
         "autoBanReportCount": 5,
         "sessionExpiryMinutes": 60,
         "termsVersion": "v1.4",
-        "supabaseUrl": "https://rhtjdals00-png.supabase.co",
-        "kakaoApiKey": "8f7b2a9d6e4c3f5b8a0d2f9e4c1b5a7d",
+        "supabaseUrl": os.getenv("SUPABASE_URL", "https://ssuncptlzlmuulqmtnqf.supabase.co"),
+        "kakaoApiKey": os.getenv("KAKAO_REST_API_KEY", "5d3ec3100e15e07c16c5a3799a090f1c"),
         "googleClientId": "40413-t9tr8ha.apps.googleusercontent.com"
     }
 

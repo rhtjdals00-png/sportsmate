@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import { adminApi } from "../../../api/adminApi";
+import { getSportEmoji } from "../../../utils/sportIcons.jsx";
 
 function MobileAdminPanel({ title = "운영 대시보드" }) {
   const navigate = useNavigate();
@@ -93,7 +94,7 @@ function MobileAdminPanel({ title = "운영 대시보드" }) {
     const name = u.name || u.nickname || "이름없음";
     const initial = name.slice(0, 1).toUpperCase();
     const sport = u.profile?.preferred_sports || "일반";
-    const emoji = sport === "축구" ? "⚽" : sport === "러닝" ? "🏃" : sport === "테니스" ? "🎾" : sport === "농구" ? "🏀" : "👟";
+    const emoji = getSportEmoji(sport);
     return {
       id: u.id,
       name,
