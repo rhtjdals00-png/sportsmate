@@ -6,6 +6,7 @@ from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models import ChatMessage, ChatRoom, DirectChatMessage, DirectChatRoom, Meeting, Report, User, Participant, Sport
+from app.services.meeting_service import recalculate_current_participants
 from app.utils.timezone import kst_now, parse_client_datetime
 from app.utils.audit import log_admin_action
 
@@ -475,11 +476,10 @@ def kick_member(meeting_id, user_id):
     target_user_name = target_user.name or target_user.email if target_user else f"ID {user_id}"
         
     meeting = Meeting.query.get(meeting_id)
-    if meeting and participant.status == "approved":
-        meeting.current_participants = max(1, meeting.current_participants - 1)
-        meeting.sync_status()
-        
     db.session.delete(participant)
+    db.session.flush()
+    if meeting:
+        recalculate_current_participants(meeting)
     db.session.commit()
 
     from app.utils.audit import log_admin_action

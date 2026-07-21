@@ -12,6 +12,7 @@ from app.models import ChatMessage, ChatMessageRead, ChatRoom, Meeting, Notice, 
 from app.utils.timezone import kst_now, to_kst_iso
 
 notification_bp = Blueprint("notifications", __name__)
+AUTOMATIC_SCHEDULE_NOTICE_TYPES = {"schedule_changed", "schedule_cancelled"}
 
 
 def _display_name(user):
@@ -100,6 +101,7 @@ def _chat_summary_items(user_id):
         )
         .filter(ChatMessage.chat_room_id.in_(room_ids))
         .filter(ChatMessage.user_id != user_id)
+        .filter(ChatMessage.message_type != "notice")
         .filter(ChatMessageRead.id.is_(None))
         .group_by(ChatMessage.chat_room_id)
         .all()
@@ -140,6 +142,7 @@ def _notice_summary_items(user_id):
         .outerjoin(ChatRoom, ChatRoom.meeting_id == Meeting.id)
         .filter(
             Notice.created_at >= since,
+            Notice.notice_type.notin_(AUTOMATIC_SCHEDULE_NOTICE_TYPES),
             Meeting.status.notin_(["cancelled", "suspended"]),
             or_(
                 Meeting.host_id == user_id,

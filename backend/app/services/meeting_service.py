@@ -3,12 +3,12 @@ import math
 from datetime import date, datetime, time, timedelta
 
 from flask import current_app
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, case, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import ChatMessage, ChatRoom, Meeting, MeetingSession, Participant, Review, Sport, User, Attendance
+from app.models import Attendance, ChatMessage, ChatRoom, Meeting, MeetingSession, Notice, Participant, Review, Sport, User
 from app.services.notification_service import create_notification, send_web_push
 from app.utils.meeting_state import is_meeting_operation_ended, validate_meeting_can_reopen_recruitment
 from app.utils.timezone import kst_now, parse_client_datetime
@@ -512,6 +512,8 @@ def get_next_meeting_session(meeting_id, now=None):
 
 SESSION_CHANGE_REASON_MAX_LENGTH = 255
 KOREAN_WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"]
+SCHEDULE_CHANGED_NOTICE_TYPE = "schedule_changed"
+SCHEDULE_CANCELLED_NOTICE_TYPE = "schedule_cancelled"
 
 
 def _session_reason(value, field_name):
@@ -552,11 +554,30 @@ def _send_session_pushes(user_ids, title, message, link_url):
             current_app.logger.warning("Meeting session push notification failed: %s", error)
 
 
-def _meeting_chat_link_url(meeting):
+def _meeting_chat_room(meeting):
     if not meeting.chat_room:
         meeting.chat_room = ChatRoom(meeting_id=meeting.id)
         db.session.flush()
-    return f"/chats/{meeting.chat_room.id}"
+    return meeting.chat_room
+
+
+def _create_session_notice(meeting, session, host_user_id, title, content, notice_type, chat_room):
+    notice = Notice(
+        meeting_id=meeting.id,
+        title=title,
+        content=content,
+        is_pinned=False,
+        notice_type=notice_type,
+        session_id=session.id,
+    )
+    db.session.add(notice)
+    db.session.add(ChatMessage(
+        chat_room_id=chat_room.id,
+        user_id=host_user_id,
+        content=f"공지가 등록되었습니다: {content}",
+        message_type="notice",
+    ))
+    return notice
 
 
 def _get_manageable_regular_session(meeting_id, session_id, current_user_id, action_text):
@@ -622,38 +643,49 @@ def update_meeting_session(meeting_id, session_id, current_user_id, data):
         raise ValueError("일정 변경은 같은 날짜 안에서만 가능합니다.")
     if new_start <= kst_now():
         raise ValueError("현재 이후의 시간으로만 변경할 수 있습니다.")
+    if session.start_at == new_start and session.end_at == new_end:
+        return session
 
     reason = _session_reason(data.get("reason"), "변경 사유")
     _validate_session_period(meeting, new_start, new_end)
     _validate_session_time_conflict(meeting.id, session.id, new_start, new_end)
 
-    old_schedule = _format_session_schedule(session.start_at, session.end_at)
+    old_start_at = session.start_at
+    old_end_at = session.end_at
+    old_schedule = _format_session_schedule(old_start_at, old_end_at)
     new_schedule = _format_session_schedule(new_start, new_end)
     recipients = _session_notification_recipients(meeting)
     title = "모임 일정이 변경되었습니다."
     message = f"{meeting.title} 일정이 {old_schedule}에서 {new_schedule}(으)로 변경되었습니다. 사유: {reason}"
-    link_url = _meeting_chat_link_url(meeting)
+    notice_title = "일정 변경 안내"
+    notice_content = (
+        f"{meeting.title}의 {session.session_number}회차 일정이 변경되었습니다.\n\n"
+        f"변경 전: {old_schedule}\n"
+        f"변경 후: {new_schedule}\n"
+        f"사유: {reason}"
+    )
 
     try:
         if session.original_start_at is None:
-            session.original_start_at = session.start_at
+            session.original_start_at = old_start_at
         if session.original_end_at is None:
-            session.original_end_at = session.end_at
+            session.original_end_at = old_end_at
         session.start_at = new_start
         session.end_at = new_end
         session.reschedule_reason = reason
-        _add_meeting_system_message(
-            meeting,
-            current_user_id,
-            (
-                "📅 모임 일정이 변경되었습니다.\n"
-                f"변경 전: {old_schedule}\n"
-                f"변경 후: {new_schedule}\n"
-                f"변경 사유: {reason}"
-            ),
-        )
+        chat_room = _meeting_chat_room(meeting)
+        link_url = f"/chats/{chat_room.id}"
         for user_id in recipients:
             create_notification(user_id, "schedule_changed", title, message, link_url, send_push=False)
+        _create_session_notice(
+            meeting,
+            session,
+            current_user_id,
+            notice_title,
+            notice_content,
+            SCHEDULE_CHANGED_NOTICE_TYPE,
+            chat_room,
+        )
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
@@ -682,22 +714,31 @@ def cancel_meeting_session(meeting_id, session_id, current_user_id, reason):
     recipients = _session_notification_recipients(meeting)
     title = "모임 일정이 취소되었습니다."
     message = f"{meeting.title}의 {cancelled_schedule} 일정이 취소되었습니다. 사유: {cancellation_reason}{next_text}"
-    link_url = _meeting_chat_link_url(meeting)
+    notice_title = "회차 취소 안내"
+    notice_content = (
+        f"{meeting.title}의 {session.session_number}회차 일정이 취소되었습니다.\n\n"
+        f"취소 일정: {cancelled_schedule}\n"
+        f"취소 사유: {cancellation_reason}"
+    )
+    if next_session:
+        notice_content += f"\n다음 일정: {_format_session_schedule(next_session.start_at, next_session.end_at)}"
 
     try:
         session.status = "cancelled"
         session.cancellation_reason = cancellation_reason
-        _add_meeting_system_message(
-            meeting,
-            current_user_id,
-            (
-                "🚫 모임 일정이 취소되었습니다.\n"
-                f"취소 일정: {cancelled_schedule}\n"
-                f"취소 사유: {cancellation_reason}{next_text}"
-            ),
-        )
+        chat_room = _meeting_chat_room(meeting)
+        link_url = f"/chats/{chat_room.id}"
         for user_id in recipients:
             create_notification(user_id, "schedule_cancelled", title, message, link_url, send_push=False)
+        _create_session_notice(
+            meeting,
+            session,
+            current_user_id,
+            notice_title,
+            notice_content,
+            SCHEDULE_CANCELLED_NOTICE_TYPE,
+            chat_room,
+        )
         db.session.commit()
     except Exception:
         db.session.rollback()
@@ -902,6 +943,22 @@ def join_meeting(meeting_id, user_id, join_message=""):
     return participant
 
 
+def recalculate_current_participants(meeting, *, sync_status=True):
+    if not meeting or not meeting.id:
+        raise ValueError("모임 정보를 확인할 수 없습니다.")
+
+    db.session.flush()
+    approved_count = (
+        Participant.query
+        .filter_by(meeting_id=meeting.id, status="approved")
+        .count()
+    )
+    meeting.current_participants = approved_count
+    if sync_status:
+        meeting.sync_status()
+    return approved_count
+
+
 def update_application(meeting_id, applicant_user_id, host_id, status):
     meeting = Meeting.query.get_or_404(meeting_id)
     if meeting.status == "suspended":
@@ -912,16 +969,14 @@ def update_application(meeting_id, applicant_user_id, host_id, status):
     if participant.status != "pending":
         raise ValueError("대기 중인 신청만 처리할 수 있습니다.")
     if status == "approved":
-        if meeting.current_participants >= meeting.max_participants:
+        if recalculate_current_participants(meeting) >= meeting.max_participants:
             raise ValueError("모집 정원이 마감되었습니다.")
         participant.status = "approved"
         participant.approved_at = kst_now()
-        meeting.current_participants += 1
         if not meeting.chat_room:
             meeting.chat_room = ChatRoom(meeting_id=meeting.id)
             db.session.flush()
-        if meeting.current_participants >= meeting.max_participants:
-            meeting.status = "full"
+        recalculate_current_participants(meeting)
         _add_meeting_system_message(meeting, participant.user_id, f"{_display_name(participant.user)}님이 입장하셨습니다.")
         title = "참여 신청 승인"
         message = f"{meeting.title} 참여 신청이 승인되었습니다."
@@ -939,6 +994,68 @@ def update_application(meeting_id, applicant_user_id, host_id, status):
     except Exception as error:
         current_app.logger.warning("Application decision push notification failed: %s", error)
     return participant
+
+
+def list_meeting_members(meeting_id, host_id):
+    meeting = Meeting.query.get_or_404(meeting_id)
+    if meeting.host_id != host_id:
+        raise PermissionError("방장만 참가자 목록을 조회할 수 있습니다.")
+
+    participants = (
+        Participant.query
+        .options(joinedload(Participant.user).joinedload(User.profile))
+        .filter_by(meeting_id=meeting.id, status="approved")
+        .order_by(
+            case((Participant.user_id == meeting.host_id, 0), else_=1),
+            Participant.approved_at.asc(),
+            Participant.id.asc(),
+        )
+        .all()
+    )
+
+    return [
+        {
+            "id": participant.id,
+            "user_id": participant.user_id,
+            "role": participant.role,
+            "status": participant.status,
+            "approved_at": participant.approved_at.isoformat() if participant.approved_at else None,
+            "is_host": participant.user_id == meeting.host_id or participant.role == "host",
+            "can_kick": participant.user_id != meeting.host_id and participant.role != "host",
+            "user": {
+                "id": participant.user.id,
+                "nickname": participant.user.nickname,
+                "profile_image_url": participant.user.profile_image_url,
+            },
+        }
+        for participant in participants
+    ]
+
+
+def kick_meeting_member(meeting_id, target_user_id, host_id):
+    meeting = Meeting.query.get_or_404(meeting_id)
+    if meeting.host_id != host_id:
+        raise PermissionError("방장만 멤버를 추방할 수 있습니다.")
+    if meeting.status == "cancelled":
+        raise ValueError("취소된 모임에서는 참가자를 내보낼 수 없습니다.")
+    if meeting.status == "suspended":
+        raise ValueError("운영 중지된 모임에서는 참가자를 내보낼 수 없습니다.")
+    if is_meeting_operation_ended(meeting):
+        raise ValueError("종료된 모임에서는 참가자를 내보낼 수 없습니다.")
+
+    participant = Participant.query.filter_by(meeting_id=meeting.id, user_id=target_user_id).first()
+    if not participant:
+        raise ValueError("참가자를 찾을 수 없습니다.")
+    if target_user_id == meeting.host_id or participant.role == "host":
+        raise ValueError("방장은 추방할 수 없습니다.")
+    if participant.status != "approved":
+        raise ValueError("승인된 참가자만 내보낼 수 있습니다.")
+
+    participant.status = "kicked"
+    recalculate_current_participants(meeting)
+    _add_meeting_system_message(meeting, host_id, f"{_display_name(participant.user)}님이 추방되셨습니다.")
+    db.session.commit()
+    return participant, meeting
 
 
 def create_review(meeting_id, user_id, data):

@@ -107,7 +107,7 @@ function DesktopHostDashboard() {
         <section className="page-card host-applicant-panel-pc">
           <div className="section-head">
             <div>
-              <h2>신청자 관리</h2>
+              <h2>참가자 관리</h2>
               <span>승인 대기 중인 신청자</span>
             </div>
             <span className="host-new-pill">New 2</span>
@@ -129,7 +129,7 @@ function DesktopHostDashboard() {
               </article>
             ))}
           </div>
-          <Link className="host-applicant-more" to="/host/meetings/0/applicants">신청자 전체 보기 <ChevronRight size={15} /></Link>
+          <Link className="host-applicant-more" to="/host/meetings/0/applicants">참가자 전체 보기 <ChevronRight size={15} /></Link>
         </section>
       </div>
     </div>

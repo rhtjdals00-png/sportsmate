@@ -8,8 +8,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import Attendance, AttendanceCheckinWindow, ChatMessage, ChatRoom, Meeting, MeetingSession, Notice, Participant, Review, Sport, User, Vote, VoteOption, VoteResponse
-from app.services.meeting_service import cancel_meeting_session, close_expired_one_time_meetings, create_meeting, create_review, get_next_meeting_session, join_meeting, list_meeting_sessions, list_meetings, update_application, update_meeting, update_meeting_session
+from app.models import Attendance, ChatMessage, ChatRoom, Meeting, MeetingSession, Notice, Participant, Review, Sport, User, Vote, VoteOption, VoteResponse
+from app.services.meeting_service import cancel_meeting_session, close_expired_one_time_meetings, create_meeting, create_review, get_next_meeting_session, join_meeting, kick_meeting_member, list_meeting_members, list_meeting_sessions, list_meetings, recalculate_current_participants, update_application, update_meeting, update_meeting_session
 from app.utils.meeting_state import is_meeting_operation_ended, meeting_chat_is_read_only
 from app.utils.timezone import kst_now, parse_client_datetime
 
@@ -222,8 +222,7 @@ def cancel_join(meeting_id):
             if is_meeting_operation_ended(meeting):
                 return jsonify({"message": "종료된 모임에서는 나갈 수 없습니다."}), 400
             participant.status = "cancelled"
-            meeting.current_participants = max(1, int(meeting.current_participants or 1) - 1)
-            meeting.sync_status()
+            recalculate_current_participants(meeting)
             add_meeting_system_message(meeting, participant.user_id, f"{user_display_name(participant.user)}님이 나가셨습니다.")
     else:
         participant.status = "cancelled"
@@ -249,7 +248,12 @@ def applicants(meeting_id):
         .filter_by(meeting_id=meeting_id, status="pending")
         .all()
     )
-    return jsonify({"items": [item.to_dict() for item in items]})
+    item_data = []
+    for item in items:
+        data = item.to_dict()
+        data["requested_at"] = item.requested_at.isoformat() if item.requested_at else None
+        item_data.append(data)
+    return jsonify({"items": item_data, "count": len(item_data)})
 
 
 @meeting_bp.patch("/<int:meeting_id>/applicants/<int:user_id>/approve")
@@ -344,22 +348,27 @@ def post_notice(meeting_id):
     return jsonify({"notice": notice.to_dict()}), 201
 
 
+@meeting_bp.get("/<int:meeting_id>/members")
+@jwt_required()
+def members(meeting_id):
+    try:
+        items = list_meeting_members(meeting_id, int(get_jwt_identity()))
+        return jsonify({"items": items, "count": len(items)})
+    except PermissionError as error:
+        return jsonify({"message": str(error)}), 403
+
+
 @meeting_bp.delete("/<int:meeting_id>/members/<int:user_id>")
 @jwt_required()
 def kick_member(meeting_id, user_id):
-    meeting = Meeting.query.get_or_404(meeting_id)
     current_user_id = int(get_jwt_identity())
-    if meeting.host_id != current_user_id:
-        return jsonify({"message": "방장만 멤버를 추방할 수 있습니다."}), 403
-    if meeting.host_id == user_id:
-        return jsonify({"message": "방장은 추방할 수 없습니다."}), 400
-    participant = Participant.query.filter_by(meeting_id=meeting_id, user_id=user_id, status="approved").first_or_404()
-    participant.status = "kicked"
-    meeting.current_participants = max(1, int(meeting.current_participants or 1) - 1)
-    meeting.sync_status()
-    add_meeting_system_message(meeting, current_user_id, f"{user_display_name(participant.user)}님이 추방되셨습니다.")
-    db.session.commit()
-    return jsonify({"participant": participant.to_dict(), "meeting": meeting.to_dict(current_user_id=current_user_id)})
+    try:
+        participant, meeting = kick_meeting_member(meeting_id, user_id, current_user_id)
+        return jsonify({"participant": participant.to_dict(), "meeting": meeting.to_dict(current_user_id=current_user_id)})
+    except PermissionError as error:
+        return jsonify({"message": str(error)}), 403
+    except ValueError as error:
+        return jsonify({"message": str(error)}), 400
 
 
 @meeting_bp.get("/<int:meeting_id>/votes")

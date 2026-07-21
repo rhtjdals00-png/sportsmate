@@ -1126,6 +1126,7 @@
 }
 
 .desktop-prototype .talk-member-row > button:first-child,
+.desktop-prototype .talk-member-row > .talk-member-self,
 .desktop-prototype .talk-members-panel > div > button {
   display: grid;
   min-width: 0;
@@ -1142,6 +1143,7 @@
 
 .desktop-prototype .talk-members-panel img,
 .desktop-prototype .talk-member-row > button:first-child > span,
+.desktop-prototype .talk-member-row > .talk-member-self > span,
 .desktop-prototype .talk-members-panel > div > button > span {
   display: grid;
   width: 34px;
@@ -1152,6 +1154,10 @@
   background: #eef2ff;
   color: #4f46e5;
   object-fit: cover;
+}
+
+.desktop-prototype .talk-member-row > .talk-member-self {
+  cursor: default;
 }
 
 .desktop-prototype .talk-members-panel b,

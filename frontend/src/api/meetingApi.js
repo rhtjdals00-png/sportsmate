@@ -14,6 +14,7 @@ export const meetingApi = {
   join: (id, payload = {}) => apiClient.post(`/meetings/${id}/join`, payload).then((res) => res.data),
   cancelJoin: (id) => apiClient.delete(`/meetings/${id}/join`).then((res) => res.data),
   applicants: (id) => apiClient.get(`/meetings/${id}/applicants`).then((res) => res.data),
+  getMembers: (id) => apiClient.get(`/meetings/${id}/members`).then((res) => res.data),
   approve: (meetingId, userId) =>
     apiClient.patch(`/meetings/${meetingId}/applicants/${userId}/approve`).then((res) => res.data),
   reject: (meetingId, userId) =>

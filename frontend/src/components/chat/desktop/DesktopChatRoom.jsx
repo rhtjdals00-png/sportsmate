@@ -616,6 +616,8 @@ function DesktopChatRoom() {
   const roomItems = rooms.data?.items || [];
   const directRoomItems = directRooms.data?.items || [];
   const participantItems = room?.participants || [];
+  const isProfilePreviewMe = Boolean(profilePreviewUser?.id)
+    && String(profilePreviewUser.id) === String(user?.id ?? "");
   const isRoomHost = String(meeting?.host?.id ?? "") === String(user?.id ?? "");
   const myRole = isRoomHost ? "host" : (meeting?.my_participant?.role || "member");
   const canManageRoom = Boolean(room?.can_manage || meeting?.can_manage || ["host", "cohost", "subhost", "assistant"].includes(String(myRole).toLowerCase()));
@@ -1802,13 +1804,24 @@ function DesktopChatRoom() {
                 {participantItems.map((participant) => {
                   const participantUser = participant.user || {};
                   const isMe = String(participantUser.id ?? participant.user_id) === String(user?.id ?? "");
+                  const memberContent = (
+                    <>
+                      {participantUser.profile_image_url ? <img src={participantUser.profile_image_url} alt="" /> : <span><UsersRound size={16} /></span>}
+                      <b>{senderLabel(participantUser)}{isMe ? " (나)" : ""}</b>
+                      <small>{participant.role === "host" ? "방장" : participant.role || "member"}</small>
+                    </>
+                  );
                   return (
-                    <div key={participant.id || participant.user_id} className="talk-member-row">
-                      <button type="button" onClick={() => setProfilePreviewUser(participantUser)}>
-                        {participantUser.profile_image_url ? <img src={participantUser.profile_image_url} alt="" /> : <span><UsersRound size={16} /></span>}
-                        <b>{senderLabel(participantUser)}{isMe ? " (나)" : ""}</b>
-                        <small>{participant.role === "host" ? "방장" : participant.role || "member"}</small>
-                      </button>
+                    <div key={participant.id || participant.user_id} className={`talk-member-row ${isMe ? "is-self" : ""}`}>
+                      {isMe ? (
+                        <div className="talk-member-self" aria-label={`${senderLabel(participantUser)} 본인`}>
+                          {memberContent}
+                        </div>
+                      ) : (
+                        <button type="button" onClick={() => setProfilePreviewUser(participantUser)}>
+                          {memberContent}
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -2023,23 +2036,22 @@ function DesktopChatRoom() {
             </strong>
             <p>{profilePreviewUser.profile?.region || "활동 지역 미설정"}</p>
             {privateChatNotice ? <p className="chat-profile-sheet__notice">{privateChatNotice}</p> : null}
-            <div className="chat-profile-sheet__actions">
-              <button type="button" onClick={() => requestPrivateChat(profilePreviewUser)}>1:1 톡</button>
-              {(() => {
-                const previewParticipant = participantItems.find((participant) => String(participant.user?.id ?? participant.user_id) === String(profilePreviewUser.id));
-                const isPreviewMe = String(profilePreviewUser.id ?? "") === String(user?.id ?? "");
-                return isRoomHost && previewParticipant && !isPreviewMe && previewParticipant.role !== "host" ? (
-                  <button className="is-danger" type="button" onClick={() => kickParticipant(previewParticipant)}>추방</button>
-                ) : null;
-              })()}
-              {String(profilePreviewUser.id ?? "") !== String(user?.id ?? "") ? (
+            {!isProfilePreviewMe ? (
+              <div className="chat-profile-sheet__actions">
+                <button type="button" onClick={() => requestPrivateChat(profilePreviewUser)}>1:1 톡</button>
+                {(() => {
+                  const previewParticipant = participantItems.find((participant) => String(participant.user?.id ?? participant.user_id) === String(profilePreviewUser.id));
+                  return isRoomHost && previewParticipant && previewParticipant.role !== "host" ? (
+                    <button className="is-danger" type="button" onClick={() => kickParticipant(previewParticipant)}>추방</button>
+                  ) : null;
+                })()}
                 <button className="is-danger" type="button" onClick={() => openUserReport(profilePreviewUser)}>
                   <Flag size={14} />
                   신고
                 </button>
-              ) : null}
-              <button type="button">차단</button>
-            </div>
+                <button type="button">차단</button>
+              </div>
+            ) : null}
           </section>
         </div>
       ) : null}

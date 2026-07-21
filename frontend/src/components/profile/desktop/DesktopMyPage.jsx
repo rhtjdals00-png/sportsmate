@@ -21,14 +21,18 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { userApi } from "../../../api/userApi";
 import { meetingApi } from "../../../api/meetingApi";
+import DesktopScheduleCalendarModal, {
+  buildDesktopScheduleItems,
+  DesktopScheduleCancelModal,
+  DesktopScheduleChangeModal,
+  normalizeDesktopScheduleMeeting
+} from "../../schedule/desktop/DesktopScheduleCalendarModal.jsx";
+import { getDesktopScheduleState } from "../../schedule/desktop/DesktopScheduleCard.jsx";
 import { weatherApi } from "../../../api/weatherApi";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { useAsync } from "../../../hooks/useAsync";
-import { getMeetingCoverImage } from "../../../utils/sportThumbnails";
-import { formatRegularMeetingSchedule } from "../../../utils/formatters";
 
 const PROFILE_INTRO_MAX_LENGTH = 30;
-const SCHEDULE_REASON_MAX_LENGTH = 255;
 const PROFILE_INTRO_EMPTY_TEXT = "아직 한 줄 소개가 없습니다.";
 const FALLBACK_PROFILE_IMAGE = "/images/logo.png";
 const MEETING_FILTERS = [
@@ -74,46 +78,10 @@ function formatDateTime(value) {
   return `${month}.${day}(${weekday}) ${hours}:${minutes}`;
 }
 
-function formatDateInputValue(value) {
-  const date = validDate(value);
-  if (!date) return "";
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function formatTimeInputValue(value) {
-  const date = validDate(value);
-  if (!date) return "";
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
-}
-
 function validDate(value) {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function getDday(value) {
-  if (!value) return "D-?";
-  const target = new Date(value);
-  if (Number.isNaN(target.getTime())) return "D-?";
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  target.setHours(0, 0, 0, 0);
-  const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
-  if (diff === 0) return "D-DAY";
-  return diff > 0 ? `D-${diff}` : "종료됨";
-}
-
-function isSameDay(a, b) {
-  return Boolean(a && b)
-    && a.getFullYear() === b.getFullYear()
-    && a.getMonth() === b.getMonth()
-    && a.getDate() === b.getDate();
 }
 
 function isUpcomingSchedule(value) {
@@ -126,81 +94,8 @@ function isUpcomingSchedule(value) {
   return target >= today;
 }
 
-function meetingImage(meeting) {
-  return getMeetingCoverImage(meeting) || FALLBACK_PROFILE_IMAGE;
-}
-
-function meetingMemberText(meeting) {
-  const current = meeting.current_participants ?? 0;
-  const max = meeting.max_participants ?? 0;
-  return max ? `${current}/${max}` : `${current}`;
-}
-
-function sportNameOf(meeting) {
-  return meeting?.sport?.name || meeting?.sport_name || "";
-}
-
-function meetingTypeLabel(type) {
-  if (type === "regular") return "정기모임";
-  if (type === "one_time") return "일회성";
-  return "";
-}
-
-function sortSessionsByStart(sessions) {
-  return [...sessions].sort((a, b) => {
-    const dateA = validDate(a.start_at);
-    const dateB = validDate(b.start_at);
-    if (!dateA && !dateB) return 0;
-    if (!dateA) return 1;
-    if (!dateB) return -1;
-    return dateA - dateB;
-  });
-}
-
-function isPastDateTime(value) {
-  const date = validDate(value);
-  return date ? date < new Date() : false;
-}
-
-function getScheduleState(item) {
-  const status = String(item.status || "");
-  if (status === "cancelled" || item.sessionStatus === "cancelled") {
-    return { label: "취소됨", isEnded: true, state: "cancelled" };
-  }
-  if (status === "suspended") {
-    return { label: "운영중지", isEnded: true, state: "suspended" };
-  }
-  if (status === "completed") {
-    return { label: "종료됨", isEnded: true, state: "ended" };
-  }
-
-  const now = new Date();
-  const start = validDate(item.rawTime);
-  const end = validDate(item.endTime);
-  const operationEnd = validDate(item.operationEndAt);
-
-  if (!start) {
-    if (operationEnd && operationEnd < now) {
-      return { label: "종료됨", isEnded: true, state: "ended" };
-    }
-    return { label: "예정 없음", isEnded: false, state: "unscheduled" };
-  }
-
-  if (end) {
-    if (now >= end) return { label: "종료됨", isEnded: true, state: "ended" };
-    if (now >= start) return { label: "진행 중", isEnded: false, state: "active" };
-  } else if (now > start) {
-    return { label: "종료됨", isEnded: true, state: "ended" };
-  }
-
-  if (isSameDay(start, now)) {
-    return { label: "D-DAY", isEnded: false, state: "today" };
-  }
-  return { label: getDday(item.rawTime), isEnded: false, state: "upcoming" };
-}
-
 function isMeetingEnded(item) {
-  return getScheduleState(item).isEnded;
+  return getDesktopScheduleState(item).isEnded;
 }
 
 function filterMeetingItems(items, filter) {
@@ -270,40 +165,6 @@ function uniqueMeetingsById(items) {
     }
   });
   return Array.from(byId.values());
-}
-
-function buildCalendarItems(items) {
-  const byKey = new Map();
-  items.forEach((item) => {
-    if (item.meetingType === "regular") {
-      item.sessions.forEach((session) => {
-        const date = validDate(session.start_at);
-        if (!date) return;
-        const key = `${item.id}-${session.id}`;
-        byKey.set(key, {
-          ...item,
-          calendarKey: key,
-          sessionId: session.id,
-          sessionNumber: session.session_number,
-          sessionStatus: session.status || "scheduled",
-          rawTime: session.start_at,
-          endTime: session.end_at,
-          cancellationReason: session.cancellation_reason || "",
-          originalStartAt: session.original_start_at || "",
-          originalEndAt: session.original_end_at || "",
-          rescheduleReason: session.reschedule_reason || "",
-          time: formatDateTime(session.start_at)
-        });
-      });
-      return;
-    }
-    if (!validDate(item.rawTime)) return;
-    byKey.set(`${item.id}-one-time`, {
-      ...item,
-      calendarKey: `${item.id}-one-time`
-    });
-  });
-  return Array.from(byKey.values()).sort((a, b) => validDate(a.rawTime) - validDate(b.rawTime));
 }
 
 function pageTitle(title, desc) {
@@ -415,7 +276,7 @@ function MeetingFilterChips({ value, onChange }) {
 function ScheduleItem({ item, variant = "schedule" }) {
   const isHost = item.state === "host";
   const showTypeTag = Boolean(item.meetingTypeLabel);
-  const scheduleState = getScheduleState(item);
+  const scheduleState = getDesktopScheduleState(item);
   const recruitment = recruitmentTag(item.status);
   return (
     <article className={`proto-schedule-item proto-schedule-item--profile ${isHost ? "proto-schedule-item--host" : ""}`}>
@@ -449,380 +310,6 @@ function ScheduleItem({ item, variant = "schedule" }) {
     </article>
   );
 }
-
-function calendarBaseDate(items) {
-  const firstDate = items.map((item) => validDate(item.rawTime)).find(Boolean);
-  return firstDate || new Date();
-}
-
-function calendarTitle(date) {
-  return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
-}
-
-function calendarDayTitle(date) {
-  if (!date) return "선택한 날짜";
-  const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
-  return `${date.getMonth() + 1}월 ${date.getDate()}일 (${weekday})`;
-}
-
-function calendarItemTime(value) {
-  const date = validDate(value);
-  if (!date) return "시간 미정";
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
-}
-
-function isSameCalendarDate(a, b) {
-  return Boolean(a && b)
-    && a.getFullYear() === b.getFullYear()
-    && a.getMonth() === b.getMonth()
-    && a.getDate() === b.getDate();
-}
-
-function calendarStateLabel(item) {
-  if (item.sessionStatus === "cancelled") return "취소";
-  if (item.state === "host") return "방장";
-  if (item.state === "joined") return "참여";
-  return "모집";
-}
-
-function buildCalendarCells(monthDate, items) {
-  const year = monthDate.getFullYear();
-  const month = monthDate.getMonth();
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const daysInPrevMonth = new Date(year, month, 0).getDate();
-
-  const today = new Date();
-
-  return Array.from({ length: 42 }, (_, index) => {
-    const currentDay = index - firstDay + 1;
-    const outside = currentDay < 1 || currentDay > daysInMonth;
-    const day = currentDay < 1
-      ? daysInPrevMonth + currentDay
-      : currentDay > daysInMonth
-        ? currentDay - daysInMonth
-        : currentDay;
-    const cellDate = new Date(year, outside && currentDay < 1 ? month - 1 : outside ? month + 1 : month, day);
-    const cellItems = outside ? [] : items.filter((item) => {
-      const itemDate = validDate(item.rawTime);
-      return itemDate
-        && itemDate.getFullYear() === year
-        && itemDate.getMonth() === month
-        && itemDate.getDate() === day;
-    });
-
-    return { key: `${cellDate.toISOString()}-${index}`, date: cellDate, day, outside, isToday: isSameCalendarDate(cellDate, today), items: cellItems };
-  });
-}
-
-function CalendarModal({ open, items, loading, error, onClose, highlightMeetingId, highlightChatRoomId, highlightSource, autoOpenHighlightedDay, onRequestChange, onRequestCancel }) {
-  const [monthDate, setMonthDate] = useState(() => calendarBaseDate(items));
-  const [selectedDay, setSelectedDay] = useState(null);
-  const autoOpenConsumedRef = useRef(false);
-  const cells = useMemo(() => buildCalendarCells(monthDate, items), [monthDate, items]);
-  const isHighlightedItem = (item) => {
-    if (highlightChatRoomId && item.chatRoomId) {
-      return String(item.chatRoomId) === String(highlightChatRoomId);
-    }
-    return String(item.id) === String(highlightMeetingId);
-  };
-  const highlightedItem = useMemo(
-    () => items.find((item) => {
-      if (highlightChatRoomId && item.chatRoomId) {
-        return String(item.chatRoomId) === String(highlightChatRoomId);
-      }
-      return String(item.id) === String(highlightMeetingId);
-    }),
-    [highlightChatRoomId, highlightMeetingId, items]
-  );
-  const isChatbotHighlight = highlightSource === "chatbot" && Boolean(highlightedItem);
-
-  useEffect(() => {
-    if (open) {
-      const highlightedDate = validDate(highlightedItem?.rawTime);
-      setMonthDate(highlightedDate ? new Date(highlightedDate.getFullYear(), highlightedDate.getMonth(), 1) : calendarBaseDate(items));
-    }
-  }, [open, items, highlightedItem]);
-
-  useEffect(() => {
-    if (!open) {
-      autoOpenConsumedRef.current = false;
-      setSelectedDay(null);
-      return;
-    }
-    if (!highlightedItem || !autoOpenHighlightedDay || autoOpenConsumedRef.current) return;
-    const matchedCell = cells.find((cell) => cell.items.some(isHighlightedItem));
-    if (matchedCell) {
-      setSelectedDay(matchedCell);
-      autoOpenConsumedRef.current = true;
-    }
-  }, [autoOpenHighlightedDay, cells, highlightedItem, open]);
-
-  useEffect(() => {
-    if (!selectedDay) return;
-    const refreshedCell = cells.find((cell) => {
-      const current = selectedDay.date;
-      return cell.date.getFullYear() === current.getFullYear()
-        && cell.date.getMonth() === current.getMonth()
-        && cell.date.getDate() === current.getDate();
-    });
-    setSelectedDay(refreshedCell?.items.length ? refreshedCell : null);
-  }, [cells, selectedDay?.date]);
-
-  if (!open) return null;
-  return (
-    <>
-      <div className="schedule-modal schedule-modal--calendar is-open is-calendar-modal" aria-hidden="false" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-        <div className="schedule-modal-panel">
-          <button className="schedule-modal-close" type="button" onClick={onClose}><X size={18} /></button>
-          <h2 className="schedule-modal-title">다가오는 일정</h2>
-          {isChatbotHighlight && (
-            <div className="profile-calendar-ai-note">
-              <Sparkles size={17} />
-              <span>
-                <strong>AI 비서가 알려준 일정이에요.</strong>
-                달력에서 해당 날짜를 열어 바로 확인할 수 있게 표시해두었습니다.
-              </span>
-            </div>
-          )}
-          <div className="schedule-modal-body">
-            <div className="profile-calendar-expanded">
-              <section className="page-card calendar-card">
-                <div className="calendar-head">
-                  <button type="button" aria-label="이전 달" onClick={() => { setSelectedDay(null); setMonthDate((date) => new Date(date.getFullYear(), date.getMonth() - 1, 1)); }}>
-                    <ChevronLeft size={20} />
-                  </button>
-                  <div>
-                    <p>{calendarTitle(monthDate)}</p>
-                    <h2>내 운동 일정</h2>
-                  </div>
-                  <button type="button" aria-label="다음 달" onClick={() => { setSelectedDay(null); setMonthDate((date) => new Date(date.getFullYear(), date.getMonth() + 1, 1)); }}>
-                    <ChevronRight size={20} />
-                  </button>
-                </div>
-                <div className="calendar-week"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
-                <div className="calendar-grid">
-                  {cells.map((cell) => (
-                    <button
-                      type="button"
-                      key={cell.key}
-                      className={`calendar-day profile-calendar-day ${cell.outside ? "is-outside" : ""} ${cell.items.length ? "has-event" : ""} ${cell.items.some((item) => item.state === "host") ? "host-day" : ""} ${cell.items.some((item) => item.sessionStatus === "cancelled") ? "has-cancelled-event" : ""} ${cell.items.some(isHighlightedItem) ? "is-highlighted-from-chat" : ""}`}
-                      disabled={cell.outside || !cell.items.length}
-                      onClick={() => cell.items.length && setSelectedDay(cell)}
-                    >
-                      <b>{cell.day}{cell.isToday && !cell.outside ? <span>오늘</span> : null}</b>
-                      {cell.items.some(isHighlightedItem) && isChatbotHighlight ? <i>AI 추천</i> : null}
-                      {cell.items[0] && (
-                        <>
-                          <small>{cell.items[0].title}</small>
-                          <em>{cell.items.length > 1 ? `+${cell.items.length - 1}개 더보기` : `${calendarStateLabel(cell.items[0])} · ${calendarItemTime(cell.items[0].rawTime)}`}</em>
-                        </>
-                      )}
-                    </button>
-                  ))}
-                </div>
-                {loading && <p className="empty-schedule profile-calendar-empty">달력 일정을 불러오는 중입니다.</p>}
-                {error && !loading && <p className="empty-schedule profile-calendar-empty">{error}</p>}
-                {!loading && !items.length && <p className="empty-schedule profile-calendar-empty">표시할 일정이 없습니다.</p>}
-              </section>
-            </div>
-          </div>
-        </div>
-      </div>
-      {selectedDay && (
-        <div className="schedule-modal schedule-modal--day is-open" aria-hidden="false" onMouseDown={(event) => event.target === event.currentTarget && setSelectedDay(null)}>
-          <div className="schedule-modal-panel profile-calendar-day-panel">
-            <button className="schedule-modal-close" type="button" onClick={() => setSelectedDay(null)}><X size={18} /></button>
-            <h2 className="schedule-modal-title">{calendarDayTitle(selectedDay.date)} 일정</h2>
-            <div className="schedule-modal-body">
-              {selectedDay.items.map((item) => {
-                const canManageSchedule = item.state === "host"
-                  && item.meetingType === "regular"
-                  && item.sessionId
-                  && item.sessionStatus === "scheduled"
-                  && !isPastDateTime(item.rawTime);
-                return (
-                <article className={`schedule-modal-item ${item.sessionStatus === "cancelled" ? "is-cancelled-session" : ""} ${isHighlightedItem(item) ? "is-highlighted-from-chat" : ""}`} key={item.calendarKey || `${item.state}-${item.id}`}>
-                  <img src={item.img} alt={item.title} />
-                  <div>
-                    {isHighlightedItem(item) && isChatbotHighlight && (
-                      <div className="schedule-modal-ai-badge">
-                        <Sparkles size={13} />
-                        AI 비서가 알려준 일정
-                      </div>
-                    )}
-                    {item.state === "host" && <div className="schedule-modal-status"><span className="board-badge host"><Crown size={13} />내가 방장</span></div>}
-                    <span>{calendarItemTime(item.rawTime)}</span>
-                    <h3>{item.title}</h3>
-                    <p>{item.place} · {item.member}</p>
-                    <CalendarMeetingWeather item={item} />
-                    {item.sessionStatus === "cancelled" && (
-                      <div className="schedule-session-note is-cancelled">
-                        <b>일정 취소</b>
-                        <span>{item.cancellationReason || "취소 사유가 등록되지 않았습니다."}</span>
-                      </div>
-                    )}
-                    {item.sessionStatus === "scheduled" && item.rescheduleReason && item.originalStartAt && (
-                      <div className="schedule-session-note">
-                        <b>일정 변경됨</b>
-                        <span>기존 {formatDateTime(item.originalStartAt)} · 사유: {item.rescheduleReason}</span>
-                      </div>
-                    )}
-                    {item.state !== "host" && <span className={`board-badge ${item.state}`}>{calendarStateLabel(item)}</span>}
-                    <footer>
-                      <Link className="ghost-btn" to={`/meetings/${item.id}`}>상세 보기</Link>
-                      {item.chatRoomId && <Link className="ghost-btn is-chat-return" to={`/chats/${item.chatRoomId}`}>채팅으로 이동</Link>}
-                      {item.state === "host" && <Link className="ghost-btn" to={`/host/meetings/${item.id}`}>관리</Link>}
-                    </footer>
-                    {canManageSchedule && (
-                      <footer className="schedule-session-actions">
-                        <button className="ghost-btn schedule-session-change-btn" type="button" onClick={() => onRequestChange?.(item)}>일정 변경</button>
-                        <button className="ghost-btn schedule-session-cancel-btn" type="button" onClick={() => onRequestCancel?.(item)}>일정 취소</button>
-                      </footer>
-                    )}
-                  </div>
-                </article>
-              );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-function ScheduleChangeModal({ item, submitting, error, onClose, onSubmit }) {
-  const [dateValue, setDateValue] = useState(formatDateInputValue(item?.rawTime));
-  const [startValue, setStartValue] = useState(formatTimeInputValue(item?.rawTime));
-  const [endValue, setEndValue] = useState(formatTimeInputValue(item?.endTime));
-  const [reason, setReason] = useState("");
-
-  useEffect(() => {
-    setDateValue(formatDateInputValue(item?.rawTime));
-    setStartValue(formatTimeInputValue(item?.rawTime));
-    setEndValue(formatTimeInputValue(item?.endTime));
-    setReason("");
-  }, [item]);
-
-  if (!item) return null;
-
-  const submit = (event) => {
-    event.preventDefault();
-    const trimmedReason = reason.trim();
-    if (!dateValue || !startValue || !endValue) {
-      onSubmit(null, "변경 날짜와 시간을 모두 입력해 주세요.");
-      return;
-    }
-    if (!trimmedReason) {
-      onSubmit(null, "변경 사유를 입력해 주세요.");
-      return;
-    }
-    if (trimmedReason.length > SCHEDULE_REASON_MAX_LENGTH) {
-      onSubmit(null, `변경 사유는 ${SCHEDULE_REASON_MAX_LENGTH}자 이내로 입력해 주세요.`);
-      return;
-    }
-    const startAt = `${dateValue}T${startValue}:00`;
-    const endAt = `${dateValue}T${endValue}:00`;
-    if (new Date(endAt) <= new Date(startAt)) {
-      onSubmit(null, "종료 시간은 시작 시간 이후여야 합니다.");
-      return;
-    }
-    if (new Date(startAt) <= new Date()) {
-      onSubmit(null, "현재 이후의 시간으로만 변경할 수 있습니다.");
-      return;
-    }
-    onSubmit({ start_at: startAt, end_at: endAt, reason: trimmedReason });
-  };
-
-  return (
-    <div className="schedule-modal schedule-modal--form is-open" aria-hidden="false" onMouseDown={(event) => event.target === event.currentTarget && !submitting && onClose()}>
-      <form className="schedule-modal-panel schedule-action-panel" onSubmit={submit}>
-        <button className="schedule-modal-close" type="button" onClick={onClose} disabled={submitting}><X size={18} /></button>
-        <h2 className="schedule-modal-title">일정 변경</h2>
-        <p className="schedule-action-guide">선택한 일정만 변경됩니다. 다른 정기 일정에는 영향을 주지 않습니다.</p>
-        <div className="schedule-action-current">
-          <b>{item.title}</b>
-          <span>현재 일정 {formatDateTime(item.rawTime)}{item.endTime ? `~${calendarItemTime(item.endTime)}` : ""}</span>
-        </div>
-        <div className="schedule-action-grid">
-          <label>변경 날짜 *<input type="date" value={dateValue} onChange={(event) => setDateValue(event.target.value)} /></label>
-          <label>시작 시간 *<input type="time" value={startValue} onChange={(event) => setStartValue(event.target.value)} /></label>
-          <label>종료 시간 *<input type="time" value={endValue} onChange={(event) => setEndValue(event.target.value)} /></label>
-        </div>
-        <label className="schedule-action-field">변경 사유 *
-          <textarea value={reason} maxLength={SCHEDULE_REASON_MAX_LENGTH} onChange={(event) => setReason(event.target.value)} placeholder="참여자에게 전달할 변경 사유를 입력해 주세요." />
-          <small>{reason.length}/{SCHEDULE_REASON_MAX_LENGTH}</small>
-        </label>
-        <p className="schedule-action-note">일정을 변경하면 승인된 참여자에게 알림이 전송됩니다.</p>
-        {error && <p className="schedule-action-error">{error}</p>}
-        <div className="schedule-action-buttons">
-          <button className="ghost-btn" type="button" onClick={onClose} disabled={submitting}>돌아가기</button>
-          <button className="schedule-action-submit" type="submit" disabled={submitting}>{submitting ? "변경 중..." : "일정 변경"}</button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-const CANCEL_REASON_PRESETS = [
-  { label: "우천", text: "우천으로 인해 이번 일정은 취소합니다." },
-  { label: "장소 문제", text: "장소 이용 문제로 이번 일정은 취소합니다." },
-  { label: "방장 사정", text: "방장 사정으로 이번 일정은 취소합니다." },
-  { label: "참여 인원 부족", text: "참여 인원 부족으로 이번 일정은 취소합니다." }
-];
-
-function ScheduleCancelModal({ item, submitting, error, onClose, onSubmit }) {
-  const [reason, setReason] = useState("");
-
-  useEffect(() => {
-    setReason("");
-  }, [item]);
-
-  if (!item) return null;
-
-  const submit = (event) => {
-    event.preventDefault();
-    const trimmedReason = reason.trim();
-    if (!trimmedReason) {
-      onSubmit(null, "취소 사유를 입력해 주세요.");
-      return;
-    }
-    if (trimmedReason.length > SCHEDULE_REASON_MAX_LENGTH) {
-      onSubmit(null, `취소 사유는 ${SCHEDULE_REASON_MAX_LENGTH}자 이내로 입력해 주세요.`);
-      return;
-    }
-    onSubmit({ reason: trimmedReason });
-  };
-
-  return (
-    <div className="schedule-modal schedule-modal--form is-open" aria-hidden="false" onMouseDown={(event) => event.target === event.currentTarget && !submitting && onClose()}>
-      <form className="schedule-modal-panel schedule-action-panel" onSubmit={submit}>
-        <button className="schedule-modal-close" type="button" onClick={onClose} disabled={submitting}><X size={18} /></button>
-        <h2 className="schedule-modal-title">일정 취소</h2>
-        <p className="schedule-action-guide">{formatDateTime(item.rawTime)}{item.endTime ? `~${calendarItemTime(item.endTime)}` : ""} 일정만 취소합니다.</p>
-        <div className="schedule-reason-presets">
-          {CANCEL_REASON_PRESETS.map((preset) => (
-            <button key={preset.label} type="button" onClick={() => setReason(preset.text)}>{preset.label}</button>
-          ))}
-        </div>
-        <label className="schedule-action-field">취소 사유 *
-          <textarea value={reason} maxLength={SCHEDULE_REASON_MAX_LENGTH} onChange={(event) => setReason(event.target.value)} placeholder="참여자에게 전달할 취소 사유를 입력해 주세요." />
-          <small>{reason.length}/{SCHEDULE_REASON_MAX_LENGTH}</small>
-        </label>
-        <p className="schedule-action-note">취소하면 이 일정은 달력에 취소 상태로 남고, 승인된 참여자에게 알림이 전송됩니다.</p>
-        {error && <p className="schedule-action-error">{error}</p>}
-        <div className="schedule-action-buttons">
-          <button className="ghost-btn" type="button" onClick={onClose} disabled={submitting}>돌아가기</button>
-          <button className="schedule-action-submit is-danger" type="submit" disabled={submitting}>{submitting ? "취소 중..." : "일정 취소"}</button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
 function DesktopMyPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -981,8 +468,8 @@ function DesktopMyPage() {
   const displayTag = tagLabel(user);
   const preferredSports = splitPreferredSports(profile.preferred_sports);
   const savedIntro = profile.bio || "";
-  const hostedMeetings = (meetingsState.data?.hosted || []).map((meeting) => normalizeMeeting(meeting, "host"));
-  const joinedMeetings = (meetingsState.data?.joined || []).map((meeting) => normalizeMeeting(meeting, "joined"));
+  const hostedMeetings = (meetingsState.data?.hosted || []).map((meeting) => normalizeDesktopScheduleMeeting(meeting, "host"));
+  const joinedMeetings = (meetingsState.data?.joined || []).map((meeting) => normalizeDesktopScheduleMeeting(meeting, "joined"));
   const filteredHostedMeetings = useMemo(
     () => filterMeetingItems(hostedMeetings, createdMeetingFilter),
     [createdMeetingFilter, hostedMeetings]
@@ -991,8 +478,8 @@ function DesktopMyPage() {
     () => filterMeetingItems(joinedMeetings, joinedMeetingFilter),
     [joinedMeetingFilter, joinedMeetings]
   );
-  const calendarHostedMeetings = (calendarMeetings?.hosted || []).map((meeting) => normalizeMeeting(meeting, "host"));
-  const calendarJoinedMeetings = (calendarMeetings?.joined || []).map((meeting) => normalizeMeeting(meeting, "joined"));
+  const calendarHostedMeetings = (calendarMeetings?.hosted || []).map((meeting) => normalizeDesktopScheduleMeeting(meeting, "host"));
+  const calendarJoinedMeetings = (calendarMeetings?.joined || []).map((meeting) => normalizeDesktopScheduleMeeting(meeting, "joined"));
   const scheduled = useMemo(
     () => uniqueMeetingsById([...hostedMeetings, ...joinedMeetings])
       .filter((item) => isUpcomingSchedule(item.rawTime))
@@ -1004,10 +491,25 @@ function DesktopMyPage() {
       const sourceItems = calendarMeetings
         ? [...calendarHostedMeetings, ...calendarJoinedMeetings]
         : [...hostedMeetings, ...joinedMeetings];
-      return buildCalendarItems(uniqueMeetingsById(sourceItems));
+      return buildDesktopScheduleItems(uniqueMeetingsById(sourceItems));
     },
     [calendarHostedMeetings, calendarJoinedMeetings, calendarMeetings, hostedMeetings, joinedMeetings]
   );
+  const resolveCalendarActions = (item) => {
+    const actions = [{ key: "detail", label: "상세 보기", to: `/meetings/${item.id}` }];
+    if (item.chatRoomId) actions.push({ key: "chat", label: "채팅으로 이동", to: `/chats/${item.chatRoomId}`, tone: "primary" });
+    if (item.state === "host") actions.push({ key: "manage", label: "관리", to: `/host/meetings/${item.id}` });
+    const canManageSchedule = item.state === "host"
+      && item.meetingType === "regular"
+      && item.sessionId
+      && item.sessionStatus === "scheduled"
+      && validDate(item.startAt) > new Date();
+    if (canManageSchedule) {
+      actions.push({ key: "change", label: "일정 변경", onClick: () => openScheduleAction("change", item) });
+      actions.push({ key: "cancel", label: "회차 취소", tone: "danger", onClick: () => openScheduleAction("cancel", item) });
+    }
+    return actions;
+  };
   const writtenReviews = writtenReviewsState.data?.items || [];
   const receivedReviews = receivedReviewsState.data?.items || [];
   const pendingReviews = pendingReviewsState.data?.items || [];
@@ -1435,27 +937,26 @@ function DesktopMyPage() {
           </form>
         </div>
       )}
-      <CalendarModal
-        open={calendarOpen}
+      <DesktopScheduleCalendarModal
+        isOpen={calendarOpen}
         items={calendarItems}
         loading={calendarLoading}
         error={calendarError}
         onClose={() => { setCalendarOpen(false); setCalendarHighlight((current) => ({ ...current, autoOpen: false })); }}
-        highlightMeetingId={calendarHighlight.meetingId}
-        highlightChatRoomId={calendarHighlight.chatRoomId}
+        selectedMeetingId={calendarHighlight.meetingId}
+        selectedChatRoomId={calendarHighlight.chatRoomId}
         highlightSource={calendarHighlight.source}
         autoOpenHighlightedDay={calendarHighlight.autoOpen}
-        onRequestChange={(item) => openScheduleAction("change", item)}
-        onRequestCancel={(item) => openScheduleAction("cancel", item)}
+        resolveActions={resolveCalendarActions}
       />
-      <ScheduleChangeModal
+      <DesktopScheduleChangeModal
         item={scheduleAction?.type === "change" ? scheduleAction.item : null}
         submitting={scheduleActionSubmitting}
         error={scheduleAction?.type === "change" ? scheduleActionError : ""}
         onClose={closeScheduleAction}
         onSubmit={handleScheduleChange}
       />
-      <ScheduleCancelModal
+      <DesktopScheduleCancelModal
         item={scheduleAction?.type === "cancel" ? scheduleAction.item : null}
         submitting={scheduleActionSubmitting}
         error={scheduleAction?.type === "cancel" ? scheduleActionError : ""}

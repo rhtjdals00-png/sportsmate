@@ -20,13 +20,22 @@ import Button from "../components/common/Button.jsx";
 import AttendanceQrPanel from "../components/attendance/AttendanceQrPanel.jsx";
 import EmptyState from "../components/common/EmptyState.jsx";
 import LoadingCards from "../components/common/LoadingCards.jsx";
+import DesktopHostParticipantManager from "../components/host/desktop/DesktopHostParticipantManager.jsx";
+import DesktopScheduleCalendarModal, {
+  buildDesktopScheduleItems,
+  DesktopScheduleCancelModal,
+  DesktopScheduleChangeModal,
+  getDesktopScheduleInitialDate,
+  normalizeDesktopScheduleMeeting
+} from "../components/schedule/desktop/DesktopScheduleCalendarModal.jsx";
+import { validScheduleDate } from "../components/schedule/desktop/DesktopScheduleCard.jsx";
 import MeetingCard from "../components/meeting/shared/MeetingCard.jsx";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
 import { meetingApi } from "../api/meetingApi";
 import { sportApi } from "../api/sportApi";
+import { userApi } from "../api/userApi";
 import { useAsync } from "../hooks/useAsync";
 import { useResponsive } from "../hooks/useResponsive";
-import { formatExerciseLevel } from "../utils/formatters";
 
 function parseMeetingDate(value) {
   if (!value) return null;
@@ -108,7 +117,7 @@ function HostMeetingManagePage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [notice, setNotice] = useState({ title: "", content: "", is_pinned: true, notice_type: "text", session_id: null });
   const [isDeletingMeeting, setIsDeletingMeeting] = useState(false);
-  const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId]);
+  const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId, refreshKey]);
   const notices = useAsync(() => meetingApi.notices(meetingId), [meetingId, refreshKey]);
 
   if (detail.loading) return <LoadingCards count={2} />;
@@ -205,6 +214,7 @@ function HostMeetingManagePage() {
         toggleMeetingStatus={toggleMeetingStatus}
         deleteMeeting={deleteMeeting}
         isDeletingMeeting={isDeletingMeeting}
+        onMeetingUpdated={() => setRefreshKey((value) => value + 1)}
       />
     );
   }
@@ -306,15 +316,150 @@ function hostMeetingStatusClass(status) {
   return "closed";
 }
 
-function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading, setNotice, submitNotice, toggleMeetingStatus, deleteMeeting, isDeletingMeeting }) {
+function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading, setNotice, submitNotice, toggleMeetingStatus, deleteMeeting, isDeletingMeeting, onMeetingUpdated }) {
   const [activeTab, setActiveTab] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleAction, setScheduleAction] = useState(null);
+  const [scheduleActionError, setScheduleActionError] = useState("");
+  const [scheduleActionSubmitting, setScheduleActionSubmitting] = useState(false);
+  const [userCalendarData, setUserCalendarData] = useState(null);
+  const [userCalendarLoading, setUserCalendarLoading] = useState(false);
+  const [userCalendarError, setUserCalendarError] = useState("");
+  const calendarRequestRef = useRef(null);
   const fileInputRef = useRef(null);
   const recruitmentAction = getRecruitmentAction(meeting);
   const sessions = useAsync(
     () => meeting.meeting_type === "regular" ? meetingApi.sessions(meeting.id) : Promise.resolve({ items: [] }),
-    [meeting.id, meeting.meeting_type]
+    [meeting.id, meeting.meeting_type, refreshKey]
   );
+
+  const managedMeetingWithSessions = useMemo(() => meeting.meeting_type === "regular"
+    ? { ...meeting, sessions: sessions.data?.items || meeting.sessions || [] }
+    : meeting, [meeting, sessions.data?.items]);
+  const managedCalendarItems = useMemo(() => buildDesktopScheduleItems([
+    normalizeDesktopScheduleMeeting(managedMeetingWithSessions, "host")
+  ]), [managedMeetingWithSessions]);
+  const calendarItems = useMemo(() => {
+    const meetingsById = new Map();
+    (userCalendarData?.joined || []).forEach((item) => {
+      meetingsById.set(String(item.id), { meeting: item, participantStatus: "joined" });
+    });
+    (userCalendarData?.hosted || []).forEach((item) => {
+      meetingsById.set(String(item.id), { meeting: item, participantStatus: "host" });
+    });
+    meetingsById.set(String(meeting.id), { meeting: managedMeetingWithSessions, participantStatus: "host" });
+    return buildDesktopScheduleItems(Array.from(meetingsById.values(), ({ meeting: item, participantStatus }) => (
+      normalizeDesktopScheduleMeeting(item, participantStatus)
+    )));
+  }, [managedMeetingWithSessions, meeting.id, userCalendarData]);
+  const calendarInitialDate = useMemo(() => getDesktopScheduleInitialDate(managedCalendarItems), [managedCalendarItems]);
+
+  const loadUserCalendar = async ({ force = false } = {}) => {
+    if (!force && userCalendarData) return userCalendarData;
+    if (calendarRequestRef.current) {
+      const pendingData = await calendarRequestRef.current.catch(() => null);
+      if (!force) return pendingData;
+    }
+    setUserCalendarLoading(true);
+    setUserCalendarError("");
+    const request = userApi.myCalendar();
+    calendarRequestRef.current = request;
+    try {
+      const data = await request;
+      setUserCalendarData(data);
+      return data;
+    } catch (error) {
+      console.error("Failed to load user calendar", error);
+      setUserCalendarError("다른 일정을 불러오지 못했습니다.");
+      return null;
+    } finally {
+      if (calendarRequestRef.current === request) {
+        calendarRequestRef.current = null;
+        setUserCalendarLoading(false);
+      }
+    }
+  };
+
+  const openScheduleCalendar = () => {
+    setScheduleOpen(true);
+    if (!userCalendarData) loadUserCalendar();
+  };
+
+  const closeScheduleAction = () => {
+    if (scheduleActionSubmitting) return;
+    setScheduleAction(null);
+    setScheduleActionError("");
+  };
+
+  const handleScheduleChange = async (payload, clientError = "") => {
+    if (clientError) return setScheduleActionError(clientError);
+    if (!scheduleAction?.item || !payload) return;
+    if (String(scheduleAction.item.meetingId ?? scheduleAction.item.id) !== String(meeting.id)) return;
+    setScheduleActionSubmitting(true);
+    setScheduleActionError("");
+    try {
+      await meetingApi.updateSession(meeting.id, scheduleAction.item.sessionId, payload);
+      setRefreshKey((value) => value + 1);
+      onMeetingUpdated?.();
+      loadUserCalendar({ force: true });
+      setScheduleAction(null);
+      alert("일정이 변경되었습니다.");
+    } catch (error) {
+      setScheduleActionError(error.response?.data?.message || "일정 변경 중 오류가 발생했습니다.");
+    } finally {
+      setScheduleActionSubmitting(false);
+    }
+  };
+
+  const handleScheduleCancel = async (payload, clientError = "") => {
+    if (clientError) return setScheduleActionError(clientError);
+    if (!scheduleAction?.item || !payload?.reason) return;
+    if (String(scheduleAction.item.meetingId ?? scheduleAction.item.id) !== String(meeting.id)) return;
+    setScheduleActionSubmitting(true);
+    setScheduleActionError("");
+    try {
+      await meetingApi.cancelSession(meeting.id, scheduleAction.item.sessionId, payload.reason);
+      setRefreshKey((value) => value + 1);
+      onMeetingUpdated?.();
+      loadUserCalendar({ force: true });
+      setScheduleAction(null);
+      alert("일정이 취소되었습니다.");
+    } catch (error) {
+      setScheduleActionError(error.response?.data?.message || "일정 취소 중 오류가 발생했습니다.");
+    } finally {
+      setScheduleActionSubmitting(false);
+    }
+  };
+
+  const resolveCalendarActions = (item) => {
+    const isManagedMeeting = String(item.meetingId ?? item.id) === String(meeting.id);
+    const actions = [{ key: "detail", label: "상세 보기", to: `/meetings/${item.id}`, tone: "primary" }];
+    if (item.chatRoomId) actions.push({ key: "chat", label: "채팅", to: `/chats/${item.chatRoomId}` });
+    if (item.isHost) {
+      actions.push(isManagedMeeting
+        ? { key: "manage", label: "관리 화면", onClick: () => setScheduleOpen(false) }
+        : { key: "manage", label: "관리 화면", to: `/host/meetings/${item.id}` });
+    }
+    const canManageSchedule = isManagedMeeting
+      && item.meetingType === "regular"
+      && item.sessionId
+      && item.sessionStatus === "scheduled"
+      && validScheduleDate(item.startAt) > new Date();
+    if (canManageSchedule) {
+      actions.push({ key: "change", label: "일정 변경", onClick: () => {
+        if (String(item.meetingId ?? item.id) !== String(meeting.id)) return;
+        setScheduleAction({ type: "change", item });
+        setScheduleActionError("");
+      } });
+      actions.push({ key: "cancel", label: "회차 취소", tone: "danger", onClick: () => {
+        if (String(item.meetingId ?? item.id) !== String(meeting.id)) return;
+        setScheduleAction({ type: "cancel", item });
+        setScheduleActionError("");
+      } });
+    }
+    return actions;
+  };
 
   const scheduleNoticeOptions = useMemo(() => {
     if (meeting.meeting_type === "regular") {
@@ -522,7 +667,7 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
     }
   };
 
-  // 4. 투표 관리 관련 API 호출
+  // 3. 투표 관리 관련 API 호출
   const votes = useAsync(
     () => (activeTab === "vote" ? meetingApi.votes(meeting.id) : Promise.resolve(null)),
     [meeting.id, activeTab, refreshKey]
@@ -653,7 +798,7 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
         {/* 탭 기반 관리 메뉴 */}
         <section className="page-card desktop-host-tool-card">
           <div className="section-head"><h2>관리 메뉴</h2></div>
-          <div className="desktop-host-tool-grid-5">
+          <div className="desktop-host-tool-grid-6">
             <button
               type="button"
               className={`desktop-host-tool-button ${activeTab === "edit" ? "active" : ""}`}
@@ -664,11 +809,19 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
             </button>
             <button
               type="button"
+              className={`desktop-host-tool-button ${scheduleOpen ? "active" : ""}`}
+              onClick={openScheduleCalendar}
+            >
+              <CalendarDays size={20} />
+              <span>일정 관리</span>
+            </button>
+            <button
+              type="button"
               className={`desktop-host-tool-button ${activeTab === "applicants" ? "active" : ""}`}
               onClick={() => handleTabClick("applicants")}
             >
               <UserCheck size={20} />
-              <span>신청자 관리</span>
+              <span>참가자 관리</span>
             </button>
             <button
               type="button"
@@ -789,47 +942,12 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
         )}
 
         {activeTab === "applicants" && (
-          <section className="page-card desktop-host-tab-content-card">
-            <div className="section-head"><h2>참가자 관리</h2></div>
-            {applicants.loading ? (
-              <LoadingCards count={2} />
-            ) : applicants.data?.items?.length ? (
-              <table className="flow-table">
-                <thead>
-                  <tr>
-                    <th>참가자</th>
-                    <th>상태</th>
-                    <th>운동 성향</th>
-                    <th>신청 메시지</th>
-                    <th>관리</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {applicants.data.items.map((item) => (
-                    <tr key={item.id}>
-                      <td>
-                        <div className="table-user">
-                          <img src={item.user.profile_image_url || "/img/test3.png"} alt="" />
-                          <span><b>{item.user.nickname}</b><small>{item.user.profile?.region || "지역 미설정"}</small></span>
-                        </div>
-                      </td>
-                      <td><span className="status wait">대기</span></td>
-                      <td>{formatExerciseLevel(item.user.profile?.exercise_level)} · {item.user.profile?.preferred_sports || "선호 종목 미설정"}</td>
-                      <td>{item.join_message || "참여 신청 메시지가 없습니다."}</td>
-                      <td>
-                        <div className="table-actions">
-                          <Button type="button" onClick={() => decideApplicant(item.user.id, "approve")}>승인</Button>
-                          <Button type="button" variant="danger" onClick={() => decideApplicant(item.user.id, "reject")}>거절</Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <EmptyState title="대기 중인 신청자가 없습니다." description="새 참여 신청이 들어오면 이곳에서 승인하거나 거절할 수 있습니다." />
-            )}
-          </section>
+          <DesktopHostParticipantManager
+            meetingId={meeting.id}
+            meeting={meeting}
+            onMeetingUpdated={onMeetingUpdated}
+            embedded
+          />
         )}
 
         {activeTab === "attendance" && (
@@ -1124,6 +1242,33 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
           </div>
         </section>
       </div>
+      <DesktopScheduleCalendarModal
+        isOpen={scheduleOpen}
+        onClose={() => setScheduleOpen(false)}
+        items={calendarItems}
+        loading={(meeting.meeting_type === "regular" && sessions.loading) || userCalendarLoading}
+        error={sessions.error ? "등록된 일정을 불러오지 못했습니다." : userCalendarError}
+        modalTitle="일정 관리"
+        calendarTitle="내 운동 일정"
+        initialDate={calendarInitialDate}
+        managedMeetingId={meeting.id}
+        emptyMessage="등록된 일정이 없습니다."
+        resolveActions={resolveCalendarActions}
+      />
+      <DesktopScheduleChangeModal
+        item={scheduleAction?.type === "change" ? scheduleAction.item : null}
+        submitting={scheduleActionSubmitting}
+        error={scheduleAction?.type === "change" ? scheduleActionError : ""}
+        onClose={closeScheduleAction}
+        onSubmit={handleScheduleChange}
+      />
+      <DesktopScheduleCancelModal
+        item={scheduleAction?.type === "cancel" ? scheduleAction.item : null}
+        submitting={scheduleActionSubmitting}
+        error={scheduleAction?.type === "cancel" ? scheduleActionError : ""}
+        onClose={closeScheduleAction}
+        onSubmit={handleScheduleCancel}
+      />
     </div>
   );
 }

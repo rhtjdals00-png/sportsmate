@@ -20,6 +20,7 @@ from app.services.chat_service import (
     send_direct_message,
     send_message,
 )
+from app.services.meeting_service import recalculate_current_participants
 from app.utils.meeting_state import meeting_chat_is_read_only
 
 chat_bp = Blueprint("chat", __name__)
@@ -445,8 +446,7 @@ def leave_room(room_id):
             return jsonify({"message": "이미 나간 채팅방입니다."}), 400
         participant.status = "cancelled"
         if room.meeting:
-            room.meeting.current_participants = max(1, int(room.meeting.current_participants or 1) - 1)
-            room.meeting.sync_status()
+            recalculate_current_participants(room.meeting)
         db.session.add(ChatMessage(
             chat_room_id=room.id,
             user_id=user_id,

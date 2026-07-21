@@ -4,7 +4,7 @@ import { useResponsive } from "../hooks/useResponsive";
 
 function HostApplicantsPage() {
   const { isMobile } = useResponsive();
-  return isMobile ? <MobileHostApplicants /> : <DesktopHostApplicants />;
+  return isMobile ? <MobileHostApplicants /> : <DesktopHostApplicants standalone />;
 }
 
 export default HostApplicantsPage;
