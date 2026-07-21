@@ -453,8 +453,8 @@ function DesktopMeetingCreate() {
     }
     const requestId = weatherRequestRef.current + 1;
     weatherRequestRef.current = requestId;
+    setWeather({ loading: true, forecast: null });
     const timer = window.setTimeout(() => {
-      setWeather((current) => ({ ...current, loading: true }));
       weatherApi.forecast({ latitude, longitude, at, address: form.address })
         .then((data) => {
           if (weatherRequestRef.current === requestId) setWeather({ loading: false, forecast: data.forecast });
@@ -466,7 +466,7 @@ function DesktopMeetingCreate() {
             forecast: { available: false, message: error.response?.data?.message || "예보를 불러오지 못했습니다." },
           });
         });
-    }, 500);
+    }, 250);
     return () => window.clearTimeout(timer);
   }, [form.latitude, form.longitude, form.start_date, form.start_time, form.address]);
 
@@ -824,6 +824,7 @@ function DesktopMeetingCreate() {
                   forecast={weather.forecast}
                   loading={weather.loading}
                   title={form.meeting_type === "regular" ? "첫 회차 날씨" : "모임 날씨"}
+                  selectedAt={combineDateTime(form.start_date, form.start_time)}
                 />
               </div>
             )}

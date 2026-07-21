@@ -539,10 +539,9 @@ def _session_notification_recipients(meeting):
     rows = (
         Participant.query
         .filter_by(meeting_id=meeting.id, status="approved")
-        .filter(Participant.user_id != meeting.host_id)
         .all()
     )
-    return sorted({row.user_id for row in rows})
+    return sorted({meeting.host_id, *(row.user_id for row in rows)})
 
 
 def _send_session_pushes(user_ids, title, message, link_url):
@@ -643,6 +642,16 @@ def update_meeting_session(meeting_id, session_id, current_user_id, data):
         session.start_at = new_start
         session.end_at = new_end
         session.reschedule_reason = reason
+        _add_meeting_system_message(
+            meeting,
+            current_user_id,
+            (
+                "📅 모임 일정이 변경되었습니다.\n"
+                f"변경 전: {old_schedule}\n"
+                f"변경 후: {new_schedule}\n"
+                f"변경 사유: {reason}"
+            ),
+        )
         for user_id in recipients:
             create_notification(user_id, "schedule_changed", title, message, link_url, send_push=False)
         db.session.commit()
@@ -678,6 +687,15 @@ def cancel_meeting_session(meeting_id, session_id, current_user_id, reason):
     try:
         session.status = "cancelled"
         session.cancellation_reason = cancellation_reason
+        _add_meeting_system_message(
+            meeting,
+            current_user_id,
+            (
+                "🚫 모임 일정이 취소되었습니다.\n"
+                f"취소 일정: {cancelled_schedule}\n"
+                f"취소 사유: {cancellation_reason}{next_text}"
+            ),
+        )
         for user_id in recipients:
             create_notification(user_id, "schedule_cancelled", title, message, link_url, send_push=False)
         db.session.commit()

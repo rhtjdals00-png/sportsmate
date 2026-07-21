@@ -104,17 +104,61 @@ class Attendance(db.Model):
     __tablename__ = "attendances"
     id = db.Column(db.Integer, primary_key=True)
     meeting_id = db.Column(db.Integer, db.ForeignKey("meetings.id"), nullable=False)
+    meeting_session_id = db.Column(
+        db.Integer,
+        db.ForeignKey("meeting_sessions.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     status = db.Column(db.String(30), default="present", nullable=False)
     checked_at = db.Column(db.DateTime, default=kst_now, nullable=False)
 
     user = db.relationship("User")
+    meeting_session = db.relationship("MeetingSession")
+
+    __table_args__ = (
+        db.UniqueConstraint("meeting_session_id", "user_id", name="uq_attendance_session_user"),
+        db.CheckConstraint("status in ('present', 'absent')", name="ck_attendances_status"),
+    )
 
     def to_dict(self):
         return {
             "id": self.id,
             "meeting_id": self.meeting_id,
+            "meeting_session_id": self.meeting_session_id,
             "user": self.user.to_dict(),
             "status": self.status,
             "checked_at": self.checked_at.isoformat()
+        }
+
+
+class AttendanceCheckinWindow(db.Model, TimestampMixin):
+    __tablename__ = "attendance_checkin_windows"
+
+    id = db.Column(db.Integer, primary_key=True)
+    meeting_session_id = db.Column(
+        db.Integer,
+        db.ForeignKey("meeting_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    token_hash = db.Column(db.String(64), nullable=False, unique=True, index=True)
+    opens_at = db.Column(db.DateTime, nullable=False)
+    closes_at = db.Column(db.DateTime, nullable=False)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+    meeting_session = db.relationship("MeetingSession")
+    creator = db.relationship("User")
+
+    def to_dict(self):
+        now = kst_now()
+        return {
+            "id": self.id,
+            "meeting_session_id": self.meeting_session_id,
+            "opens_at": self.opens_at.isoformat(),
+            "closes_at": self.closes_at.isoformat(),
+            "is_active": self.is_active,
+            "is_open": self.is_active and self.opens_at <= now < self.closes_at,
         }

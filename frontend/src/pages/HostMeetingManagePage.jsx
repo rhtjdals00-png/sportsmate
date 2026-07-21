@@ -17,6 +17,7 @@ import {
   MessageCircle
 } from "lucide-react";
 import Button from "../components/common/Button.jsx";
+import AttendanceQrPanel from "../components/attendance/AttendanceQrPanel.jsx";
 import EmptyState from "../components/common/EmptyState.jsx";
 import LoadingCards from "../components/common/LoadingCards.jsx";
 import MeetingCard from "../components/meeting/shared/MeetingCard.jsx";
@@ -31,6 +32,19 @@ function parseMeetingDate(value) {
   if (!value) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatAttendanceSession(session) {
+  if (!session?.start_at) return `${session?.session_number || "-"}회차`;
+  const date = new Date(session.start_at);
+  const dateLabel = date.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  });
+  const timeLabel = date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+  return `${session.session_number}회차 · ${dateLabel} ${timeLabel}${session.status === "cancelled" ? " · 취소" : ""}`;
 }
 
 function getMeetingOperationEndAt(meeting) {
@@ -479,15 +493,33 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
   };
 
   // 3. 출석 관리 관련 API 호출
+  const [selectedAttendanceSessionId, setSelectedAttendanceSessionId] = useState("");
   const attendance = useAsync(
-    () => (activeTab === "attendance" ? meetingApi.attendance(meeting.id) : Promise.resolve(null)),
-    [meeting.id, activeTab, refreshKey]
+    () => (activeTab === "attendance"
+      ? meetingApi.attendance(meeting.id, selectedAttendanceSessionId ? { session_id: selectedAttendanceSessionId } : {})
+      : Promise.resolve(null)),
+    [meeting.id, activeTab, refreshKey, selectedAttendanceSessionId]
   );
-  const checkedIds = new Set((attendance.data?.items || []).map((item) => item.user.id));
-  const checkParticipant = async (userId) => {
-    await meetingApi.checkAttendance(meeting.id, { user_id: userId });
-    setRefreshKey((value) => value + 1);
-    alert("출석 체크되었습니다.");
+  const [attendanceUpdatingId, setAttendanceUpdatingId] = useState(null);
+  const attendanceStatusByUser = new Map((attendance.data?.items || []).map((item) => [item.user.id, item.status]));
+  const activeAttendanceSessionId = selectedAttendanceSessionId || attendance.data?.selected_session?.id || "";
+  const checkParticipant = async (userId, status) => {
+    if (!activeAttendanceSessionId) {
+      alert("출석을 기록할 회차를 선택해 주세요.");
+      return;
+    }
+    setAttendanceUpdatingId(userId);
+    try {
+      await meetingApi.checkAttendance(meeting.id, {
+        user_id: userId,
+        status,
+        session_id: Number(activeAttendanceSessionId),
+      });
+      setRefreshKey((value) => value + 1);
+      alert(status === "present" ? "출석으로 변경되었습니다." : "미출석으로 변경되었습니다.");
+    } finally {
+      setAttendanceUpdatingId(null);
+    }
   };
 
   // 4. 투표 관리 관련 API 호출
@@ -802,30 +834,74 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
 
         {activeTab === "attendance" && (
           <section className="page-card desktop-host-tab-content-card">
-            <div className="section-head"><h2>출석 체크 관리</h2></div>
+            <div className="section-head">
+              <h2>출석 체크 관리</h2>
+              {(attendance.data?.sessions?.length || attendance.data?.past_sessions?.length) ? (
+                <select
+                  className="desktop-attendance-session-select"
+                  aria-label="출석 회차 선택"
+                  value={activeAttendanceSessionId}
+                  onChange={(event) => setSelectedAttendanceSessionId(event.target.value)}
+                >
+                  {!activeAttendanceSessionId ? <option value="">회차를 선택해 주세요</option> : null}
+                  {attendance.data.sessions?.length ? (
+                    <optgroup label="이번 주 남은 회차">
+                      {attendance.data.sessions.map((session) => (
+                        <option key={session.id} value={session.id}>{formatAttendanceSession(session)}</option>
+                      ))}
+                    </optgroup>
+                  ) : null}
+                  {attendance.data.past_sessions?.length ? (
+                    <optgroup label="지난 회차 수정">
+                      {attendance.data.past_sessions.map((session) => (
+                        <option key={session.id} value={session.id}>{formatAttendanceSession(session)}</option>
+                      ))}
+                    </optgroup>
+                  ) : null}
+                </select>
+              ) : null}
+            </div>
             {attendance.loading ? (
               <LoadingCards count={2} />
+            ) : !attendance.data?.selected_session ? (
+              <EmptyState title="출석 회차를 선택해 주세요." description="지난 회차는 수정할 수 있고, 다음 주 회차는 다음 주 월요일부터 열립니다." />
             ) : attendance.data?.approved_participants?.length ? (
-              <div className="attendance-list">
-                {(attendance.data?.approved_participants || []).map((participant) => (
+              <>
+                <AttendanceQrPanel
+                  key={attendance.data.selected_session.id}
+                  meetingId={meeting.id}
+                  session={attendance.data.selected_session}
+                />
+                <div className="attendance-list">
+                  {(attendance.data?.approved_participants || []).map((participant) => (
                   <article key={participant.id} className="desktop-attendance-item">
                     <div className="user-info">
                       <img src={participant.user.profile_image_url || "/images/logo.png"} alt="" />
                       <strong>{participant.user.nickname}</strong>
                     </div>
                     <div className="control">
-                      <span className={checkedIds.has(participant.user.id) ? "status-badge checked" : "status-badge"}>
-                        {checkedIds.has(participant.user.id) ? "출석 완료" : "미출석"}
+                      <span className={attendanceStatusByUser.get(participant.user.id) === "present" ? "status-badge checked" : "status-badge"}>
+                        {attendanceStatusByUser.get(participant.user.id) === "present" ? "출석 완료" : "미출석"}
                       </span>
-                      {!checkedIds.has(participant.user.id) && (
-                        <Button type="button" onClick={() => checkParticipant(participant.user.id)}>
-                          출석 체크
-                        </Button>
-                      )}
+                      <Button
+                        type="button"
+                        onClick={() => checkParticipant(
+                          participant.user.id,
+                          attendanceStatusByUser.get(participant.user.id) === "present" ? "absent" : "present"
+                        )}
+                        disabled={!activeAttendanceSessionId || attendanceUpdatingId === participant.user.id}
+                      >
+                        {attendanceUpdatingId === participant.user.id
+                          ? "처리 중"
+                          : attendanceStatusByUser.get(participant.user.id) === "present"
+                            ? "미출석으로 변경"
+                            : "출석 체크"}
+                      </Button>
                     </div>
                   </article>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </>
             ) : (
               <EmptyState title="출석 대상이 없습니다." description="승인된 참여자가 생기면 출석 체크를 진행할 수 있습니다." />
             )}
