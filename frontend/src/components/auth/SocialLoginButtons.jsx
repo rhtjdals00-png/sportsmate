@@ -1,4 +1,5 @@
 import { MessageCircle, Search } from "lucide-react";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 
 const providers = [
@@ -12,6 +13,7 @@ function normalizeAuthProvider(provider) {
 
 function SocialLoginButtons() {
   const { socialLogin } = useAuth();
+  const location = useLocation();
 
   const startSocialLogin = async (provider) => {
     const nextProvider = normalizeAuthProvider(provider);
@@ -20,6 +22,9 @@ function SocialLoginButtons() {
       return;
     }
     try {
+      const redirectPath = location.state?.from;
+      if (redirectPath) localStorage.setItem("sportsmate_post_auth_redirect", redirectPath);
+      else localStorage.removeItem("sportsmate_post_auth_redirect");
       await socialLogin(nextProvider);
     } catch (error) {
       window.alert(error?.message || "소셜 로그인 요청에 실패했습니다.");

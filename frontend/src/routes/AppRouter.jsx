@@ -24,6 +24,7 @@ import HostDashboardPage from "../pages/HostDashboardPage.jsx";
 import HostMeetingManagePage from "../pages/HostMeetingManagePage.jsx";
 import HostApplicantsPage from "../pages/HostApplicantsPage.jsx";
 import HostAttendancePage from "../pages/HostAttendancePage.jsx";
+import AttendanceCheckinPage from "../pages/AttendanceCheckinPage.jsx";
 import HostVotePage from "../pages/HostVotePage.jsx";
 import HostStatsPage from "../pages/HostStatsPage.jsx";
 import AdminLayout from "../layouts/AdminLayout.jsx";
@@ -121,6 +122,7 @@ function AppRouter() {
         <Route path="/host/meetings/:meetingId" element={protect(<HostMeetingManagePage />)} />
         <Route path="/host/meetings/:meetingId/applicants" element={protect(<HostApplicantsPage />)} />
         <Route path="/host/meetings/:meetingId/attendance" element={protect(<HostAttendancePage />)} />
+        <Route path="/attendance/checkin/:token" element={protect(<AttendanceCheckinPage />)} />
         <Route path="/host/meetings/:meetingId/vote" element={protect(<HostVotePage />)} />
         <Route path="/host/meetings/:meetingId/stats" element={protect(<HostStatsPage />)} />
         <Route path="/mobile/*" element={<Navigate to="/" replace />} />

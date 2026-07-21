@@ -227,10 +227,20 @@
 .desktop-weather-hourly time { color: #64748b; font-size: 12px; }
 .desktop-weather-hourly svg { color: #2563eb; }
 .desktop-weather-hourly article > span { display: flex; align-items: center; gap: 3px; color: #3b82f6; font-size: 12px; }
-.desktop-weather-daily > div:last-child { display: grid; }
+.desktop-weather-daily .desktop-section__head > div { display: flex; align-items: baseline; gap: 12px; }
+.desktop-weather-daily .desktop-section__head > div span { color: #64748b; font-size: 14px; }
+.desktop-weather-daily__toggle { display: inline-flex; align-items: center; gap: 6px; padding: 9px 12px; border: 1px solid #dbe4f0; border-radius: 10px; background: #fff; color: #334155; font-weight: 700; cursor: pointer; }
+.desktop-weather-daily__toggle svg { transition: transform 0.2s ease; }
+.desktop-weather-daily__toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.desktop-weather-daily__list { display: grid; }
 .desktop-weather-daily article { display: grid; grid-template-columns: 100px 1fr 1fr 80px; align-items: center; gap: 16px; padding: 16px 4px; border-bottom: 1px solid #e2e8f0; }
 .desktop-weather-daily article > span { display: flex; align-items: center; gap: 8px; color: #475569; }
 .desktop-weather-daily article svg { color: #2563eb; }
+.desktop-weather-extended { margin-top: 12px; padding-top: 18px; border-top: 1px solid #dbe4f0; }
+.desktop-weather-extended__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.desktop-weather-extended__head h3 { margin: 0; font-size: 18px; }
+.desktop-weather-extended__head span, .desktop-weather-extended > p { color: #64748b; font-size: 14px; }
+.desktop-weather-extended > p { margin: 18px 0 8px; text-align: center; }
 
 @media (max-width: 760px) {
   .home-weather-card, .desktop-weather-current { grid-template-columns: 1fr; }

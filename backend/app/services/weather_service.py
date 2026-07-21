@@ -278,6 +278,49 @@ def _mid_forecast(target, address, now):
     }
 
 
+def get_extended_forecast(address):
+    now = datetime.now()
+    daily = []
+    condition_priority = {"clear": 0, "cloudy": 1, "rain": 2, "snow": 3}
+
+    for offset in range(4, 11):
+        target_date = now.date() + timedelta(days=offset)
+        base_target = datetime.combine(target_date, datetime.min.time())
+        periods = [
+            _mid_forecast(base_target.replace(hour=9), address, now),
+            _mid_forecast(base_target.replace(hour=15), address, now),
+        ]
+        periods = [item for item in periods if item and item.get("available")]
+        if not periods:
+            continue
+
+        labels = []
+        for item in periods:
+            label = item.get("condition_label") or "예보 정보 없음"
+            if label not in labels:
+                labels.append(label)
+        representative = max(periods, key=lambda item: condition_priority.get(item.get("condition"), 1))
+        precipitation_values = [
+            item.get("precipitation_probability")
+            for item in periods
+            if item.get("precipitation_probability") is not None
+        ]
+        daily.append({
+            "date": target_date.isoformat(),
+            "condition": representative.get("condition") or "cloudy",
+            "condition_label": " / ".join(labels),
+            "temperature_min_c": periods[0].get("temperature_min_c"),
+            "temperature_max_c": periods[0].get("temperature_max_c"),
+            "precipitation_probability": max(precipitation_values) if precipitation_values else None,
+        })
+
+    return {
+        "daily": daily,
+        "source": "기상청 중기예보",
+        "fetched_at": now.isoformat(timespec="seconds"),
+    }
+
+
 def get_forecast(latitude, longitude, target, address=""):
     now = datetime.now()
     if target < now - timedelta(hours=2):
@@ -285,5 +328,5 @@ def get_forecast(latitude, longitude, target, address=""):
     days = (target.date() - now.date()).days
     result = _short_forecast(latitude, longitude, target, now) if days <= 3 else _mid_forecast(target, address, now) if days <= 10 else None
     if result is None:
-        result = {"available": False, "forecast_type": "unavailable", "forecast_at": target.isoformat(), "message": "아직 발표되지 않은 예보입니다. 일정이 가까워지면 확인할 수 있습니다."}
+        result = {"available": False, "forecast_type": "unavailable", "forecast_at": target.isoformat(), "message": "기상정보가 없습니다."}
     return {**result, "source": "기상청", "fetched_at": now.isoformat(timespec="seconds")}

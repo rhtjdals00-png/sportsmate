@@ -1,0 +1,93 @@
+[
+  {
+    "id": 1,
+    "meeting_id": 15,
+    "user_id": 21,
+    "status": "present",
+    "checked_at": "2026-07-02T05:52:34.583785"
+  },
+  {
+    "id": 2,
+    "meeting_id": 1,
+    "user_id": 22,
+    "status": "present",
+    "checked_at": "2026-07-03T02:18:55.409302"
+  },
+  {
+    "id": 3,
+    "meeting_id": 1,
+    "user_id": 23,
+    "status": "present",
+    "checked_at": "2026-07-03T02:18:57.006372"
+  },
+  {
+    "id": 4,
+    "meeting_id": 1,
+    "user_id": 21,
+    "status": "present",
+    "checked_at": "2026-07-03T02:18:58.245029"
+  },
+  {
+    "id": 5,
+    "meeting_id": 7,
+    "user_id": 21,
+    "status": "present",
+    "checked_at": "2026-07-08T02:34:25.313194"
+  },
+  {
+    "id": 6,
+    "meeting_id": 6,
+    "user_id": 21,
+    "status": "present",
+    "checked_at": "2026-07-08T02:35:42.259626"
+  },
+  {
+    "id": 7,
+    "meeting_id": 27,
+    "user_id": 32,
+    "status": "present",
+    "checked_at": "2026-07-09T03:11:46.298356"
+  },
+  {
+    "id": 8,
+    "meeting_id": 27,
+    "user_id": 57,
+    "status": "present",
+    "checked_at": "2026-07-09T03:56:32.394694"
+  },
+  {
+    "id": 9,
+    "meeting_id": 9,
+    "user_id": 23,
+    "status": "present",
+    "checked_at": "2026-07-09T15:39:03.274142"
+  },
+  {
+    "id": 11,
+    "meeting_id": 3,
+    "user_id": 32,
+    "status": "present",
+    "checked_at": "2026-07-10T16:32:07.599877"
+  },
+  {
+    "id": 12,
+    "meeting_id": 3,
+    "user_id": 23,
+    "status": "present",
+    "checked_at": "2026-07-10T16:32:51.128187"
+  },
+  {
+    "id": 13,
+    "meeting_id": 28,
+    "user_id": 32,
+    "status": "present",
+    "checked_at": "2026-07-16T16:50:32.733176"
+  },
+  {
+    "id": 14,
+    "meeting_id": 49,
+    "user_id": 63,
+    "status": "present",
+    "checked_at": "2026-07-21T14:50:35.252070"
+  }
+]

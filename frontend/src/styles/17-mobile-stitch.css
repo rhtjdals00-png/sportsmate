@@ -3696,6 +3696,62 @@
   gap: 12px;
 }
 
+.mobile-shell .attendance-session-picker {
+  display: grid;
+  gap: 7px;
+  margin: 12px 16px;
+  color: var(--mobile-text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.mobile-shell .attendance-session-picker select {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--mobile-soft-border);
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 0 12px;
+  color: var(--mobile-text);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.mobile-shell .attendance-qr-panel {
+  margin: 0 16px 14px;
+  border-radius: 20px;
+  padding: 16px;
+}
+
+.mobile-shell .attendance-qr-panel__heading,
+.mobile-shell .attendance-qr-panel__code,
+.mobile-shell .attendance-qr-panel__empty {
+  display: grid;
+  justify-items: stretch;
+}
+
+.mobile-shell .attendance-qr-panel__heading > strong {
+  justify-self: start;
+}
+
+.mobile-shell .attendance-qr-panel__code svg {
+  width: min(220px, 100%);
+  height: auto;
+  justify-self: center;
+}
+
+.mobile-shell .attendance-qr-panel__code > div {
+  max-width: none;
+  text-align: center;
+}
+
+.mobile-shell .attendance-checkin-result {
+  min-height: 390px;
+  margin: 20px auto;
+  border-radius: 22px;
+  padding: 28px 20px;
+}
+
 .mobile-shell .attendance-list article {
   display: flex;
   min-height: 72px;

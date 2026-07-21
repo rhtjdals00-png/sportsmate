@@ -2,7 +2,7 @@ from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
-from app.services.weather_service import WeatherServiceError, get_daily_forecast, get_forecast
+from app.services.weather_service import WeatherServiceError, get_daily_forecast, get_extended_forecast, get_forecast
 
 
 weather_bp = Blueprint("weather", __name__)
@@ -53,6 +53,19 @@ def daily():
         if not (33 <= latitude <= 39.5 and 124 <= longitude <= 132):
             raise ValueError("대한민국 내 장소만 예보를 확인할 수 있습니다.")
         return jsonify({"weather": get_daily_forecast(latitude, longitude)})
+    except ValueError as error:
+        return jsonify({"message": str(error)}), 400
+    except WeatherServiceError as error:
+        return jsonify({"message": str(error)}), 502
+
+
+@weather_bp.get("/extended")
+def extended():
+    try:
+        address = (request.args.get("address") or "").strip()
+        if not address:
+            raise ValueError("중기예보를 확인할 지역 주소가 필요합니다.")
+        return jsonify({"weather": get_extended_forecast(address)})
     except ValueError as error:
         return jsonify({"message": str(error)}), 400
     except WeatherServiceError as error:
