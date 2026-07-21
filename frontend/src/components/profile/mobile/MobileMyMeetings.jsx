@@ -2,6 +2,8 @@ import { Link } from "react-router-dom";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
 import { meetingApi } from "../../../api/meetingApi.js";
+import { weatherApi } from "../../../api/weatherApi.js";
+import MobileWeatherCard from "../../meeting/mobile/MobileWeatherCard.jsx";
 
 const SCHEDULE_REASON_MAX_LENGTH = 100;
 
@@ -202,6 +204,105 @@ function ScheduleCancelModal({ item, submitting, error, onClose, onSubmit }) {
   );
 }
 
+function MobileMyMeetingItem({ item, openScheduleAction }) {
+  const isClosed = item.status !== "open";
+  const [weatherState, setWeatherState] = useState({ loading: false, forecast: null });
+
+  useEffect(() => {
+    let active = true;
+    if (item.latitude && item.longitude && item.start_at) {
+      setWeatherState({ loading: true, forecast: null });
+      weatherApi.forecast({
+        latitude: item.latitude,
+        longitude: item.longitude,
+        at: item.start_at,
+        address: item.address
+      })
+      .then((data) => {
+        if (active) setWeatherState({ loading: false, forecast: data.forecast });
+      })
+      .catch((error) => {
+        if (active) setWeatherState({ loading: false, forecast: { available: false, message: error.response?.data?.message || "날씨 정보를 불러올 수 없습니다." } });
+      });
+    }
+    return () => { active = false; };
+  }, [item.latitude, item.longitude, item.start_at, item.address]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', borderBottom: '1px solid #f1f5f9', paddingBottom: '16px', marginBottom: '16px' }}>
+      <Link to={item.state === "host" ? `/host/meetings/${item.id}` : `/meetings/${item.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+          <span style={{
+            fontSize: '11px',
+            padding: '3px 8px',
+            borderRadius: '12px',
+            background: item.state === "host" ? "#eff6ff" : "#f0fdf4",
+            color: item.state === "host" ? "#3b82f6" : "#22c55e",
+            fontWeight: '800'
+          }}>
+            {item.state === "host" ? "👑 방장" : "🙌 참여중"}
+          </span>
+          
+          <span style={{
+            fontSize: '11px',
+            padding: '3px 8px',
+            borderRadius: '12px',
+            background: "#fff7ed",
+            color: "#ea580c",
+            fontWeight: '800'
+          }}>
+            {item.meeting_type === "regular" ? "🔄 정기" : "⚡ 일회성"}
+          </span>
+          
+          {isClosed && (
+            <span style={{
+              fontSize: '11px',
+              padding: '3px 8px',
+              borderRadius: '12px',
+              background: "#f1f5f9",
+              color: "#64748b",
+              fontWeight: '800'
+            }}>
+              🔒 모집 종료
+            </span>
+          )}
+          
+          <span style={{ fontSize: '12px', color: '#94a3b8', marginLeft: 'auto' }}>
+            {shortTime(item.start_at)}
+          </span>
+        </div>
+        
+        <strong style={{ color: isClosed ? "#94a3b8" : "inherit", display: 'block' }}>{item.title}</strong>
+        <p style={{ color: isClosed ? "#cbd5e1" : "inherit", margin: '4px 0 0 0', fontSize: '13px' }}>{item.place}</p>
+        
+        <div style={{ marginTop: '12px' }}>
+          <MobileWeatherCard forecast={weatherState.forecast} loading={weatherState.loading} title="운동 일정 날씨" />
+        </div>
+
+        {item.sessionStatus === "cancelled" && (
+          <div style={{ marginTop: '8px', padding: '8px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px' }}>
+            <b style={{ color: '#ef4444', fontSize: '12px', display: 'block' }}>일정 취소됨</b>
+            <span style={{ color: '#7f1d1d', fontSize: '12px' }}>{item.cancellationReason || "취소 사유가 등록되지 않았습니다."}</span>
+          </div>
+        )}
+        {item.sessionStatus === "scheduled" && item.rescheduleReason && item.originalStartAt && (
+          <div style={{ marginTop: '8px', padding: '8px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px' }}>
+            <b style={{ color: '#16a34a', fontSize: '12px', display: 'block' }}>일정 변경됨</b>
+            <span style={{ color: '#166534', fontSize: '12px' }}>기존 {formatDateTime(item.originalStartAt)} · 사유: {item.rescheduleReason}</span>
+          </div>
+        )}
+      </Link>
+      
+      {item.state === "host" && item.meeting_type === "regular" && item.sessionId && item.sessionStatus === "scheduled" && !isPastDateTime(item.start_at) && (
+        <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+          <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); openScheduleAction("change", item); }} style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 'bold', color: '#4f46e5', border: '1px solid #c7d2fe', borderRadius: '6px', background: '#fff' }}>일정 변경</button>
+          <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); openScheduleAction("cancel", item); }} style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 'bold', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '6px', background: '#fff' }}>일정 취소</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MobileMyMeetings({ meetings }) {
   const scheduleItems = useMemo(() => {
     const rawItems = [
@@ -226,7 +327,10 @@ export default function MobileMyMeetings({ meetings }) {
             sessionStatus: session.status || "scheduled",
             cancellationReason: session.cancellation_reason || "",
             rescheduleReason: session.reschedule_reason || "",
-            originalStartAt: session.original_start_at || ""
+            originalStartAt: session.original_start_at || "",
+            latitude: meeting.latitude,
+            longitude: meeting.longitude,
+            address: meeting.address || meeting.location_name || ""
           });
         });
       } else {
@@ -241,7 +345,10 @@ export default function MobileMyMeetings({ meetings }) {
           state: meeting.state,
           status: meeting.status,
           meeting_type: meeting.meeting_type,
-          sessionStatus: null
+          sessionStatus: null,
+          latitude: meeting.latitude,
+          longitude: meeting.longitude,
+          address: meeting.address || meeting.location_name || ""
         });
       }
     });
@@ -366,79 +473,9 @@ export default function MobileMyMeetings({ meetings }) {
             })}
           </div>
           <div className="mobile-my-calendar__list">
-            {selectedSchedules.length ? selectedSchedules.map((item) => {
-              const isClosed = item.status !== "open";
-              
-              return (
-                <div key={`${item.state}-${item.id}-${item.start_at}`} style={{ display: 'flex', flexDirection: 'column', borderBottom: '1px solid #f1f5f9', paddingBottom: '16px', marginBottom: '16px' }}>
-                  <Link to={item.state === "host" ? `/host/meetings/${item.id}` : `/meetings/${item.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                      <span style={{
-                        fontSize: '11px',
-                        padding: '3px 8px',
-                        borderRadius: '12px',
-                        background: item.state === "host" ? "#eff6ff" : "#f0fdf4",
-                        color: item.state === "host" ? "#3b82f6" : "#22c55e",
-                        fontWeight: '800'
-                      }}>
-                        {item.state === "host" ? "👑 방장" : "🙌 참여중"}
-                      </span>
-                      
-                      <span style={{
-                        fontSize: '11px',
-                        padding: '3px 8px',
-                        borderRadius: '12px',
-                        background: "#fff7ed",
-                        color: "#ea580c",
-                        fontWeight: '800'
-                      }}>
-                        {item.meeting_type === "regular" ? "🔄 정기" : "⚡ 일회성"}
-                      </span>
-                      
-                      {isClosed && (
-                        <span style={{
-                          fontSize: '11px',
-                          padding: '3px 8px',
-                          borderRadius: '12px',
-                          background: "#f1f5f9",
-                          color: "#64748b",
-                          fontWeight: '800'
-                        }}>
-                          🔒 모집 종료
-                        </span>
-                      )}
-                      
-                      <span style={{ fontSize: '12px', color: '#94a3b8', marginLeft: 'auto' }}>
-                        {shortTime(item.start_at)}
-                      </span>
-                    </div>
-                    
-                    <strong style={{ color: isClosed ? "#94a3b8" : "inherit", display: 'block' }}>{item.title}</strong>
-                    <p style={{ color: isClosed ? "#cbd5e1" : "inherit", margin: '4px 0 0 0', fontSize: '13px' }}>{item.place}</p>
-                    
-                    {item.sessionStatus === "cancelled" && (
-                      <div style={{ marginTop: '8px', padding: '8px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px' }}>
-                        <b style={{ color: '#ef4444', fontSize: '12px', display: 'block' }}>일정 취소됨</b>
-                        <span style={{ color: '#7f1d1d', fontSize: '12px' }}>{item.cancellationReason || "취소 사유가 등록되지 않았습니다."}</span>
-                      </div>
-                    )}
-                    {item.sessionStatus === "scheduled" && item.rescheduleReason && item.originalStartAt && (
-                      <div style={{ marginTop: '8px', padding: '8px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px' }}>
-                        <b style={{ color: '#16a34a', fontSize: '12px', display: 'block' }}>일정 변경됨</b>
-                        <span style={{ color: '#166534', fontSize: '12px' }}>기존 {formatDateTime(item.originalStartAt)} · 사유: {item.rescheduleReason}</span>
-                      </div>
-                    )}
-                  </Link>
-                  
-                  {item.state === "host" && item.meeting_type === "regular" && item.sessionId && item.sessionStatus === "scheduled" && !isPastDateTime(item.start_at) && (
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                      <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); openScheduleAction("change", item); }} style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 'bold', color: '#4f46e5', border: '1px solid #c7d2fe', borderRadius: '6px', background: '#fff' }}>일정 변경</button>
-                      <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); openScheduleAction("cancel", item); }} style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 'bold', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '6px', background: '#fff' }}>일정 취소</button>
-                    </div>
-                  )}
-                </div>
-              );
-            }) : <p>표시할 일정이 없습니다.</p>}
+            {selectedSchedules.length ? selectedSchedules.map((item) => (
+              <MobileMyMeetingItem key={`${item.state}-${item.id}-${item.start_at}`} item={item} openScheduleAction={openScheduleAction} />
+            )) : <p>표시할 일정이 없습니다.</p>}
           </div>
         </div>
       </section>

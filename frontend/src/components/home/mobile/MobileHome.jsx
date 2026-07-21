@@ -10,6 +10,17 @@ import { useAsync } from "../../../hooks/useAsync";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { getSportIcon } from "../../../utils/sportIcons.jsx";
 import { sportApi } from "../../../api/sportApi.js";
+import { weatherApi } from "../../../api/weatherApi";
+import { getSavedWeatherLocation, requestCurrentPosition, sameWeatherArea, saveWeatherLocation } from "../../../utils/weatherLocation";
+import { CloudRain, Snowflake, Sun, CloudSun, Cloud, Wind, Droplets } from "lucide-react";
+
+function WeatherIcon({ condition, size = 40 }) {
+  if (["rain", "rain_snow", "shower"].includes(condition)) return <CloudRain size={size} />;
+  if (condition === "snow") return <Snowflake size={size} />;
+  if (condition === "clear") return <Sun size={size} />;
+  if (condition === "partly_cloudy") return <CloudSun size={size} />;
+  return <Cloud size={size} />;
+}
 
 function splitPreferredSports(value) {
   if (Array.isArray(value)) {
@@ -50,17 +61,33 @@ function MobileHome() {
   const showAdminEntry = isAdminUser(user);
   const navigate = useNavigate();
 
-  const [weather, setWeather] = useState(null);
+  const [location, setLocation] = useState(() => getSavedWeatherLocation(user));
+  const [weatherState, setWeatherState] = useState({ loading: true, weather: null });
   const swiperRef = useRef(null);
 
   useEffect(() => {
-    fetch("https://api.open-meteo.com/v1/forecast?latitude=37.566&longitude=126.9784&current_weather=true")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.current_weather) setWeather(data.current_weather);
+    let active = true;
+    const initial = getSavedWeatherLocation(user);
+    setLocation(initial);
+    
+    const load = (nextLocation) => {
+      setWeatherState(curr => ({ ...curr, loading: true }));
+      weatherApi.daily({ latitude: nextLocation.latitude, longitude: nextLocation.longitude })
+        .then((data) => { if (active) setWeatherState({ loading: false, weather: data.weather }); })
+        .catch(() => { if (active) setWeatherState({ loading: false, weather: null }); });
+    };
+
+    load(initial);
+    requestCurrentPosition()
+      .then((current) => {
+        if (!active || sameWeatherArea(initial, current)) return;
+        saveWeatherLocation(current);
+        setLocation(current);
+        load(current);
       })
-      .catch((err) => console.error("Weather fetch error:", err));
-  }, []);
+      .catch(() => {});
+    return () => { active = false; };
+  }, [user?.id, user?.profile?.region_latitude, user?.profile?.region_longitude]);
 
   useEffect(() => {
     const swiper = swiperRef.current;
@@ -77,14 +104,18 @@ function MobileHome() {
     return () => clearInterval(interval);
   }, []);
 
-  const getWeatherMessage = (weatherObj) => {
-    if (!weatherObj) return { title: "날씨 정보를 불러오는 중...", desc: "잠시만 기다려주세요." };
-    const temp = weatherObj.temperature !== undefined ? `${weatherObj.temperature}°C` : "";
-    const code = weatherObj.weathercode;
+  const getWeatherMessage = (weatherObj, loading) => {
+    if (loading) return { title: "날씨 정보를 불러오는 중...", desc: "잠시만 기다려주세요." };
+    if (!weatherObj) return { title: "날씨를 불러올 수 없습니다", desc: "기상청 API 키가 설정되지 않았거나 네트워크 오류입니다." };
+    const current = weatherObj.current;
+    if (!current) return { title: "현재 날씨", desc: "날씨 정보를 불러올 수 없습니다." };
     
-    if (code >= 51 && code <= 67) return { title: `현재 ${temp} 비 ☔️`, desc: "비가 오네요! 실내 체육관 모임을 추천해드려요." };
-    if (code >= 71 && code <= 77) return { title: `현재 ${temp} 눈 ☃️`, desc: "눈길 조심하시고 따뜻한 실내 스포츠 어떠세요?" };
-    return { title: `현재 ${temp} 맑음 ☀️`, desc: "운동하기 딱 좋은 날씨! 야외 모임 어떠세요?" };
+    const temp = Math.round(current.temperature_c) + "°";
+    const cond = current.condition;
+    
+    if (["rain", "rain_snow", "shower"].includes(cond)) return { title: `현재 ${temp} 비 ☔️`, desc: "비가 오네요! 실내 체육관 모임을 추천해드려요." };
+    if (cond === "snow") return { title: `현재 ${temp} 눈 ☃️`, desc: "눈길 조심하시고 따뜻한 실내 스포츠 어떠세요?" };
+    return { title: `현재 ${temp} ${current.condition_label} ☀️`, desc: "운동하기 딱 좋은 날씨! 야외 모임 어떠세요?" };
   };
   
   const getSportMessage = (sportName) => {
@@ -172,7 +203,7 @@ function MobileHome() {
     return `/meetings?keyword=${encodeURIComponent(regionName)}`;
   };
 
-  const weatherInfo = getWeatherMessage(weather);
+  const weatherInfo = getWeatherMessage(weatherState.weather, weatherState.loading);
   const nickname = user?.nickname || user?.name || '게스트';
   const regionName = user?.profile?.region || '우리 동네';
   const randomSport = useMemo(() => {
@@ -190,10 +221,21 @@ function MobileHome() {
           <h1>{nickname}님, 이번 주말엔<br/>{getSportMessage(randomSport)}</h1>
           <p>회원님을 위한 맞춤 모임을 준비했어요.</p>
         </div>
-        <div className="mobile-hero-slide" style={{ cursor: 'pointer', background: 'linear-gradient(135deg, rgba(255, 251, 235, 0.98), rgba(254, 243, 199, 0.86))' }} onClick={() => navigate(`/meetings`)}>
-          <span>오늘의 동네 날씨</span>
+        <div className="mobile-hero-slide mobile-hero-slide--weather" style={{ cursor: 'pointer', background: 'linear-gradient(135deg, rgba(255, 251, 235, 0.98), rgba(254, 243, 199, 0.86))' }} onClick={() => navigate(`/weather`)}>
+          <span>{location.label} 오늘의 날씨</span>
           <h1>{weatherInfo.title}</h1>
           <p>{weatherInfo.desc}</p>
+          {weatherState.weather?.current && (
+            <>
+              <div className="weather-decor">
+                <WeatherIcon condition={weatherState.weather.current.condition} size={110} />
+              </div>
+              <div className="mobile-weather-metrics">
+                <span>강수확률 {Math.round(weatherState.weather.current.precipitation_probability || 0)}%</span>
+                <span><Wind size={12} /> {weatherState.weather.current.wind_speed_ms ?? "-"}m/s</span>
+              </div>
+            </>
+          )}
         </div>
         <div className="mobile-hero-slide" style={{ cursor: 'pointer', background: 'linear-gradient(135deg, rgba(240, 253, 244, 0.98), rgba(220, 252, 231, 0.86))' }} onClick={() => navigate(getRegionSearchRoute(regionName))}>
           <span>내 동네 핫플레이스</span>

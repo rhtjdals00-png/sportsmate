@@ -743,12 +743,28 @@ function DesktopProfileEdit() {
     }
   };
 
-  const submitWithdraw = () => {
-    if (withdrawText.trim() !== "탈퇴합니다") {
+  const submitWithdraw = async () => {
+    if (withdrawText.trim().normalize('NFC') !== "탈퇴합니다".normalize('NFC')) {
       setWithdrawStatus("mismatch");
       return;
     }
-    setWithdrawStatus("success");
+    
+    try {
+      await userApi.deleteMe();
+      setWithdrawStatus("success");
+      setTimeout(async () => {
+        try {
+          await logout();
+          sessionStorage.setItem("sportsmate_flash", "회원 탈퇴가 완료되었습니다.");
+          window.location.href = "/login";
+        } catch (e) {
+          console.error("Logout failed after deletion", e);
+        }
+      }, 1500);
+    } catch (error) {
+      setWithdrawStatus("mismatch");
+      console.error(error);
+    }
   };
 
   const submit = async (event) => {

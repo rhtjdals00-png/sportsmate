@@ -26,6 +26,8 @@
   position: sticky;
   top: 0;
   z-index: 50;
+  left: auto;
+  transform: none;
   margin-top: -72px; /* Break out of mobile-main top padding */
   margin-bottom: 12px; /* Add some space below header */
   margin-left: -16px; /* Break out of mobile-main left padding */
@@ -4840,6 +4842,10 @@
   font-size: 16px;
 }
 
+.mobile-shell .profile-setup__level-toggle input {
+  min-height: 24px;
+}
+
 .mobile-shell .profile-setup__categories,
 .mobile-shell .profile-setup__sport-list,
 .mobile-shell .profile-setup__selected {
@@ -4871,14 +4877,6 @@
   border-radius: 18px;
 }
 
-.mobile-shell .profile-setup__level-toggle input {
-  width: 13px !important;
-  height: 13px !important;
-  min-width: 13px !important;
-  min-height: 13px !important;
-  accent-color: #2563eb !important;
-  margin: 0 !important;
-}
 
 .mobile-shell .profile-setup__sport-levels label,
 .mobile-shell .profile-setup__actions {
@@ -6594,13 +6592,6 @@
   border-color: #cbd5e1;
 }
 
-.mobile-shell .profile-setup__level-toggle input[type="checkbox"] {
-  width: 13px;
-  height: 13px;
-  accent-color: var(--mobile-primary);
-  margin: 0;
-  cursor: pointer;
-}
 
 .mobile-shell .profile-setup__sports-count {
   font-size: 12px;
@@ -7362,4 +7353,150 @@
 
 .mobile-shell .mobile-review-card__info-item strong {
   color: #334155;
+}
+
+/* 모바일 전용 날씨 통통 튀는 효과 (Bouncy Weather) */
+.mobile-shell .mobile-weather-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(248, 250, 252, 0.96), rgba(241, 245, 249, 0.8));
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 12px 28px rgba(30, 41, 59, 0.05);
+  margin-top: 14px;
+  overflow: hidden;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+  animation: bounceIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.mobile-shell .mobile-weather-card:active {
+  transform: scale(0.96);
+  box-shadow: 0 4px 12px rgba(30, 41, 59, 0.08);
+}
+
+.mobile-shell .mobile-weather-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 2;
+}
+
+.mobile-shell .mobile-weather-card__content small {
+  color: var(--mobile-primary);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
+.mobile-shell .mobile-weather-card__content strong {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--mobile-text);
+  line-height: 1.2;
+}
+
+.mobile-shell .mobile-weather-card__metrics {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 800;
+}
+
+.mobile-shell .mobile-weather-card__metrics span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #fff;
+  padding: 3px 8px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.mobile-shell .mobile-weather-card__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+  color: var(--mobile-primary);
+  box-shadow: 0 8px 16px rgba(79, 70, 229, 0.12);
+  z-index: 2;
+  animation: floatingIcon 3s ease-in-out infinite;
+}
+
+.mobile-shell .mobile-weather-card.is-unavailable {
+  background: #f8fafc;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.mobile-shell .mobile-weather-card.is-unavailable .mobile-weather-card__icon {
+  background: #f1f5f9;
+  color: #94a3b8;
+  box-shadow: none;
+  animation: none;
+}
+
+.mobile-shell .mobile-weather-card.is-loading {
+  justify-content: center;
+  height: 86px;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 800;
+  background: #f8fafc;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes floatingIcon {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes bounceIn {
+  0% { transform: scale(0.9) translateY(10px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* 모바일 홈 상단 날씨 배너 (기존 투명 배경 슬라이드 호환용) */
+.mobile-shell .mobile-hero-slide--weather {
+  position: relative;
+  overflow: hidden;
+}
+
+.mobile-shell .mobile-hero-slide--weather .weather-decor {
+  position: absolute;
+  right: -10px;
+  bottom: -10px;
+  opacity: 0.1;
+  color: var(--mobile-primary);
+  transform: rotate(-15deg);
+}
+
+.mobile-shell .mobile-hero-slide--weather .mobile-weather-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mobile-shell .mobile-hero-slide--weather .mobile-weather-metrics span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #475569;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 }

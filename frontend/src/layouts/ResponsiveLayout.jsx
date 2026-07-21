@@ -11,9 +11,10 @@ const AUTH_ROUTES = ["/login", "/register", "/auth/callback", "/profile/intro", 
 
 function ResponsiveLayout() {
   const { isMobile } = useResponsive();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, logout, syncUser } = useAuth();
   const location = useLocation();
   const [toast, setToast] = useState("");
+  const [canceling, setCanceling] = useState(false);
   const [permissionGuideOpen, setPermissionGuideOpen] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState("");
   const [pushPermissionGranted, setPushPermissionGranted] = useState(false);
@@ -87,6 +88,49 @@ function ResponsiveLayout() {
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
     );
   };
+
+  const handleCancelDeletion = async () => {
+    if (canceling) return;
+    setCanceling(true);
+    try {
+      const { userApi } = await import("../api/userApi");
+      await userApi.cancelAccountDeletion();
+      await syncUser();
+      alert("탈퇴 처리가 성공적으로 철회되었습니다.");
+      window.location.replace("/"); // 강제 새로고침하여 홈으로 이동
+    } catch (err) {
+      alert("탈퇴 철회 중 오류가 발생했습니다.");
+    } finally {
+      setCanceling(false);
+    }
+  };
+
+  if (user?.role === "pending_withdrawal") {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px', textAlign: 'center' }}>
+        <ShieldCheck size={48} color="#ef4444" style={{ marginBottom: '16px' }} />
+        <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>탈퇴 처리 중인 계정입니다</h1>
+        <p style={{ color: '#64748b', marginBottom: '24px', lineHeight: '1.5' }}>
+          현재 30일 간의 계정 탈퇴 유예 기간이 진행 중이며<br />모든 기능 이용이 제한됩니다.<br/><br/>
+          탈퇴를 취소하고 다시 스포츠메이트를 이용하시려면<br />아래 버튼을 눌러주세요.
+        </p>
+        <button 
+          onClick={handleCancelDeletion}
+          disabled={canceling}
+          style={{ padding: '12px 24px', background: '#3b82f6', color: '#fff', borderRadius: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer', fontSize: '16px' }}
+        >
+          {canceling ? "처리 중..." : "탈퇴 철회하기"}
+        </button>
+        
+        <button 
+          onClick={logout}
+          style={{ marginTop: '24px', padding: '8px', background: 'transparent', color: '#64748b', border: 'none', textDecoration: 'underline', cursor: 'pointer' }}
+        >
+          로그아웃
+        </button>
+      </div>
+    );
+  }
 
   const content = isMobile ? (
     <MobileLayout>
