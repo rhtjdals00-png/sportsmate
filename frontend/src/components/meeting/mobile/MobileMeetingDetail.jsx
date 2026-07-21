@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { CalendarClock, Eye, LockKeyhole, MessageCircle, UserRound, Users, ChevronDown, Star, Crown, Share2 } from "lucide-react";
+import { CalendarClock, Eye, LockKeyhole, MessageCircle, UserRound, Users, ChevronDown, Star, Crown, Share2, QrCode } from "lucide-react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import MobilePushPermissionModal from "../../notification/mobile/MobilePushPermissionModal.jsx";
 import Badge from "../../common/Badge.jsx";
@@ -15,6 +15,12 @@ import { getMeetingCoverImage, isUsingSportThumbnail } from "../../../utils/spor
 import { reportApi } from "../../../api/reportApi";
 import { voteApi } from "../../../api/voteApi";
 import { chatApi } from "../../../api/chatApi";
+import { weatherApi } from "../../../api/weatherApi";
+import MobileWeatherCard from "./MobileWeatherCard.jsx";
+
+function getDisplayStartAt(meeting) {
+  return meeting?.meeting_type === "regular" ? meeting?.next_session?.start_at || meeting?.start_at : meeting?.start_at;
+}
 
 function MobileMeetingDetail() {
   const { meetingId } = useParams();
@@ -29,9 +35,12 @@ function MobileMeetingDetail() {
   const [reviewing, setReviewing] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [checkingAttendance, setCheckingAttendance] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
   const [hostProfileOpen, setHostProfileOpen] = useState(false);
   const [permissionModalOpen, setPermissionModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [weatherState, setWeatherState] = useState({ loading: false, forecast: null });
+  
   const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId, refreshKey]);
   const detailMeeting = detail.data?.meeting;
   const detailIsHost = user?.id === detailMeeting?.host?.id;
@@ -55,6 +64,28 @@ function MobileMeetingDetail() {
     const timer = window.setTimeout(() => setMessage({ text: "", tone: "notice" }), 2400);
     return () => window.clearTimeout(timer);
   }, [message.text]);
+
+  useEffect(() => {
+    const m = detail.data?.meeting;
+    if (!m || !m.location_latitude || !m.location_longitude) return;
+    
+    let active = true;
+    const at = getDisplayStartAt(m);
+    setWeatherState({ loading: true, forecast: null });
+    
+    weatherApi.forecast({
+      latitude: m.location_latitude,
+      longitude: m.location_longitude,
+      at: at,
+      address: m.location_name
+    })
+      .then((data) => { if (active) setWeatherState({ loading: false, forecast: data.forecast }); })
+      .catch(() => {
+        if (active) setWeatherState({ loading: false, forecast: { available: false, message: "날씨 정보를 불러올 수 없습니다." } });
+      });
+
+    return () => { active = false; };
+  }, [detail.data?.meeting?.id, detail.data?.meeting?.start_at, detail.data?.meeting?.location_latitude, detail.data?.meeting?.location_longitude]);
 
   if (detail.loading) return <LoadingCards count={2} />;
 
@@ -182,18 +213,6 @@ function MobileMeetingDetail() {
       setMessage({ text: "투표가 반영되었습니다.", tone: "notice" });
     } catch (error) {
       setMessage({ text: error.response?.data?.message || "투표를 반영하지 못했습니다.", tone: "error" });
-    }
-  };
-
-  const checkAttendance = async () => {
-    setCheckingAttendance(true);
-    try {
-      await meetingApi.checkAttendance(meeting.id);
-      setMessage({ text: "출석 체크가 완료되었습니다.", tone: "notice" });
-    } catch (error) {
-      setMessage({ text: error.response?.data?.message || "출석 체크를 처리하지 못했습니다.", tone: "error" });
-    } finally {
-      setCheckingAttendance(false);
     }
   };
 
@@ -440,6 +459,9 @@ function MobileMeetingDetail() {
             )}
           </div>
         </div>
+        <div style={{ margin: "0 16px" }}>
+          <MobileWeatherCard forecast={weatherState.forecast} loading={weatherState.loading} title={meeting.meeting_type === "regular" ? "다음 회차 날씨" : "모임 날씨"} />
+        </div>
         <MobileMeetingLocationMap meeting={meeting} />
         {canViewMemberContent ? (
           <>
@@ -477,18 +499,21 @@ function MobileMeetingDetail() {
             <section className="detail-card">
               <h2>출석 체크</h2>
               <p style={{ fontSize: "12px", color: "#64748b", marginBottom: "12px", lineHeight: "1.4" }}>
-                모임 참여가 완료되었다면 본인의 출석 현황을 확인하여 반영해 주세요.
+                방장의 기기에 표시된 출석 QR 코드를 스캔해 주세요.
               </p>
               {isAuthenticated && (
-                <Button 
-                  type="button" 
-                  variant="secondary" 
-                  onClick={checkAttendance} 
-                  disabled={checkingAttendance}
-                  style={{ width: "100%" }}
+                <button 
+                  onClick={() => setIsScanning(true)}
+                  style={{ 
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                    width: '100%', padding: '16px', background: '#3b82f6', color: 'white', 
+                    borderRadius: '12px', border: 'none', fontWeight: 'bold', fontSize: '16px', 
+                    boxShadow: '0 4px 12px rgba(59, 130, 246, 0.25)', cursor: 'pointer' 
+                  }}
                 >
-                  {checkingAttendance ? "처리 중..." : "출석 체크 하기"}
-                </Button>
+                  <QrCode size={20} />
+                  QR 인식하기
+                </button>
               )}
             </section>
           </>
@@ -543,8 +568,11 @@ function MobileMeetingDetail() {
           </form>
         </section>
       </article>
+
       <div className="sticky-cta">
-        {message.text && <span className={`sticky-cta__message sticky-cta__message--${message.tone}`}>{message.text}</span>}
+        {message.text && (
+          <div className={`toast toast--${message.tone}`}>{message.text}</div>
+        )}
         {isHost ? (
           <div className="sticky-cta__split">
             {chatRoomId ? (
@@ -583,6 +611,39 @@ function MobileMeetingDetail() {
         isOpen={permissionModalOpen}
         onClose={() => setPermissionModalOpen(false)}
       />
+
+      {isScanning && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100, background: '#000',
+          display: 'flex', flexDirection: 'column'
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '16px 20px', background: 'rgba(0,0,0,0.5)', color: '#fff'
+          }}>
+            <span style={{ fontSize: '18px', fontWeight: 'bold' }}>QR 스캔하여 출석체크</span>
+            <button 
+              onClick={() => setIsScanning(false)}
+              style={{ background: 'none', border: 'none', color: '#fff', fontSize: '16px', padding: '4px' }}
+            >
+              닫기
+            </button>
+          </div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ 
+              width: '250px', height: '250px', border: '2px dashed rgba(255,255,255,0.4)', 
+              borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexDirection: 'column', gap: '12px'
+            }}>
+              <QrCode size={48} color="rgba(255,255,255,0.4)" />
+              <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '14px' }}>카메라 영역 준비 중...</span>
+            </div>
+          </div>
+          <div style={{ padding: '24px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>
+            방장이 띄운 출석 QR 코드를 사각형 안에 맞춰주세요.
+          </div>
+        </div>
+      )}
     </>
   );
 }

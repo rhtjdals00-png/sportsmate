@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
+import { QrCode } from "lucide-react";
 import Button from "../components/common/Button.jsx";
 import AttendanceQrPanel from "../components/attendance/AttendanceQrPanel.jsx";
 import EmptyState from "../components/common/EmptyState.jsx";
@@ -108,6 +109,38 @@ function HostAttendancePage() {
         </>
       ) : (
         <EmptyState title="출석 대상이 없습니다." description="승인된 참여자가 생기면 출석 체크를 진행할 수 있습니다." />
+      )}
+
+      {isShowingQR && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.8)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: '24px', width: '100%', maxWidth: '340px',
+            padding: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px'
+          }}>
+            <h3 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>출석 QR 코드</h3>
+            <div style={{ 
+              width: '200px', height: '200px', background: '#f1f5f9', borderRadius: '12px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              <span style={{ color: '#94a3b8' }}>QR 이미지 출력 예정</span>
+            </div>
+            <p style={{ margin: 0, color: '#64748b', textAlign: 'center', fontSize: '15px' }}>
+              회원분들이 이 QR을 스캔하면<br />자동으로 출석 처리됩니다.
+            </p>
+            <button
+              onClick={() => setIsShowingQR(false)}
+              style={{
+                width: '100%', padding: '14px', background: '#e2e8f0', border: 'none',
+                borderRadius: '12px', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer'
+              }}
+            >
+              닫기
+            </button>
+          </div>
+        </div>
       )}
     </>
   );

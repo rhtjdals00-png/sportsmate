@@ -183,7 +183,7 @@ function MobileProfileEditPage() {
   const [withdrawStatus, setWithdrawStatus] = useState("idle");
 
   const submitWithdraw = async () => {
-    if (withdrawText.trim() !== "탈퇴합니다") {
+    if (withdrawText.trim().normalize('NFC') !== "탈퇴합니다".normalize('NFC')) {
       setWithdrawStatus("mismatch");
       return;
     }
