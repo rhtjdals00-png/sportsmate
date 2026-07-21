@@ -10,6 +10,7 @@ import { formatMeetingSchedule, formatMeetingType } from "../../../utils/formatt
 import { getMeetingCoverImage, isUsingSportThumbnail } from "../../../utils/sportThumbnails";
 import { getSportVisualAsset } from "../../../utils/sportVisualAssets";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
+import HomeWeatherCard from "./HomeWeatherCard.jsx";
 
 const GUEST_SPORT_SHORTCUT_LABELS = ["풋살", "배드민턴", "러닝", "테니스", "등산", "농구"];
 
@@ -197,6 +198,8 @@ function DesktopHome() {
           <img src="https://images.unsplash.com/photo-1486218119243-13883505764c?auto=format&fit=crop&w=800&q=80" alt="러닝 이미지" />
         </div>
       </section>
+
+      {isAuthenticated && <HomeWeatherCard user={user} />}
 
       <section className="home-categories-wrap">
         <div className="section-head" style={{ marginBottom: "26px" }}>

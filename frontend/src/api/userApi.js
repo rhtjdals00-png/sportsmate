@@ -13,5 +13,6 @@ export const userApi = {
   myReceivedReviews: () => apiClient.get("/users/me/reviews/received").then((res) => res.data),
   myPendingReviews: () => apiClient.get("/users/me/reviews/pending").then((res) => res.data),
   updateReview: (id, payload) => apiClient.put(`/users/me/reviews/${id}`, payload).then((res) => res.data),
-  deleteReview: (id) => apiClient.delete(`/users/me/reviews/${id}`).then((res) => res.data)
+  deleteReview: (id) => apiClient.delete(`/users/me/reviews/${id}`).then((res) => res.data),
+  deleteMe: () => apiClient.delete("/users/me").then((res) => res.data)
 };

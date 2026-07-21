@@ -44,6 +44,7 @@ import NotFoundPage from "../pages/NotFoundPage.jsx";
 import NotificationsPage from "../pages/NotificationsPage.jsx";
 import MapPage from "../pages/MapPage.jsx";
 import AppSettingsPage from "../pages/AppSettingsPage.jsx";
+import WeatherPage from "../pages/WeatherPage.jsx";
 import SupportPage from "../pages/SupportPage.jsx";
 import ProtectedRoute from "../components/common/ProtectedRoute.jsx";
 import AdminRoute from "../components/common/AdminRoute.jsx";
@@ -108,6 +109,7 @@ function AppRouter() {
         <Route path="/support" element={protect(<SupportPage />)} />
         <Route path="/settings" element={protect(<AppSettingsPage />)} />
         <Route path="/map" element={<MapPage />} />
+        <Route path="/weather" element={protect(<WeatherPage />)} />
         <Route path="/mypage" element={protect(<MyPage />)} />
         <Route path="/mypage/profile" element={protect(<ProfileEditPage />)} />
         <Route path="/profile/intro" element={protect(<ProfileIntroPage />)} />

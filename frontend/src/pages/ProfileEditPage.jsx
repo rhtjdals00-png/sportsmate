@@ -3,6 +3,7 @@ import StatusMessages from "../constants/statusMessages";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Button from "../components/common/Button.jsx";
+import BouncySelect from "../components/common/BouncySelect";
 import DesktopProfileEdit from "../components/profile/desktop/DesktopProfileEdit.jsx";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
@@ -11,7 +12,7 @@ import { sportApi } from "../api/sportApi";
 import { locationApi } from "../api/locationApi";
 import { koreaRegions } from "../data/koreaRegions";
 import { useResponsive } from "../hooks/useResponsive";
-import { isProfileEditVerified, markProfileEditVerified } from "../utils/profileEditAccess";
+
 import { isSupabaseConfigured, supabase } from "../api/supabaseClient";
 
 const T = {
@@ -122,6 +123,10 @@ function getPasswordStrength(password) {
   return { label: "안전", level: "safe", percent: 100 };
 }
 
+function isEmailOnlyProvider(user) {
+  return String(user?.provider || "").trim().toLowerCase() === "email";
+}
+
 // 모바일 프로필 수정 화면은 PC 프로필 수정 화면과 분리해 관리합니다.
 function MobileProfileEditPage() {
   const { isMobile } = useResponsive();
@@ -130,39 +135,7 @@ function MobileProfileEditPage() {
   const initialSports = useMemo(() => splitSports(user?.profile?.preferred_sports), [user?.profile?.preferred_sports]);
   const initialLevels = useMemo(() => parsePreferredLevels(user?.profile?.preferred_sport_levels), [user?.profile?.preferred_sport_levels]);
 
-  const [unlocked, setUnlocked] = useState(() => isProfileEditVerified());
-  const [verifyPasswordVal, setVerifyPasswordVal] = useState("");
-  const [verifyError, setVerifyError] = useState("");
-  const [verifyChecking, setVerifyChecking] = useState(false);
-
-  const handleVerifyPassword = async (e) => {
-    e.preventDefault();
-    if (!verifyPasswordVal.trim()) {
-      setVerifyError("비밀번호를 입력해주세요.");
-      return;
-    }
-    setVerifyChecking(true);
-    setVerifyError("");
-    try {
-      if (!isSupabaseConfigured || !supabase) {
-        throw new Error("인증 서비스 설정을 확인해주세요.");
-      }
-      const { error: supabaseError } = await supabase.auth.signInWithPassword({
-        email: user?.email || "",
-        password: verifyPasswordVal
-      });
-      if (supabaseError) {
-        throw new Error("비밀번호가 올바르지 않습니다.");
-      }
-      await userApi.verifyPassword({ password: verifyPasswordVal });
-      markProfileEditVerified();
-      setUnlocked(true);
-    } catch (err) {
-      setVerifyError(err.message || "비밀번호 확인에 실패했습니다.");
-    } finally {
-      setVerifyChecking(false);
-    }
-  };
+  const canChangePassword = isEmailOnlyProvider(user);
 
   const [form, setForm] = useState({
     name: user?.name || "",
@@ -205,6 +178,34 @@ function MobileProfileEditPage() {
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [toast, setToast] = useState("");
+  const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
+  const [withdrawText, setWithdrawText] = useState("");
+  const [withdrawStatus, setWithdrawStatus] = useState("idle");
+
+  const submitWithdraw = async () => {
+    if (withdrawText.trim() !== "탈퇴합니다") {
+      setWithdrawStatus("mismatch");
+      return;
+    }
+    
+    try {
+      await userApi.deleteMe();
+      setWithdrawStatus("success");
+      // Short delay so they see the success text
+      setTimeout(async () => {
+        try {
+          await logout();
+          sessionStorage.setItem("sportsmate_flash", "회원 탈퇴가 완료되었습니다.");
+          navigate("/login", { replace: true });
+        } catch (e) {
+          console.error("Failed to logout after withdraw:", e);
+        }
+      }, 1500);
+    } catch (e) {
+      console.error("Withdraw failed:", e);
+      setWithdrawStatus("mismatch"); // fallback error
+    }
+  };
 
   const newPasswordChecks = getPasswordCheckItems(passwordForm.next);
   const newPasswordStrength = getPasswordStrength(passwordForm.next);
@@ -535,190 +536,20 @@ function MobileProfileEditPage() {
     }
   };
 
-  if (user && !user.has_password) {
-    return (
-      <div className="mobile-shell" style={{ background: '#f8fafc', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-        <MobileHeader title="계정 연동 필요" showBack={true} />
-        <main style={{ padding: '24px 16px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-            <div style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: '50%',
-              background: 'rgba(239, 68, 68, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 16px auto',
-              color: '#ef4444'
-            }}>
-              <KeyRound size={28} />
-            </div>
-            <h2 style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a', marginBottom: '8px' }}>이메일 연동 필요</h2>
-            <p style={{ fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
-              소셜 로그인 계정은 프로필 수정 전<br />
-              이메일 연동 및 비밀번호 등록이 필요합니다.
-            </p>
-          </div>
-
-          <div style={{ display: 'grid', gap: '12px' }}>
-            <button
-              type="button"
-              onClick={() => navigate("/mypage/account-link")}
-              style={{
-                width: '100%',
-                padding: '14px',
-                background: 'var(--mobile-primary)',
-                color: '#fff',
-                border: 0,
-                borderRadius: '12px',
-                fontSize: '15px',
-                fontWeight: '800',
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(79, 70, 229, 0.2)',
-                textAlign: 'center'
-              }}
-            >
-              이메일 계정 연동하기
-            </button>
-            
-            <button
-              type="button"
-              onClick={() => navigate("/mypage")}
-              style={{
-                width: '100%',
-                padding: '14px',
-                background: 'transparent',
-                color: '#64748b',
-                border: 0,
-                borderRadius: '12px',
-                fontSize: '15px',
-                fontWeight: '800',
-                cursor: 'pointer'
-              }}
-            >
-              취소
-            </button>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  if (!unlocked) {
-    return (
-      <div className="mobile-shell" style={{ background: '#f8fafc', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-        <MobileHeader title="비밀번호 확인" showBack={true} />
-        <main style={{ padding: '24px 16px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-            <div style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: '50%',
-              background: 'rgba(79, 70, 229, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 16px auto',
-              color: 'var(--mobile-primary)'
-            }}>
-              <KeyRound size={28} />
-            </div>
-            <h2 style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a', marginBottom: '8px' }}>비밀번호 입력</h2>
-            <p style={{ fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
-              회원님의 개인정보 보호를 위해<br />
-              비밀번호를 다시 한 번 입력해주세요.
-            </p>
-          </div>
-
-          <form onSubmit={handleVerifyPassword} style={{ display: 'grid', gap: '16px' }}>
-            {verifyError && (
-              <p style={{
-                fontSize: '13px',
-                color: '#ef4444',
-                background: '#fef2f2',
-                padding: '10px 12px',
-                borderRadius: '8px',
-                border: '1px solid #fecaca',
-                textAlign: 'center',
-                margin: 0,
-                fontWeight: '700'
-              }}>{verifyError}</p>
-            )}
-            
-            <input
-              type="password"
-              value={verifyPasswordVal}
-              onChange={(e) => setVerifyPasswordVal(e.target.value)}
-              placeholder="비밀번호를 입력하세요"
-              style={{
-                width: '100%',
-                padding: '14px 16px',
-                border: '1px solid #e2e8f0',
-                borderRadius: '12px',
-                fontSize: '15px',
-                background: '#fff',
-                outline: 'none',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                boxSizing: 'border-box'
-              }}
-              autoFocus
-            />
-
-            <button
-              type="submit"
-              disabled={verifyChecking}
-              style={{
-                width: '100%',
-                padding: '14px',
-                background: 'var(--mobile-primary)',
-                color: '#fff',
-                border: 0,
-                borderRadius: '12px',
-                fontSize: '15px',
-                fontWeight: '800',
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(79, 70, 229, 0.2)'
-              }}
-            >
-              {verifyChecking ? "확인 중..." : "확인"}
-            </button>
-            
-            <button
-              type="button"
-              onClick={() => navigate("/mypage")}
-              style={{
-                width: '100%',
-                padding: '14px',
-                background: 'transparent',
-                color: '#64748b',
-                border: 0,
-                borderRadius: '12px',
-                fontSize: '15px',
-                fontWeight: '800',
-                cursor: 'pointer'
-              }}
-            >
-              취소
-            </button>
-          </form>
-        </main>
-      </div>
-    );
-  }
-
   return (
     <>
       {isMobile ? <MobileHeader title={T.title} /> : null}
       <main className="profile-setup-page">
         <form className="profile-setup" onSubmit={submit}>
-          <section className="profile-setup__intro">
-            <div>
-              <p className="profile-setup__eyebrow">{T.eyebrow}</p>
-              <h1>{T.heading}</h1>
-              <p>{T.description}</p>
-            </div>
-          </section>
+          {!isMobile && (
+            <section className="profile-setup__intro">
+              <div>
+                <p className="profile-setup__eyebrow">{T.eyebrow}</p>
+                <h1>{T.heading}</h1>
+                <p>{T.description}</p>
+              </div>
+            </section>
+          )}
 
           {!isMobile ? (
             <section className="profile-setup__nickname-notice" aria-label={T.nicknameNoticeTitle}>
@@ -810,18 +641,23 @@ function MobileProfileEditPage() {
             ) : (
               <div className="profile-setup__region-selects">
                 <div className="profile-setup__region-select-row">
-                  <select value={form.region_sido} onChange={(event) => handleSidoChange(event.target.value)}>
-                    <option value="">{T.sido}</option>
-                    {koreaRegions.map((region) => (
-                      <option key={region.name} value={region.name}>{region.name}</option>
-                    ))}
-                  </select>
-                  <select value={form.region_area} onChange={(event) => handleAreaChange(event.target.value)} disabled={!form.region_sido}>
-                    <option value="">{T.all}</option>
-                    {(selectedRegion?.areas || []).map((area) => (
-                      <option key={area} value={area}>{area}</option>
-                    ))}
-                  </select>
+                  <div style={{ flex: 1, minWidth: '120px' }}>
+                    <BouncySelect 
+                      value={form.region_sido} 
+                      onChange={handleSidoChange}
+                      placeholder={T.sido}
+                      options={koreaRegions.map(r => ({ value: r.name, label: r.name }))}
+                    />
+                  </div>
+                  <div style={{ flex: 1, minWidth: '120px' }}>
+                    <BouncySelect 
+                      value={form.region_area} 
+                      onChange={handleAreaChange}
+                      placeholder={T.all}
+                      disabled={!form.region_sido}
+                      options={(selectedRegion?.areas || []).map(a => ({ value: a, label: a }))}
+                    />
+                  </div>
                   <button
                     type="button"
                     className="profile-setup__region-add-btn"
@@ -933,20 +769,39 @@ function MobileProfileEditPage() {
             )}
           </section>
 
-          <section className="profile-setup__panel profile-setup__security">
-            <div>
-              <KeyRound size={18} />
+          {canChangePassword && (
+            <section className="profile-setup__panel profile-setup__security">
               <div>
-                <h2>계정 보안</h2>
-                <p>비밀번호는 현재 비밀번호 확인 후 변경합니다.</p>
+                <KeyRound size={18} />
+                <div>
+                  <h2>계정 보안</h2>
+                  <p>비밀번호는 현재 비밀번호 확인 후 변경합니다.</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setPasswordModalOpen(true)}>비밀번호 변경</button>
+            </section>
+          )}
+
+          <section className="profile-setup__panel profile-setup__security" style={{ marginTop: '16px', border: '1px solid #fca5a5', backgroundColor: '#fef2f2' }}>
+            <div>
+              <XCircle size={18} color="#ef4444" />
+              <div>
+                <h2 style={{ color: '#ef4444' }}>회원 탈퇴</h2>
+                <p style={{ color: '#f87171' }}>탈퇴 요청은 최종 확인 후 처리됩니다.</p>
               </div>
             </div>
-            <button type="button" onClick={() => setPasswordModalOpen(true)}>비밀번호 변경</button>
+            <button 
+              type="button" 
+              onClick={() => setWithdrawModalOpen(true)}
+              style={{ color: 'white', backgroundColor: '#ef4444', border: 'none' }}
+            >
+              회원 탈퇴
+            </button>
           </section>
 
           {error && <p className="profile-setup__error">{error}</p>}
           <div className="profile-setup__actions">
-            <Button type="button" variant="ghost" onClick={() => navigate("/", { replace: true })}>{T.later}</Button>
+            <Button type="button" variant="ghost" onClick={() => navigate("/mypage", { replace: true })}>{T.later}</Button>
             <Button type="submit" disabled={saving || !form.nickname.trim()}>{saving ? T.saving : T.save}</Button>
           </div>
         </form>
@@ -978,7 +833,7 @@ function MobileProfileEditPage() {
           </div>
         </div>
       )}
-      {passwordModalOpen && (
+      {canChangePassword && passwordModalOpen && (
         <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closePasswordModal()}>
           <section className="profile-auth-modal password-change-modal" style={{ width: '95%', maxWidth: '360px', padding: '24px 20px', borderRadius: '16px', boxSizing: 'border-box' }}>
             <button className="schedule-modal-close" type="button" onClick={closePasswordModal} disabled={passwordSaving}><X size={18} /></button>
@@ -1107,6 +962,36 @@ function MobileProfileEditPage() {
               <button className="primary-small" type="button" onClick={submitPasswordChange} disabled={passwordSaving || (hasPasswordConfirm && !passwordMatches)} style={{ flex: 1 }}>
                 {passwordSaving ? "변경 중..." : "변경하기"}
               </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {withdrawModalOpen && (
+        <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setWithdrawModalOpen(false)}>
+          <section className="profile-auth-modal" style={{ width: '95%', maxWidth: '360px', padding: '24px 20px', borderRadius: '16px', boxSizing: 'border-box' }}>
+            <button className="schedule-modal-close" type="button" onClick={() => setWithdrawModalOpen(false)}><X size={18} /></button>
+            <h2>회원 탈퇴</h2>
+            <p>회원 탈퇴는 신중하게 확인해야 하는 작업입니다.</p>
+            <div className="profile-auth-form" style={{ marginTop: '20px' }}>
+              <label>
+                아래 입력창에 <strong>탈퇴합니다</strong> 라고 입력해주세요.
+                <input
+                  type="text"
+                  value={withdrawText}
+                  placeholder="탈퇴합니다"
+                  onChange={(event) => {
+                    setWithdrawText(event.target.value);
+                    setWithdrawStatus("idle");
+                  }}
+                />
+              </label>
+              {withdrawStatus === "mismatch" && <em className="nickname-check warn">확인 문구를 정확히 입력해주세요.</em>}
+              {withdrawStatus === "success" && <em className="nickname-check ok">회원 탈퇴 확인 흐름이 완료되었습니다.</em>}
+              <div className="profile-auth-actions" style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
+                <button className="ghost-btn" type="button" onClick={() => setWithdrawModalOpen(false)}>취소</button>
+                <button className="primary-small danger-small" type="button" onClick={submitWithdraw} style={{ background: '#ef4444', color: 'white', border: 'none' }}>탈퇴 확인</button>
+              </div>
             </div>
           </section>
         </div>

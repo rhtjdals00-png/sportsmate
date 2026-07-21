@@ -145,6 +145,21 @@ def update_profile_intro_preference():
     db.session.commit()
     return jsonify({"user": user.to_dict()})
 
+@user_bp.delete("/me")
+@jwt_required()
+def delete_me():
+    user = user_query().get_or_404(int(get_jwt_identity()))
+    
+    try:
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({"message": "Successfully deleted account"})
+    except Exception as e:
+        db.session.rollback()
+        from flask import current_app
+        current_app.logger.error(f"Error deleting user {user.id}: {str(e)}")
+        return jsonify({"message": "계정 탈퇴 중 오류가 발생했습니다."}), 500
+
 
 @user_bp.post("/me/verify-password")
 @jwt_required()

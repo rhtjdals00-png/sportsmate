@@ -27,6 +27,66 @@ import { useAsync } from "../hooks/useAsync";
 import { useResponsive } from "../hooks/useResponsive";
 import { formatExerciseLevel } from "../utils/formatters";
 
+function parseMeetingDate(value) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getMeetingOperationEndAt(meeting) {
+  if (!meeting) return null;
+  if (meeting.meeting_type === "one_time") {
+    return parseMeetingDate(meeting.end_at) || parseMeetingDate(meeting.start_at);
+  }
+  if (meeting.meeting_type === "regular") {
+    if (meeting.next_session) return null;
+    return parseMeetingDate(meeting.end_at);
+  }
+  return parseMeetingDate(meeting.end_at) || parseMeetingDate(meeting.start_at);
+}
+
+function isMeetingOperationEnded(meeting, now = new Date()) {
+  const operationEndAt = getMeetingOperationEndAt(meeting);
+  return Boolean(operationEndAt && now >= operationEndAt);
+}
+
+function getRecruitmentAction(meeting) {
+  if (meeting.status === "open") {
+    return { label: "모집종료", className: "btn-close", disabled: false };
+  }
+  if (meeting.status === "closed") {
+    if (isMeetingOperationEnded(meeting)) {
+      return {
+        label: "운영 종료",
+        className: "btn-start",
+        disabled: true,
+        message: "종료된 모임은 모집을 다시 시작할 수 없습니다."
+      };
+    }
+    return { label: "모집시작", className: "btn-start", disabled: false };
+  }
+  if (meeting.status === "full") {
+    return { label: "모집마감", className: "btn-start", disabled: true };
+  }
+  if (meeting.status === "cancelled") {
+    return {
+      label: "취소됨",
+      className: "btn-start",
+      disabled: true,
+      message: "취소된 모임은 모집을 다시 시작할 수 없습니다."
+    };
+  }
+  if (meeting.status === "suspended") {
+    return {
+      label: "운영중지",
+      className: "btn-start",
+      disabled: true,
+      message: "운영 중지된 모임은 모집을 다시 시작할 수 없습니다."
+    };
+  }
+  return { label: "상태 확인", className: "btn-start", disabled: true };
+}
+
 function HostMeetingManagePage() {
   const { isMobile } = useResponsive();
   const { meetingId } = useParams();
@@ -67,6 +127,13 @@ function HostMeetingManagePage() {
 
   const toggleMeetingStatus = async () => {
     const isCurrentlyOpen = meeting.status === "open";
+    if (!isCurrentlyOpen) {
+      const action = getRecruitmentAction(meeting);
+      if (action.disabled) {
+        alert(action.message || "현재 상태에서는 모집을 다시 시작할 수 없습니다.");
+        return;
+      }
+    }
     const confirmMessage = isCurrentlyOpen
       ? "모집을 종료하시겠습니까?"
       : "모집을 다시 시작하시겠습니까?";
@@ -229,6 +296,7 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
   const [activeTab, setActiveTab] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const fileInputRef = useRef(null);
+  const recruitmentAction = getRecruitmentAction(meeting);
   const sessions = useAsync(
     () => meeting.meeting_type === "regular" ? meetingApi.sessions(meeting.id) : Promise.resolve({ items: [] }),
     [meeting.id, meeting.meeting_type]
@@ -970,10 +1038,12 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
           <div className="desktop-host-danger-zone">
             <button
               type="button"
-              className={meeting.status === "open" ? "btn-close" : "btn-start"}
-              onClick={toggleMeetingStatus}
+              className={recruitmentAction.className}
+              disabled={recruitmentAction.disabled}
+              onClick={recruitmentAction.disabled ? undefined : toggleMeetingStatus}
+              title={recruitmentAction.message || recruitmentAction.label}
             >
-              {meeting.status === "open" ? "모집종료" : "모집시작"}
+              {recruitmentAction.label}
             </button>
           </div>
         </section>

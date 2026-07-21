@@ -1,6 +1,6 @@
 import math
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlencode
 
 from flask import Blueprint, jsonify, request
@@ -10,8 +10,9 @@ from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models import ChatbotMessage, ChatbotSession, ChatbotUserMemory, Meeting, Participant, Region, Sport, User
-from app.services.location_service import search_places
+from app.services.location_service import reverse_geocode, search_places
 from app.services.openai_service import generate_openai_chatbot_nlu, generate_openai_chatbot_reply
+from app.services.weather_service import WeatherServiceError, get_daily_forecast, get_forecast
 from app.utils.timezone import kst_now
 
 chatbot_bp = Blueprint("chatbot", __name__)
@@ -26,6 +27,8 @@ LOCATION_HINT_PATTERN = r"(?:근처|주변|부근|쪽|인근)(?:에서는|에서
 PERSONALIZED_HINTS = ["나한테", "내 취향", "맞춤", "선호", "관심", "좋아하는", "내가 좋아"]
 MY_LOCATION_PATTERNS = [r"내\s*(?:주변|근처|위치)", r"현재\s*위치", r"주변\s*모임"]
 SEARCH_STOPWORDS = {"모임", "운동", "추천", "찾아", "찾아줘", "찾아봐", "찾아봐줘", "찾아봐줄래", "알려줘", "근처", "주변", "부근", "쪽", "인근", "할만한", "갈만한", "이번", "주말", "평일", "오늘", "내일", "지금", "모집중", "모집중인", "뭐야", "뭐가", "있어"}
+WEATHER_KEYWORDS = ["날씨", "기온", "온도", "강수", "비 올", "비와", "비 와", "눈 올", "우산", "습도", "풍속", "바람", "더워", "추워", "미세먼지", "예보"]
+WEATHER_TIME_HINTS = {"새벽": 6, "아침": 9, "오전": 10, "점심": 12, "오후": 15, "저녁": 18, "밤": 21, "야간": 21}
 NEARBY_RADIUS_KM = 6
 ACTION_INTENTS = {
     "support": {
@@ -190,6 +193,10 @@ def is_recommend_intent(content):
     return contains_any(text, RECOMMEND_STRONG_HINTS) or ("모임" in text and not is_schedule_intent(text))
 
 
+def is_weather_intent(content):
+    return contains_any(content or "", WEATHER_KEYWORDS)
+
+
 def fallback_chatbot_nlu(content):
     extracted = extract_preferences_from_text(content)
     action_intents = detect_action_intents(content)
@@ -211,8 +218,8 @@ def fallback_chatbot_nlu(content):
         location_kind = "profile"
     else:
         location_kind = "none"
-    intent = "schedule" if is_schedule_intent(content) else ("recommend" if is_recommend_intent(content) else "general")
-    if action_intents:
+    intent = "weather" if is_weather_intent(content) else ("schedule" if is_schedule_intent(content) else ("recommend" if is_recommend_intent(content) else "general"))
+    if action_intents and intent != "weather":
         intent = "general"
     return {
         "intent": intent,
@@ -231,7 +238,9 @@ def normalize_chatbot_nlu(value, content):
     fallback = fallback_chatbot_nlu(content)
     if not isinstance(value, dict):
         return fallback
-    intent = value.get("intent") if value.get("intent") in {"schedule", "recommend", "general"} else fallback["intent"]
+    intent = value.get("intent") if value.get("intent") in {"schedule", "recommend", "weather", "general"} else fallback["intent"]
+    if fallback["intent"] == "weather":
+        intent = "weather"
     action_intents = compact_unique((value.get("action_intents") if isinstance(value.get("action_intents"), list) else []) + fallback.get("action_intents", []))
     if action_intents and intent == "recommend" and fallback["intent"] == "general":
         intent = "general"
@@ -328,7 +337,7 @@ def resolve_place_coordinate(term):
         return None
     if normalized in PLACE_COORD_FALLBACKS:
         lat, lng = PLACE_COORD_FALLBACKS[normalized]
-        return {"term": normalized, "latitude": lat, "longitude": lng, "source": "fallback"}
+        return {"term": normalized, "address": f"서울 {normalized}", "latitude": lat, "longitude": lng, "source": "fallback"}
     try:
         result = search_places(normalized, size=1)
     except Exception:
@@ -338,6 +347,7 @@ def resolve_place_coordinate(term):
         return None
     return {
         "term": normalized,
+        "address": item.get("address") or item.get("road_address") or normalized,
         "latitude": item.get("latitude"),
         "longitude": item.get("longitude"),
         "source": item.get("source") or (result or {}).get("source") or "",
@@ -395,6 +405,187 @@ def profile_location_context(user):
         "source": "profile",
         "radius_km": NEARBY_RADIUS_KM,
     }
+
+
+def weather_target_context(content):
+    text = content or ""
+    now = kst_now()
+    target = now
+    label = "오늘"
+
+    if "모레" in text:
+        target = now + timedelta(days=2)
+        label = "모레"
+    elif "글피" in text:
+        target = now + timedelta(days=3)
+        label = "글피"
+    elif "내일" in text:
+        target = now + timedelta(days=1)
+        label = "내일"
+    else:
+        days_match = re.search(r"(\d+)\s*일\s*(?:뒤|후)", text)
+        date_match = re.search(r"(?:(\d{4})\s*년\s*)?(\d{1,2})\s*월\s*(\d{1,2})\s*일", text)
+        if days_match:
+            day_count = max(0, min(int(days_match.group(1)), 10))
+            target = now + timedelta(days=day_count)
+            label = f"{day_count}일 뒤"
+        elif date_match:
+            year = int(date_match.group(1) or now.year)
+            try:
+                target = now.replace(year=year, month=int(date_match.group(2)), day=int(date_match.group(3)))
+                if target.date() < now.date() and not date_match.group(1):
+                    target = target.replace(year=year + 1)
+                label = f"{target.month}월 {target.day}일"
+            except ValueError:
+                target = now
+        elif "주말" in text or "이번 주" in text or "이번주" in text:
+            days_to_saturday = (5 - now.weekday()) % 7
+            target = now + timedelta(days=days_to_saturday)
+            label = "이번 주말"
+
+    explicit_time = False
+    hour_match = re.search(r"(?:(오전|오후)\s*)?(\d{1,2})\s*시", text)
+    if hour_match:
+        hour = int(hour_match.group(2)) % 24
+        if hour_match.group(1) == "오후" and hour < 12:
+            hour += 12
+        if hour_match.group(1) == "오전" and hour == 12:
+            hour = 0
+        target = target.replace(hour=hour, minute=0, second=0, microsecond=0)
+        explicit_time = True
+        label += f" {hour}시"
+    else:
+        for hint, hour in WEATHER_TIME_HINTS.items():
+            if hint in text:
+                target = target.replace(hour=hour, minute=0, second=0, microsecond=0)
+                explicit_time = True
+                label += f" {hint}"
+                break
+        if not explicit_time:
+            target = target.replace(hour=now.hour, minute=0, second=0, microsecond=0) if target.date() == now.date() else target.replace(hour=14, minute=0, second=0, microsecond=0)
+
+    return {"target": target, "label": label, "explicit_time": explicit_time}
+
+
+def weather_location_context(user, content, payload=None, nlu=None):
+    nlu = nlu or {}
+    nlu_location = nlu.get("location_query") if nlu.get("location_kind") == "explicit" else ""
+    if nlu_location:
+        explicit_terms = [nlu_location]
+    else:
+        extracted = extract_preferences_from_text(content)
+        explicit_terms = compact_unique(extracted.get("places", []) + extracted.get("regions", []))
+    explicit = resolve_nearby_context(explicit_terms)
+    if explicit:
+        return explicit
+    browser = request_location_context(payload)
+    if browser:
+        try:
+            place = reverse_geocode(browser["latitude"], browser["longitude"])
+            address = place.get("address") or place.get("road_address") or ""
+            if address and address != "지도에서 선택한 위치":
+                browser["term"] = " ".join(address.split()[:3])
+                browser["address"] = address
+        except Exception:
+            pass
+        return browser
+    profile = profile_location_context(user)
+    if profile:
+        return profile
+    return {"term": "서울", "latitude": 37.5665, "longitude": 126.9780, "source": "default"}
+
+
+def build_weather_context(user, content, payload=None, nlu=None):
+    if not is_weather_intent(content):
+        return None
+    if "미세먼지" in content and not any(keyword in content for keyword in ["날씨", "기온", "비", "눈", "강수", "바람", "습도"]):
+        return {
+            "available": False,
+            "air_quality_only": True,
+            "message": "현재 연결된 기상청 예보 API에는 미세먼지 수치가 포함되지 않습니다.",
+        }
+
+    location = weather_location_context(user, content, payload=payload, nlu=nlu)
+    target_info = weather_target_context(content)
+    target = target_info["target"]
+    day_offset = (target.date() - kst_now().date()).days
+    try:
+        if 0 <= day_offset <= 2 and not target_info["explicit_time"]:
+            data = get_daily_forecast(location["latitude"], location["longitude"])
+            selected = next((item for item in data.get("daily", []) if item.get("date") == target.date().isoformat()), None)
+            return {
+                "available": bool(selected),
+                "mode": "daily",
+                "location": location,
+                "target": target.isoformat(),
+                "target_label": target_info["label"],
+                "current": data.get("current") if day_offset == 0 else None,
+                "day": selected,
+                "hourly": [item for item in data.get("hourly", []) if item.get("forecast_at", "").startswith(target.date().isoformat())],
+                "source": data.get("source", "기상청"),
+                "air_quality_unavailable": "미세먼지" in content,
+            }
+        forecast = get_forecast(location["latitude"], location["longitude"], target, location.get("address") or location.get("term", ""))
+        return {
+            "available": bool(forecast.get("available")),
+            "mode": "point",
+            "location": location,
+            "target": target.isoformat(),
+            "target_label": target_info["label"],
+            "forecast": forecast,
+            "source": forecast.get("source", "기상청"),
+            "air_quality_unavailable": "미세먼지" in content,
+        }
+    except WeatherServiceError as error:
+        return {"available": False, "location": location, "target_label": target_info["label"], "message": str(error)}
+
+
+def _weather_number(value, suffix=""):
+    if value is None:
+        return "정보 없음"
+    rounded = round(float(value), 1)
+    return f"{int(rounded) if rounded.is_integer() else rounded}{suffix}"
+
+
+def build_weather_reply(weather_context):
+    if not weather_context:
+        return "날씨 정보를 확인하지 못했어요. 지역과 날짜를 함께 알려주세요."
+    if weather_context.get("air_quality_only"):
+        return f"{weather_context['message']} 미세먼지는 에어코리아 대기질 API를 추가로 연결하면 정확하게 안내할 수 있어요."
+    location_name = (weather_context.get("location") or {}).get("term") or "선택 지역"
+    target_label = weather_context.get("target_label") or "해당 시간"
+    if not weather_context.get("available"):
+        message = weather_context.get("message") or (weather_context.get("forecast") or {}).get("message") or "아직 발표된 예보가 없습니다."
+        return f"{location_name}의 {target_label} 날씨는 지금 확인하기 어려워요. {message}"
+
+    if weather_context.get("mode") == "daily":
+        day = weather_context.get("day") or {}
+        current = weather_context.get("current")
+        if current:
+            lines = [
+                f"{location_name} 현재 날씨는 {current.get('condition_label', '날씨 정보 없음')}, 기온은 {_weather_number(current.get('temperature_c'), '°C')}예요.",
+                f"오늘 최저 {_weather_number(day.get('temperature_min_c'), '°C')}, 최고 {_weather_number(day.get('temperature_max_c'), '°C')}, 강수확률은 최대 {_weather_number(day.get('precipitation_probability'), '%')}입니다.",
+            ]
+            if current.get("humidity") is not None or current.get("wind_speed_ms") is not None:
+                lines.append(f"습도 {_weather_number(current.get('humidity'), '%')}, 풍속 {_weather_number(current.get('wind_speed_ms'), 'm/s')}이고, {current.get('message', '')}".strip())
+        else:
+            lines = [
+                f"{location_name}의 {target_label} 예보는 {day.get('condition_label', '날씨 정보 없음')}입니다.",
+                f"최저 {_weather_number(day.get('temperature_min_c'), '°C')}, 최고 {_weather_number(day.get('temperature_max_c'), '°C')}, 강수확률은 최대 {_weather_number(day.get('precipitation_probability'), '%')}예요.",
+            ]
+    else:
+        forecast = weather_context.get("forecast") or {}
+        temperature = _weather_number(forecast.get("temperature_c"), "°C")
+        if forecast.get("temperature_c") is None and (forecast.get("temperature_min_c") is not None or forecast.get("temperature_max_c") is not None):
+            temperature = f"최저 {_weather_number(forecast.get('temperature_min_c'), '°C')}, 최고 {_weather_number(forecast.get('temperature_max_c'), '°C')}"
+        lines = [
+            f"{location_name}의 {target_label} 예보는 {forecast.get('condition_label', '날씨 정보 없음')}, {temperature}예요.",
+            f"강수확률은 {_weather_number(forecast.get('precipitation_probability'), '%')}이고, {forecast.get('message', '운동 전 최신 예보를 다시 확인해주세요.')}",
+        ]
+    lines.append("기상청 예보 기준이며 실제 현장 날씨는 달라질 수 있어요.")
+    if weather_context.get("air_quality_unavailable"):
+        lines.append("미세먼지 수치는 현재 예보 API에 포함되지 않아 함께 안내하지 못했어요.")
+    return "\n".join(lines)
 
 
 def my_nearby_context(user, content, payload=None, nlu=None):
@@ -784,6 +975,14 @@ def build_chatbot_actions(user, content, memory, context, payload=None, nlu=None
         })
     schedule_intent = nlu.get("intent") == "schedule"
     recommend_intent = nlu.get("intent") == "recommend"
+    weather_intent = nlu.get("intent") == "weather" or is_weather_intent(content)
+    if weather_intent:
+        actions.append({
+            "type": "weather",
+            "label": "전국 날씨 자세히 보기",
+            "description": "지역별 시간대 예보와 3일 예보를 확인해요.",
+            "href": "/weather",
+        })
     if schedule_intent:
         upcoming = upcoming_user_meetings(user.id, limit=1)
         href = "/mypage?panel=joined"
@@ -813,11 +1012,12 @@ def build_chatbot_actions(user, content, memory, context, payload=None, nlu=None
     return actions
 
 
-def build_chatbot_context(user, content, memory, fallback_reply, payload=None, nlu=None):
+def build_chatbot_context(user, content, memory, fallback_reply, payload=None, nlu=None, weather_context=None):
     nlu = nlu or fallback_chatbot_nlu(content)
     profile_context = user_profile_context(user)
-    upcoming = upcoming_user_meetings(user.id)
-    recommended = recommend_meetings(user, content, memory, payload=payload, nlu=nlu)
+    weather_intent = nlu.get("intent") == "weather" or weather_context is not None
+    upcoming = [] if weather_intent else upcoming_user_meetings(user.id)
+    recommended = [] if weather_intent else recommend_meetings(user, content, memory, payload=payload, nlu=nlu)
     recent_messages = (
         ChatbotMessage.query.join(ChatbotSession, ChatbotSession.id == ChatbotMessage.session_id)
         .filter(ChatbotSession.user_id == user.id)
@@ -835,9 +1035,11 @@ def build_chatbot_context(user, content, memory, fallback_reply, payload=None, n
         "intent": {
             "schedule": nlu.get("intent") == "schedule",
             "recommend": nlu.get("intent") == "recommend",
+            "weather": weather_intent,
             "actions": nlu.get("action_intents", []),
         },
         "nlu": nlu,
+        "weather": weather_context,
         "upcoming_meetings": [meeting_context(meeting) for meeting in upcoming],
         "recommended_meetings": [meeting_context(meeting) for meeting in recommended],
         "recent_chatbot_messages": [message.to_dict() for message in reversed(recent_messages)],
@@ -931,8 +1133,9 @@ def send_message(session_id):
 
     memory = update_user_memory(user, content)
     nlu = interpret_chatbot_query(content, user=user, memory=memory, use_ai=True)
-    fallback_reply = build_general_reply(user, content, memory, payload=data, nlu=nlu)
-    chatbot_context = build_chatbot_context(user, content, memory, fallback_reply, payload=data, nlu=nlu)
+    weather_context = build_weather_context(user, content, payload=data, nlu=nlu)
+    fallback_reply = build_weather_reply(weather_context) if weather_context is not None else build_general_reply(user, content, memory, payload=data, nlu=nlu)
+    chatbot_context = build_chatbot_context(user, content, memory, fallback_reply, payload=data, nlu=nlu, weather_context=weather_context)
     actions = build_chatbot_actions(user, content, memory, chatbot_context, payload=data, nlu=nlu)
     bot_reply_content = generate_openai_chatbot_reply(content, fallback_reply, chatbot_context) or fallback_reply
     bot_msg = ChatbotMessage(session_id=session.id, role="assistant", content=bot_reply_content)

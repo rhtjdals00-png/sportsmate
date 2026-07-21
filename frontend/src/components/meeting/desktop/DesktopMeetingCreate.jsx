@@ -4,7 +4,9 @@ import { AlarmClock, CalendarClock, ChevronLeft, ChevronRight, Map as MapIcon, M
 import { meetingApi } from "../../../api/meetingApi";
 import { sportApi } from "../../../api/sportApi";
 import { locationApi } from "../../../api/locationApi";
+import { weatherApi } from "../../../api/weatherApi";
 import { useAsync } from "../../../hooks/useAsync";
+import DesktopWeatherCard from "./DesktopWeatherCard.jsx";
 
 const TITLE_MAX_LENGTH = 40;
 const CUSTOM_PURPOSE = "custom";
@@ -355,6 +357,8 @@ function DesktopMeetingCreate() {
   const locationSearchRequestRef = useRef(0);
   const selectedLocationKeywordRef = useRef("");
   const locationReverseRequestRef = useRef(0);
+  const weatherRequestRef = useRef(0);
+  const [weather, setWeather] = useState({ loading: false, forecast: null });
   const categories = useAsync(() => sportApi.categories(), []);
   const sports = useAsync(() => sportApi.sports(form.category_id ? { category_id: form.category_id } : {}), [form.category_id]);
   const today = toDateInputValue(new Date());
@@ -437,6 +441,34 @@ function DesktopMeetingCreate() {
     }, 300);
     return () => window.clearTimeout(timer);
   }, [locationKeyword, locationScope]);
+
+  useEffect(() => {
+    const latitude = Number(form.latitude);
+    const longitude = Number(form.longitude);
+    const at = combineDateTime(form.start_date, form.start_time);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !at) {
+      weatherRequestRef.current += 1;
+      setWeather({ loading: false, forecast: null });
+      return;
+    }
+    const requestId = weatherRequestRef.current + 1;
+    weatherRequestRef.current = requestId;
+    const timer = window.setTimeout(() => {
+      setWeather((current) => ({ ...current, loading: true }));
+      weatherApi.forecast({ latitude, longitude, at, address: form.address })
+        .then((data) => {
+          if (weatherRequestRef.current === requestId) setWeather({ loading: false, forecast: data.forecast });
+        })
+        .catch((error) => {
+          if (weatherRequestRef.current !== requestId) return;
+          setWeather({
+            loading: false,
+            forecast: { available: false, message: error.response?.data?.message || "예보를 불러오지 못했습니다." },
+          });
+        });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [form.latitude, form.longitude, form.start_date, form.start_time, form.address]);
 
   const selectLocation = useCallback(async (place) => {
     if (place.source === "map-click") {
@@ -786,6 +818,15 @@ function DesktopMeetingCreate() {
                 <DesktopLocationMap clientId={mapClientId} selectedLocation={form} results={locationResults} onSelect={selectLocation} />
               </div>
             </div>
+            {(weather.loading || weather.forecast) && (
+              <div className="desktop-form-full">
+                <DesktopWeatherCard
+                  forecast={weather.forecast}
+                  loading={weather.loading}
+                  title={form.meeting_type === "regular" ? "첫 회차 날씨" : "모임 날씨"}
+                />
+              </div>
+            )}
             <label>최대 인원<input min="2" max={maxLimit} type="number" value={form.max_participants} onChange={(event) => update("max_participants", event.target.value)} /></label>
           </div>
         </section>

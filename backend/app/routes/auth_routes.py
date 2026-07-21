@@ -20,6 +20,8 @@ FIELD_LABELS = {
     "phone_number": "핸드폰 번호",
 }
 
+SUPPORTED_LOGIN_PROVIDERS = {"email", "google", "kakao"}
+
 
 def normalize_phone_number(value):
     digits = "".join(ch for ch in (value or "") if ch.isdigit())[:11]
@@ -111,14 +113,26 @@ def sync_user():
         return jsonify({"message": "Supabase 계정 이메일을 확인할 수 없습니다."}), 400
 
     data = request.get_json() or {}
-    login_provider = data.get("login_provider")
-    if login_provider is not None:
-        if not isinstance(login_provider, str):
+    requested_login_provider = data.get("login_provider")
+    if requested_login_provider is not None:
+        if not isinstance(requested_login_provider, str):
             return jsonify({"message": "login_provider 형식이 올바르지 않습니다."}), 400
-        login_provider = login_provider.strip().lower()
-        if login_provider not in {"email", "google", "kakao"}:
+        requested_login_provider = requested_login_provider.strip().lower()
+        if requested_login_provider not in SUPPORTED_LOGIN_PROVIDERS:
             return jsonify({"message": "login_provider 형식이 올바르지 않습니다."}), 400
-        data["login_provider"] = login_provider
+
+        verified_identity_providers = {
+            (identity.get("provider") or "").strip().lower()
+            for identity in (supabase_user.get("identities") or [])
+        }
+        if requested_login_provider not in verified_identity_providers:
+            return jsonify({"message": "선택한 로그인 방식을 Supabase 계정에서 확인할 수 없습니다."}), 401
+        data["login_provider"] = requested_login_provider
+    else:
+        # Session restoration has no newly selected login method. Existing
+        # users may restore their session, while new users are still rejected
+        # by sync_supabase_user until an explicit provider is supplied.
+        data.pop("login_provider", None)
 
     requested_auth_user_id = (data.get("auth_user_id") or data.get("id") or "").strip()
     requested_email = (data.get("email") or "").strip().lower()
