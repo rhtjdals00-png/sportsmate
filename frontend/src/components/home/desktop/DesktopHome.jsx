@@ -11,8 +11,46 @@ import { getMeetingCoverImage, isUsingSportThumbnail } from "../../../utils/spor
 import { getSportVisualAsset } from "../../../utils/sportVisualAssets";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import HomeWeatherCard from "./HomeWeatherCard.jsx";
+import heroCommunityImage from "../../../assets/images/home/hero-community.webp";
+import heroSportsImage from "../../../assets/images/home/hero-sports.webp";
+import heroNearbyImage from "../../../assets/images/home/hero-nearby.webp";
 
 const GUEST_SPORT_SHORTCUT_LABELS = ["풋살", "배드민턴", "러닝", "테니스", "등산", "농구"];
+const HOME_HERO_PREVIOUS_KEY = "sportsmate.homeHero.previous.v2";
+const HOME_HERO_VARIANTS = [
+  {
+    id: "community",
+    image: heroCommunityImage,
+    tone: "light",
+    label: "함께 운동하는 스포츠 모임"
+  },
+  {
+    id: "sports",
+    image: heroSportsImage,
+    tone: "dark",
+    label: "다양한 종목을 함께 즐기는 스포츠 모임"
+  },
+  {
+    id: "nearby",
+    image: heroNearbyImage,
+    tone: "dark",
+    label: "내 주변에서 찾는 스포츠 모임"
+  }
+];
+
+function selectHomeHero() {
+  try {
+    const previousId = window.sessionStorage.getItem(HOME_HERO_PREVIOUS_KEY);
+    const candidates = HOME_HERO_VARIANTS.filter((hero) => hero.id !== previousId);
+    const selectedHero = candidates[Math.floor(Math.random() * candidates.length)];
+    window.sessionStorage.setItem(HOME_HERO_PREVIOUS_KEY, selectedHero.id);
+    return selectedHero;
+  } catch {
+    return HOME_HERO_VARIANTS[Math.floor(Math.random() * HOME_HERO_VARIANTS.length)];
+  }
+}
+
+const ACTIVE_HOME_HERO = selectHomeHero();
 
 function HomeRecommendedCard({ meeting }) {
   const sportName = meeting.sport?.name || meeting.sport_name;
@@ -146,9 +184,13 @@ function DesktopHome() {
 
   return (
     <div className="desktop-page desktop-home-page">
-      <section className="home-banner">
+      <section
+        className={`home-banner home-banner--${ACTIVE_HOME_HERO.id} is-${ACTIVE_HOME_HERO.tone}`}
+        style={{ backgroundImage: `url(${ACTIVE_HOME_HERO.image})` }}
+        aria-label={ACTIVE_HOME_HERO.label}
+      >
         <div className="home-banner-copy">
-          <span>오늘도 함께, SPORTSMATE</span>
+          <span className="home-banner-eyebrow">오늘도 함께, SPORTSMATE</span>
           <h1>
             가볍게 찾고
             <br />
@@ -165,9 +207,6 @@ function DesktopHome() {
               모임 만들기
             </Link>
           </div>
-        </div>
-        <div className="home-banner-image">
-          <img src="https://images.unsplash.com/photo-1486218119243-13883505764c?auto=format&fit=crop&w=800&q=80" alt="러닝 이미지" />
         </div>
       </section>
 

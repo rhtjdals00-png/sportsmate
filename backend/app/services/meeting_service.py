@@ -3,7 +3,7 @@ import math
 from datetime import date, datetime, time, timedelta
 
 from flask import current_app
-from sqlalchemy import and_, case, or_
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
@@ -21,6 +21,41 @@ def parse_datetime(value):
 WEEKDAY_ORDER = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
 WEEKDAY_INDEX = {day: index for index, day in enumerate(WEEKDAY_ORDER)}
 JOIN_MESSAGE_MAX_LENGTH = 200
+
+
+class MeetingConflictError(ValueError):
+    code = "MEETING_CONFLICT"
+
+
+class ParticipantApprovalCapacityFullError(MeetingConflictError):
+    code = "PARTICIPANT_APPROVAL_CAPACITY_FULL"
+
+    def __init__(self):
+        super().__init__("모임 정원이 모두 찼습니다. 신청자는 승인 대기 상태로 유지됩니다.")
+
+
+class MaxParticipantsBelowApprovedCountError(MeetingConflictError):
+    code = "MAX_PARTICIPANTS_BELOW_APPROVED_COUNT"
+
+    def __init__(self):
+        super().__init__("현재 승인된 참가 인원보다 최대 정원을 작게 설정할 수 없습니다.")
+
+
+def get_meeting_for_update(meeting_id):
+    return Meeting.query.filter_by(id=meeting_id).with_for_update().first_or_404()
+
+
+def get_participant_for_update(meeting_id, user_id):
+    return (
+        Participant.query
+        .filter_by(meeting_id=meeting_id, user_id=user_id)
+        .with_for_update()
+        .first_or_404()
+    )
+
+
+def approved_participant_count(meeting_id):
+    return Participant.query.filter_by(meeting_id=meeting_id, status="approved").count()
 
 
 def _normalize_join_message(value):
@@ -250,6 +285,7 @@ def ensure_all_regular_meeting_sessions(now=None):
 
 def close_expired_one_time_meetings(now=None):
     now = now or kst_now()
+    today_start = _start_of_day(now.date())
     expired_updated = (
         Meeting.query
         .filter(
@@ -257,7 +293,7 @@ def close_expired_one_time_meetings(now=None):
             Meeting.meeting_type == "one_time",
             or_(
                 and_(Meeting.end_at.isnot(None), Meeting.end_at < now),
-                and_(Meeting.end_at.is_(None), Meeting.start_at.isnot(None), Meeting.start_at < now),
+                and_(Meeting.end_at.is_(None), Meeting.start_at.isnot(None), Meeting.start_at < today_start),
             )
         )
         .update({"status": "closed"}, synchronize_session=False)
@@ -373,6 +409,32 @@ def _add_meeting_system_message(meeting, user_id, content):
     ))
 
 
+def public_board_operation_active_filter(now=None):
+    now = now or kst_now()
+    last_regular_session_end = (
+        select(func.max(func.coalesce(MeetingSession.end_at, MeetingSession.start_at)))
+        .where(
+            MeetingSession.meeting_id == Meeting.id,
+            MeetingSession.status != "cancelled",
+        )
+        .correlate(Meeting)
+        .scalar_subquery()
+    )
+
+    regular_is_active = or_(
+        Meeting.end_at.is_(None),
+        and_(last_regular_session_end.is_(None), Meeting.end_at > now),
+        and_(
+            last_regular_session_end.is_not(None),
+            or_(
+                func.date(Meeting.end_at) < func.date(last_regular_session_end),
+                last_regular_session_end > now,
+            ),
+        ),
+    )
+    return or_(Meeting.meeting_type != "regular", regular_is_active)
+
+
 def list_meetings(params, current_user_id=None):
     delete_expired_suspended_meetings()
     close_expired_one_time_meetings()
@@ -426,6 +488,9 @@ def list_meetings(params, current_user_id=None):
         query = query.filter(Meeting.host_id == current_user_id)
     if params.get("mine") == "joined" and current_user_id:
         query = query.join(Participant).filter(Participant.user_id == current_user_id, Participant.status == "approved")
+    is_personal_listing = bool(current_user_id and params.get("mine") in {"host", "joined"})
+    if not is_personal_listing:
+        query = query.filter(public_board_operation_active_filter())
     limit = max(1, min(int(params.get("limit", 20)), 50))
     is_recommend = params.get("recommend") in {"1", "true", "yes"}
     if is_recommend:
@@ -759,50 +824,62 @@ def cancel_meeting_session(meeting_id, session_id, current_user_id, reason):
 
 
 def update_meeting(meeting_id, host_id, data):
-    meeting = Meeting.query.get_or_404(meeting_id)
-    if meeting.host_id != host_id:
-        raise PermissionError("방장만 수정할 수 있습니다.")
+    try:
+        meeting = get_meeting_for_update(meeting_id)
+        if meeting.host_id != host_id:
+            raise PermissionError("방장만 수정할 수 있습니다.")
 
-    if "status" in data:
-        requested_status = str(data["status"])
-        if requested_status not in {"open", "full", "closed", "cancelled", "suspended"}:
-            raise ValueError("올바르지 않은 모집 상태입니다.")
-        if requested_status == "open":
-            validate_meeting_can_reopen_recruitment(meeting)
+        if "status" in data:
+            requested_status = str(data["status"])
+            if requested_status not in {"open", "full", "closed", "cancelled", "suspended"}:
+                raise ValueError("올바르지 않은 모집 상태입니다.")
+            if requested_status == "open":
+                validate_meeting_can_reopen_recruitment(meeting)
 
-    if "max_participants" in data:
-        from app.utils.settings import load_system_settings
-        settings = load_system_settings()
-        max_limit = settings.get("defaultMaxParticipants", 6)
-        if int(data["max_participants"]) > max_limit:
-            raise ValueError(f"개설 최대 정원은 {max_limit}명 이하로만 설정 가능합니다.")
+        actual_approved_count = None
+        if "max_participants" in data:
+            from app.utils.settings import load_system_settings
+            settings = load_system_settings()
+            max_limit = settings.get("defaultMaxParticipants", 6)
+            requested_max = int(data["max_participants"])
+            if requested_max > max_limit:
+                raise ValueError(f"개설 최대 정원은 {max_limit}명 이하로만 설정 가능합니다.")
+            actual_approved_count = approved_participant_count(meeting.id)
+            if requested_max < actual_approved_count:
+                raise MaxParticipantsBelowApprovedCountError()
+            data = {**data, "max_participants": requested_max}
 
-    updatable_fields = [
-        "sport_id",
-        "title",
-        "description",
-        "meeting_type",
-        "purpose",
-        "region_sido_code",
-        "region_sigungu_code",
-        "location_name",
-        "address",
-        "latitude",
-        "longitude",
-        "max_participants",
-        "cover_image_url",
-        "status"
-    ]
-    for field in updatable_fields:
-        if field in data:
-            setattr(meeting, field, data[field])
-    if "start_at" in data:
-        meeting.start_at = parse_datetime(data["start_at"])
-    if "end_at" in data:
-        meeting.end_at = parse_datetime(data.get("end_at"))
-    meeting.sync_status()
-    db.session.commit()
-    return meeting
+        updatable_fields = [
+            "sport_id",
+            "title",
+            "description",
+            "meeting_type",
+            "purpose",
+            "region_sido_code",
+            "region_sigungu_code",
+            "location_name",
+            "address",
+            "latitude",
+            "longitude",
+            "max_participants",
+            "cover_image_url",
+            "status"
+        ]
+        for field in updatable_fields:
+            if field in data:
+                setattr(meeting, field, data[field])
+        if "start_at" in data:
+            meeting.start_at = parse_datetime(data["start_at"])
+        if "end_at" in data:
+            meeting.end_at = parse_datetime(data.get("end_at"))
+        if actual_approved_count is not None:
+            meeting.current_participants = actual_approved_count
+        meeting.sync_status()
+        db.session.commit()
+        return meeting
+    except Exception:
+        db.session.rollback()
+        raise
 
 
 def create_meeting(data, host_id):
@@ -911,43 +988,52 @@ def create_meeting(data, host_id):
 
 def join_meeting(meeting_id, user_id, join_message=""):
     close_expired_one_time_meetings()
-    join_message = _normalize_join_message(join_message)
-    meeting = Meeting.query.get_or_404(meeting_id)
-    applicant = User.query.options(joinedload(User.profile)).get(user_id)
-    applicant_name = applicant.nickname if applicant and getattr(applicant, "nickname", None) else (applicant.name if applicant else "신청자")
-    if is_meeting_operation_ended(meeting):
-        raise ValueError("종료된 모임에는 참가 신청할 수 없습니다.")
-    if meeting.status != "open":
-        raise ValueError("모집 중인 모임만 신청할 수 있습니다.")
-    if meeting.current_participants >= meeting.max_participants:
-        raise ValueError("모집 정원이 마감되었습니다.")
-    existing_participant = Participant.query.filter_by(meeting_id=meeting.id, user_id=user_id).first()
-    if existing_participant:
-        if existing_participant.status == "cancelled":
-            existing_participant.status = "pending"
-            existing_participant.join_message = join_message
-            existing_participant.requested_at = kst_now()
-            existing_participant.approved_at = None
-            existing_participant.rejected_at = None
-            create_notification(meeting.host_id, "join_request", "참여 신청", f"{applicant_name}님이 {meeting.title}에 참여 신청을 보냈습니다.", f"/host/meetings/{meeting.id}/applicants", send_push=False)
-            db.session.commit()
-            try:
-                send_web_push(meeting.host_id, "참여 신청", f"{applicant_name}님이 {meeting.title}에 참여 신청을 보냈습니다.", f"/host/meetings/{meeting.id}/applicants")
-            except Exception as error:
-                current_app.logger.warning("Join request push notification failed: %s", error)
-            return existing_participant
-        if existing_participant.status == "rejected":
-            raise ValueError("이미 거절된 신청입니다.")
-        if existing_participant.status == "kicked":
-            raise ValueError("다시 신청할 수 없는 모임입니다.")
-        raise ValueError("이미 신청한 모임입니다.")
-
-    participant = Participant(meeting_id=meeting.id, user_id=user_id, status="pending", join_message=join_message)
-    db.session.add(participant)
-    create_notification(meeting.host_id, "join_request", "새 참여 신청", f"{applicant_name}님이 {meeting.title}에 참여 신청을 보냈습니다.", f"/host/meetings/{meeting.id}/applicants", send_push=False)
-    db.session.commit()
     try:
-        send_web_push(meeting.host_id, "새 참여 신청", f"{applicant_name}님이 {meeting.title}에 참여 신청을 보냈습니다.", f"/host/meetings/{meeting.id}/applicants")
+        join_message = _normalize_join_message(join_message)
+        meeting = get_meeting_for_update(meeting_id)
+        applicant = User.query.options(joinedload(User.profile)).get(user_id)
+        applicant_name = applicant.nickname if applicant and getattr(applicant, "nickname", None) else (applicant.name if applicant else "신청자")
+        if is_meeting_operation_ended(meeting):
+            raise ValueError("종료된 모임에는 참가 신청할 수 없습니다.")
+        actual_approved_count = approved_participant_count(meeting.id)
+        if meeting.status != "open":
+            raise ValueError("모집 중인 모임만 신청할 수 있습니다.")
+        if actual_approved_count >= meeting.max_participants:
+            raise ValueError("모집 정원이 마감되었습니다.")
+        existing_participant = (
+            Participant.query
+            .filter_by(meeting_id=meeting.id, user_id=user_id)
+            .with_for_update()
+            .first()
+        )
+        if existing_participant:
+            if existing_participant.status == "cancelled":
+                existing_participant.status = "pending"
+                existing_participant.join_message = join_message
+                existing_participant.requested_at = kst_now()
+                existing_participant.approved_at = None
+                existing_participant.rejected_at = None
+                participant = existing_participant
+                title = "참여 신청"
+            elif existing_participant.status == "rejected":
+                raise ValueError("이미 거절된 신청입니다.")
+            elif existing_participant.status == "kicked":
+                raise ValueError("다시 신청할 수 없는 모임입니다.")
+            else:
+                raise ValueError("이미 신청한 모임입니다.")
+        else:
+            participant = Participant(meeting_id=meeting.id, user_id=user_id, status="pending", join_message=join_message)
+            db.session.add(participant)
+            title = "새 참여 신청"
+        message = f"{applicant_name}님이 {meeting.title}에 참여 신청을 보냈습니다."
+        link_url = f"/host/meetings/{meeting.id}/applicants"
+        create_notification(meeting.host_id, "join_request", title, message, link_url, send_push=False)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    try:
+        send_web_push(meeting.host_id, title, message, link_url)
     except Exception as error:
         current_app.logger.warning("Join request push notification failed: %s", error)
     return participant
@@ -958,47 +1044,152 @@ def recalculate_current_participants(meeting, *, sync_status=True):
         raise ValueError("모임 정보를 확인할 수 없습니다.")
 
     db.session.flush()
-    approved_count = (
-        Participant.query
-        .filter_by(meeting_id=meeting.id, status="approved")
-        .count()
-    )
+    approved_count = approved_participant_count(meeting.id)
     meeting.current_participants = approved_count
     if sync_status:
         meeting.sync_status()
     return approved_count
 
 
-def update_application(meeting_id, applicant_user_id, host_id, status):
-    meeting = Meeting.query.get_or_404(meeting_id)
-    if meeting.status == "suspended":
-        raise ValueError("폐쇄(비활성화) 처리된 모임입니다.")
-    if meeting.host_id != host_id:
-        raise PermissionError("방장만 처리할 수 있습니다.")
-    participant = Participant.query.filter_by(meeting_id=meeting.id, user_id=applicant_user_id).first_or_404()
-    if participant.status != "pending":
-        raise ValueError("대기 중인 신청만 처리할 수 있습니다.")
-    if status == "approved":
-        if recalculate_current_participants(meeting) >= meeting.max_participants:
-            raise ValueError("모집 정원이 마감되었습니다.")
-        participant.status = "approved"
-        participant.approved_at = kst_now()
-        if not meeting.chat_room:
-            meeting.chat_room = ChatRoom(meeting_id=meeting.id)
-            db.session.flush()
-        recalculate_current_participants(meeting)
-        _add_meeting_system_message(meeting, participant.user_id, f"{_display_name(participant.user)}님이 입장하셨습니다.")
-        title = "참여 신청 승인"
-        message = f"{meeting.title} 참여 신청이 승인되었습니다."
-        link_url = f"/chats/{meeting.chat_room.id}"
-    else:
-        participant.status = "rejected"
-        participant.rejected_at = kst_now()
-        title = "참여 신청 거절"
-        message = f"{meeting.title} 참여 신청이 거절되었습니다."
-        link_url = f"/meetings/{meeting.id}"
-    create_notification(participant.user_id, status, title, message, link_url, send_push=False)
+def _eligible_host_candidate_query(meeting_id, excluded_user_id):
+    return (
+        Participant.query
+        .join(User, User.id == Participant.user_id)
+        .filter(
+            Participant.meeting_id == meeting_id,
+            Participant.status == "approved",
+            Participant.user_id != excluded_user_id,
+            User.is_active.is_(True),
+            User.role.notin_(["suspended", "pending_withdrawal"]),
+        )
+        .order_by(
+            case((Participant.approved_at.is_(None), 1), else_=0),
+            Participant.approved_at.asc(),
+            case((Participant.requested_at.is_(None), 1), else_=0),
+            Participant.requested_at.asc(),
+            Participant.id.asc(),
+        )
+    )
+
+
+def _apply_host_transfer(meeting, target_participant, previous_host_id, *, automatic=False):
+    if not meeting or not target_participant:
+        raise ValueError("방장 위임 정보를 확인할 수 없습니다.")
+
+    stale_hosts = Participant.query.filter_by(meeting_id=meeting.id, role="host").all()
+    for participant in stale_hosts:
+        participant.role = "member"
+
+    previous_host = Participant.query.filter_by(meeting_id=meeting.id, user_id=previous_host_id).first()
+    if previous_host:
+        previous_host.role = "member"
+
+    target_participant.role = "host"
+    meeting.host_id = target_participant.user_id
+    nickname = _display_name(target_participant.user)
+    reason = "기존 방장의 계정 정지로" if automatic else "기존 방장의 위임으로"
+    _add_meeting_system_message(meeting, target_participant.user_id, f"{reason} {nickname}님이 새 방장이 되었습니다.")
+    create_notification(
+        user_id=target_participant.user_id,
+        type="meeting_host_transfer",
+        title="방장 권한 위임",
+        message=f"{meeting.title} 모임의 새 방장이 되었습니다.",
+        link_url=f"/host/meetings/{meeting.id}",
+        commit=False,
+        send_push=False,
+    )
+    db.session.flush()
+    return target_participant
+
+
+def transfer_meeting_host(meeting_id, target_user_id, current_host_id):
+    meeting = Meeting.query.filter_by(id=meeting_id).with_for_update().first()
+    if not meeting:
+        raise ValueError("모임을 찾을 수 없습니다.")
+    if meeting.host_id != current_host_id:
+        raise PermissionError("현재 방장만 방장 권한을 위임할 수 있습니다.")
+    if meeting.status in {"cancelled", "suspended"} or is_meeting_operation_ended(meeting):
+        raise ValueError("종료되거나 운영 중지된 모임은 방장을 위임할 수 없습니다.")
+    if target_user_id == current_host_id:
+        raise ValueError("현재 방장에게 다시 위임할 수 없습니다.")
+
+    target = (
+        Participant.query
+        .join(User, User.id == Participant.user_id)
+        .filter(
+            Participant.meeting_id == meeting.id,
+            Participant.user_id == target_user_id,
+            Participant.status == "approved",
+            User.is_active.is_(True),
+            User.role.notin_(["suspended", "pending_withdrawal"]),
+        )
+        .with_for_update(of=Participant)
+        .first()
+    )
+    if not target:
+        raise ValueError("방장으로 위임할 수 있는 활성 참가자가 아닙니다.")
+
+    _apply_host_transfer(meeting, target, current_host_id)
     db.session.commit()
+    try:
+        send_web_push(target.user_id, "방장 권한 위임", f"{meeting.title} 모임의 새 방장이 되었습니다.", f"/host/meetings/{meeting.id}")
+    except Exception as error:
+        current_app.logger.warning("Host transfer push notification failed: %s", error)
+    return target, meeting
+
+
+def reassign_hosted_meetings_for_suspended_user(user_id):
+    transfers = []
+    meetings = Meeting.query.filter(Meeting.host_id == user_id).with_for_update().all()
+    for meeting in meetings:
+        if meeting.status in {"cancelled", "suspended"} or is_meeting_operation_ended(meeting):
+            continue
+        candidate = _eligible_host_candidate_query(meeting.id, user_id).with_for_update(of=Participant).first()
+        if not candidate:
+            continue
+        _apply_host_transfer(meeting, candidate, user_id, automatic=True)
+        transfers.append({"meeting_id": meeting.id, "new_host_user_id": candidate.user_id})
+    return transfers
+
+
+def update_application(meeting_id, applicant_user_id, host_id, status):
+    try:
+        meeting = get_meeting_for_update(meeting_id)
+        participant = get_participant_for_update(meeting.id, applicant_user_id)
+        if meeting.host_id != host_id:
+            raise PermissionError("방장만 처리할 수 있습니다.")
+        if participant.status != "pending":
+            raise ValueError("대기 중인 신청만 처리할 수 있습니다.")
+        if meeting.status == "suspended":
+            raise ValueError("폐쇄(비활성화) 처리된 모임입니다.")
+        if meeting.status == "cancelled":
+            raise ValueError("취소된 모임의 신청은 처리할 수 없습니다.")
+        if is_meeting_operation_ended(meeting):
+            raise ValueError("종료된 모임의 신청은 처리할 수 없습니다.")
+        if status == "approved":
+            if approved_participant_count(meeting.id) >= meeting.max_participants:
+                raise ParticipantApprovalCapacityFullError()
+            participant.status = "approved"
+            participant.approved_at = kst_now()
+            if not meeting.chat_room:
+                meeting.chat_room = ChatRoom(meeting_id=meeting.id)
+                db.session.flush()
+            recalculate_current_participants(meeting)
+            _add_meeting_system_message(meeting, participant.user_id, f"{_display_name(participant.user)}님이 입장하셨습니다.")
+            title = "참여 신청 승인"
+            message = f"{meeting.title} 참여 신청이 승인되었습니다."
+            link_url = f"/chats/{meeting.chat_room.id}"
+        else:
+            participant.status = "rejected"
+            participant.rejected_at = kst_now()
+            title = "참여 신청 거절"
+            message = f"{meeting.title} 참여 신청이 거절되었습니다."
+            link_url = f"/meetings/{meeting.id}"
+        create_notification(participant.user_id, status, title, message, link_url, send_push=False)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
     try:
         send_web_push(participant.user_id, title, message, link_url)
     except Exception as error:
@@ -1032,6 +1223,12 @@ def list_meeting_members(meeting_id, host_id):
             "approved_at": participant.approved_at.isoformat() if participant.approved_at else None,
             "is_host": participant.user_id == meeting.host_id or participant.role == "host",
             "can_kick": participant.user_id != meeting.host_id and participant.role != "host",
+            "can_transfer_host": (
+                participant.user_id != meeting.host_id
+                and participant.role != "host"
+                and participant.user.is_active
+                and participant.user.role not in {"suspended", "pending_withdrawal"}
+            ),
             "user": {
                 "id": participant.user.id,
                 "nickname": participant.user.nickname,
@@ -1043,29 +1240,30 @@ def list_meeting_members(meeting_id, host_id):
 
 
 def kick_meeting_member(meeting_id, target_user_id, host_id):
-    meeting = Meeting.query.get_or_404(meeting_id)
-    if meeting.host_id != host_id:
-        raise PermissionError("방장만 멤버를 추방할 수 있습니다.")
-    if meeting.status == "cancelled":
-        raise ValueError("취소된 모임에서는 참가자를 내보낼 수 없습니다.")
-    if meeting.status == "suspended":
-        raise ValueError("운영 중지된 모임에서는 참가자를 내보낼 수 없습니다.")
-    if is_meeting_operation_ended(meeting):
-        raise ValueError("종료된 모임에서는 참가자를 내보낼 수 없습니다.")
+    try:
+        meeting = get_meeting_for_update(meeting_id)
+        participant = get_participant_for_update(meeting.id, target_user_id)
+        if meeting.host_id != host_id:
+            raise PermissionError("방장만 멤버를 추방할 수 있습니다.")
+        if meeting.status == "cancelled":
+            raise ValueError("취소된 모임에서는 참가자를 내보낼 수 없습니다.")
+        if meeting.status == "suspended":
+            raise ValueError("운영 중지된 모임에서는 참가자를 내보낼 수 없습니다.")
+        if is_meeting_operation_ended(meeting):
+            raise ValueError("종료된 모임에서는 참가자를 내보낼 수 없습니다.")
+        if target_user_id == meeting.host_id or participant.role == "host":
+            raise ValueError("방장은 추방할 수 없습니다.")
+        if participant.status != "approved":
+            raise ValueError("승인된 참가자만 내보낼 수 있습니다.")
 
-    participant = Participant.query.filter_by(meeting_id=meeting.id, user_id=target_user_id).first()
-    if not participant:
-        raise ValueError("참가자를 찾을 수 없습니다.")
-    if target_user_id == meeting.host_id or participant.role == "host":
-        raise ValueError("방장은 추방할 수 없습니다.")
-    if participant.status != "approved":
-        raise ValueError("승인된 참가자만 내보낼 수 있습니다.")
-
-    participant.status = "kicked"
-    recalculate_current_participants(meeting)
-    _add_meeting_system_message(meeting, host_id, f"{_display_name(participant.user)}님이 추방되셨습니다.")
-    db.session.commit()
-    return participant, meeting
+        participant.status = "kicked"
+        recalculate_current_participants(meeting)
+        _add_meeting_system_message(meeting, host_id, f"{_display_name(participant.user)}님이 추방되셨습니다.")
+        db.session.commit()
+        return participant, meeting
+    except Exception:
+        db.session.rollback()
+        raise
 
 
 def create_review(meeting_id, user_id, data):

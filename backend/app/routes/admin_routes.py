@@ -6,7 +6,13 @@ from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models import ChatMessage, ChatRoom, DirectChatMessage, DirectChatRoom, Meeting, Report, User, Participant, Sport
-from app.services.meeting_service import recalculate_current_participants
+from app.services.meeting_service import (
+    MaxParticipantsBelowApprovedCountError,
+    approved_participant_count,
+    get_meeting_for_update,
+    get_participant_for_update,
+    recalculate_current_participants,
+)
 from app.utils.timezone import kst_now, parse_client_datetime
 from app.utils.audit import log_admin_action
 
@@ -347,11 +353,21 @@ def update_meeting(meeting_id):
     if not admin_user or admin_user.role not in ["superadmin", "admin"]:
         return jsonify({"message": "관리자 권한이 필요합니다."}), 403
 
-    meeting = Meeting.query.get_or_404(meeting_id)
+    meeting = get_meeting_for_update(meeting_id)
     from flask import request
     from app.extensions import db
     
     data = request.get_json() or {}
+
+    if "max_participants" in data:
+        requested_max = int(data["max_participants"])
+        actual_approved_count = approved_participant_count(meeting.id)
+        if requested_max < actual_approved_count:
+            error = MaxParticipantsBelowApprovedCountError()
+            db.session.rollback()
+            return jsonify({"message": str(error), "code": error.code}), 409
+        data = {**data, "max_participants": requested_max}
+        meeting.current_participants = actual_approved_count
     
     updatable_fields = [
         "sport_id",
@@ -408,7 +424,7 @@ def delete_meeting(meeting_id):
     if not admin_user or admin_user.role not in ["superadmin", "admin"]:
         return jsonify({"message": "관리자 권한이 필요합니다."}), 403
 
-    meeting = Meeting.query.get_or_404(meeting_id)
+    meeting = get_meeting_for_update(meeting_id)
     from app.extensions import db
     meeting.status = "suspended"
     meeting.suspended_at = kst_now()
@@ -435,7 +451,7 @@ def restore_meeting(meeting_id):
     if not admin_user or admin_user.role not in ["superadmin", "admin"]:
         return jsonify({"message": "관리자 권한이 필요합니다."}), 403
 
-    meeting = Meeting.query.get_or_404(meeting_id)
+    meeting = get_meeting_for_update(meeting_id)
     from app.extensions import db
     
     if meeting.status != "suspended":
@@ -468,18 +484,17 @@ def kick_member(meeting_id, user_id):
         return jsonify({"message": "관리자 권한이 필요합니다."}), 403
 
     from app.extensions import db
-    participant = Participant.query.filter_by(meeting_id=meeting_id, user_id=user_id).first_or_404()
+    meeting = get_meeting_for_update(meeting_id)
+    participant = get_participant_for_update(meeting_id, user_id)
     if participant.role == "host":
         return jsonify({"message": "방장은 강제 퇴장시킬 수 없습니다."}), 400
         
     target_user = User.query.get(user_id)
     target_user_name = target_user.name or target_user.email if target_user else f"ID {user_id}"
         
-    meeting = Meeting.query.get(meeting_id)
     db.session.delete(participant)
     db.session.flush()
-    if meeting:
-        recalculate_current_participants(meeting)
+    recalculate_current_participants(meeting)
     db.session.commit()
 
     from app.utils.audit import log_admin_action
@@ -564,7 +579,7 @@ def update_user(user_id):
             user.is_active = False
         elif new_role == "pending_withdrawal":
             # user.is_active = False # 탈퇴 대기 상태도 로그인 가능하도록
-            from app.utils.time_utils import kst_now
+            from app.utils.timezone import kst_now
             user.deleted_at = user.deleted_at or kst_now()
         else:
             if user.is_active == False:
@@ -598,7 +613,10 @@ def update_user(user_id):
             profile.preferred_sports = data["preferred_sports"]
             
     is_suspended = (user.role == "suspended" or not user.is_active)
+    host_transfers = []
     if is_suspended and not was_suspended:
+        from app.services.meeting_service import reassign_hosted_meetings_for_suspended_user
+        host_transfers = reassign_hosted_meetings_for_suspended_user(user.id)
         from app.services.notification_service import create_notification
         create_notification(
             user_id=user.id,
@@ -641,7 +659,7 @@ def update_user(user_id):
         target_id=user_id
     )
 
-    return jsonify({"user": user.to_dict()})
+    return jsonify({"user": user.to_dict(), "host_transfers": host_transfers})
 
 
 @admin_bp.get("/settings")
@@ -716,6 +734,23 @@ def update_settings():
 def get_settings_logs():
     from app.utils.settings import load_settings_logs
     return jsonify(load_settings_logs())
+
+
+@admin_bp.get("/settings/defaults")
+@jwt_required()
+def get_settings_defaults():
+    from app.utils.settings import load_system_defaults
+    return jsonify(load_system_defaults())
+
+
+@admin_bp.post("/settings/defaults")
+@jwt_required()
+def update_settings_defaults():
+    from app.utils.settings import save_system_defaults
+    data = request.get_json() or {}
+    if save_system_defaults(data):
+        return jsonify({"success": True})
+    return jsonify({"message": "기본값 저장 실패"}), 500
 
 
 @admin_bp.post("/users/<int:user_id>/message")

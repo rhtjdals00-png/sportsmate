@@ -11,24 +11,33 @@ import {
   ShieldAlert,
   Activity,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  X
 } from "lucide-react";
 import { adminApi } from "../api/adminApi";
 import { useResponsive } from "../hooks/useResponsive";
 import MobileAdminAnalyticsPage from "../components/admin/mobile/MobileAdminAnalyticsPage.jsx";
 
+const ALL_PREDEFINED_SPORTS = [
+  "축구", "풋살", "농구", "야구", "배드민턴", "테니스", "탁구", "스쿼시", "러닝", "자전거", "등산", "수영", "피트니스", "골프"
+];
+
+const ALL_PREDEFINED_REGIONS = [
+  "서울", "경기", "인천", "부산", "대구", "대전", "광주", "울산", "세종", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"
+];
+
 // Default/Fallback stats
 // Default/Fallback stats
 const initialStats = {
-  revenue: 14250000,
-  revenueTrend: "12.5%",
+  revenue: 0,
+  revenueTrend: "0%",
   revenueTrendIsUp: true,
   newUsers: 1842,
   newUsersTrend: "8.2%",
   newUsersTrendIsUp: true,
   activeMeetings: 328,
   meetingsDetails: { soccer: 145, running: 98, tennis: 85 },
-  reports: { pending: 12, resolved: 45 }
+  reports: { pending: 12, resolved: 45, dismissed: 8 }
 };
 
 const topMeetings = [
@@ -93,13 +102,21 @@ function AdminAnalyticsPage() {
     { day: "토", percentage: 25 }
   ]);
 
+  const [detailModal, setDetailModal] = useState(null);
+  const [allSportsData, setAllSportsData] = useState([]);
+  const [allRegionsData, setAllRegionsData] = useState([]);
+  const [allWeeklyData, setAllWeeklyData] = useState([]);
+  const [allUserData, setAllUserData] = useState([]);
+
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [isApiConnected, setIsApiConnected] = useState(false);
 
   useEffect(() => {
     async function fetchAnalyticsData() {
       try {
         setLoading(true);
+        setError("");
         const [usersRes, meetingsRes, reportsRes] = await Promise.allSettled([
           adminApi.users(),
           adminApi.meetings(),
@@ -115,11 +132,14 @@ function AdminAnalyticsPage() {
           meetings: apiMeetings,
           reports: apiReports
         });
-        if (usersRes.status === "fulfilled" || meetingsRes.status === "fulfilled" || reportsRes.status === "fulfilled") {
-          setIsApiConnected(true);
+        const success = usersRes.status === "fulfilled" || meetingsRes.status === "fulfilled" || reportsRes.status === "fulfilled";
+        setIsApiConnected(success);
+        if (!success) {
+          setError("데이터베이스에서 통계 데이터를 불러오는 데 실패했습니다. 관리자 권한이나 서버 상태를 확인해 주세요.");
         }
       } catch (err) {
-        console.error("API error while generating analytics, fallback used", err);
+        console.error("API error while generating analytics", err);
+        setError("통계 데이터를 로드하는 중 오류가 발생했습니다.");
       } finally {
         setLoading(false);
       }
@@ -214,23 +234,10 @@ function AdminAnalyticsPage() {
     let revenueTrend = "0%";
     let revenueTrendIsUp = true;
 
-    if (apiMeetings.length === 0 && !isApiConnected) {
-      // Fallbacks for empty database mockup
-      revenue = activeTab === "오늘" ? 450000 : activeTab === "7일" ? 3250000 : 14250000;
-      revenueTrend = activeTab === "오늘" ? "2.5%" : activeTab === "7일" ? "6.8%" : "12.5%";
-    } else {
-      // Simulated dynamic revenue: 150,000 won per meeting created
-      revenue = filteredMeetings.length * 150000;
-      const prevRevenue = prevPeriodMeetings.length * 150000;
-      if (prevRevenue === 0) {
-        revenueTrend = revenue > 0 ? "100%" : "0%";
-        revenueTrendIsUp = true;
-      } else {
-        const growth = ((revenue - prevRevenue) / prevRevenue) * 100;
-        revenueTrend = `${Math.abs(Math.round(growth))}%`;
-        revenueTrendIsUp = growth >= 0;
-      }
-    }
+    // Fixed total revenue to 0 as requested since there is no revenue-related data in DB
+    revenue = 0;
+    revenueTrend = "0%";
+    revenueTrendIsUp = true;
 
     let newUsers = filteredUsers.length;
     let newUsersTrend = "0%";
@@ -263,11 +270,13 @@ function AdminAnalyticsPage() {
     const runningFallback = activeTab === "오늘" ? 4 : activeTab === "7일" ? 24 : 98;
     const tennisFallback = activeTab === "오늘" ? 2 : activeTab === "7일" ? 16 : 85;
 
-    const pendingCount = filteredReports.filter(r => r.status === "pending" || r.status === "대기 중").length;
+    const pendingCount = filteredReports.filter(r => r.status === "pending" || r.status === "대기 중" || r.status === "in_progress" || r.status === "처리 중").length;
     const resolvedCount = filteredReports.filter(r => r.status === "resolved" || r.status === "처리 완료").length;
+    const dismissedCount = filteredReports.filter(r => r.status === "dismissed" || r.status === "반려").length;
 
     const pendingFallback = activeTab === "오늘" ? 1 : activeTab === "7일" ? 3 : 12;
     const resolvedFallback = activeTab === "오늘" ? 4 : activeTab === "7일" ? 15 : 45;
+    const dismissedFallback = activeTab === "오늘" ? 1 : activeTab === "7일" ? 2 : 8;
 
     setStats({
       revenue,
@@ -284,22 +293,40 @@ function AdminAnalyticsPage() {
       },
       reports: {
         pending: (apiReports.length === 0 && !isApiConnected) ? pendingFallback : pendingCount,
-        resolved: (apiReports.length === 0 && !isApiConnected) ? resolvedFallback : resolvedCount
+        resolved: (apiReports.length === 0 && !isApiConnected) ? resolvedFallback : resolvedCount,
+        dismissed: (apiReports.length === 0 && !isApiConnected) ? dismissedFallback : dismissedCount
       }
     });
 
     // 3. Process Dynamic Popular Sports (Top 3)
     const sportCounts = {};
+    ALL_PREDEFINED_SPORTS.forEach(s => {
+      sportCounts[s] = 0;
+    });
+    sportCounts["기타"] = 0;
+
     filteredMeetings.forEach(m => {
       const sportName = m.sport?.name || m.sport || "기타";
-      sportCounts[sportName] = (sportCounts[sportName] || 0) + 1;
+      const matched = ALL_PREDEFINED_SPORTS.find(s => sportName.includes(s) || s.includes(sportName));
+      if (matched) {
+        sportCounts[matched]++;
+      } else {
+        sportCounts["기타"]++;
+      }
     });
 
     const sortedSports = Object.entries(sportCounts)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count);
 
-    const top3Sports = sortedSports.slice(0, 3);
+    const isSportTied = (sportName, count) => {
+      if (count === 0) return true;
+      const idx = sortedSports.findIndex(s => s.name === sportName);
+      if (idx === -1) return true;
+      return sortedSports.slice(3).some(s => s.count === count);
+    };
+
+    const top3Sports = sortedSports.filter(s => s.name !== "기타").slice(0, 3);
     const totalMeetingsInPeriod = filteredMeetings.length;
     
     const formattedSports = top3Sports.map((s, idx) => {
@@ -308,7 +335,8 @@ function AdminAnalyticsPage() {
         rank: idx + 1,
         name: s.name,
         count: s.count,
-        percentage: pct
+        percentage: pct,
+        isTied: isSportTied(s.name, s.count)
       };
     });
 
@@ -319,9 +347,9 @@ function AdminAnalyticsPage() {
       const tennisVal = activeTab === "오늘" ? 2 : activeTab === "7일" ? 16 : 85;
 
       formattedSports.push(
-        { rank: 1, name: "축구", count: soccerVal, percentage: Math.round(soccerVal / totalFallback * 100) },
-        { rank: 2, name: "러닝", count: runningVal, percentage: Math.round(runningVal / totalFallback * 100) },
-        { rank: 3, name: "테니스", count: tennisVal, percentage: Math.round(tennisVal / totalFallback * 100) }
+        { rank: 1, name: "축구", count: soccerVal, percentage: Math.round(soccerVal / totalFallback * 100), isTied: false },
+        { rank: 2, name: "러닝", count: runningVal, percentage: Math.round(runningVal / totalFallback * 100), isTied: false },
+        { rank: 3, name: "테니스", count: tennisVal, percentage: Math.round(tennisVal / totalFallback * 100), isTied: false }
       );
     } else if (formattedSports.length < 3) {
       const fallbacks = [
@@ -335,7 +363,8 @@ function AdminAnalyticsPage() {
           rank: i + 1,
           name: fb.name,
           count: 0,
-          percentage: fb.percentage
+          percentage: fb.percentage,
+          isTied: false
         });
       }
     }
@@ -352,6 +381,29 @@ function AdminAnalyticsPage() {
       count: "-",
       percentage: othersPct
     });
+
+    // Save full list of all sports for the detail modal
+    const sportTotal = filteredMeetings.length;
+    let fullSportsList = sortedSports
+      .filter(s => s.name !== "기타")
+      .map((s, idx) => ({
+        rank: idx + 1,
+        name: s.name,
+        count: s.count,
+        percentage: sportTotal > 0 ? Math.round((s.count / sportTotal) * 100) : 0
+      }));
+
+    if (fullSportsList.length === 0 && !isApiConnected) {
+      fullSportsList = [
+        { rank: 1, name: "축구", count: activeTab === "오늘" ? 6 : activeTab === "7일" ? 38 : 145, percentage: 45 },
+        { rank: 2, name: "러닝", count: activeTab === "오늘" ? 4 : activeTab === "7일" ? 24 : 98, percentage: 30 },
+        { rank: 3, name: "테니스", count: activeTab === "오늘" ? 2 : activeTab === "7일" ? 16 : 85, percentage: 25 },
+        { rank: 4, name: "자전거", count: activeTab === "오늘" ? 1 : activeTab === "7일" ? 5 : 22, percentage: 7 },
+        { rank: 5, name: "농구", count: activeTab === "오늘" ? 1 : activeTab === "7일" ? 3 : 15, percentage: 4 },
+        { rank: 6, name: "배드민턴", count: activeTab === "오늘" ? 0 : activeTab === "7일" ? 2 : 8, percentage: 2 }
+      ];
+    }
+    setAllSportsData(fullSportsList);
 
     setSportPercentages(formattedSports);
 
@@ -569,6 +621,11 @@ function AdminAnalyticsPage() {
 
     // 7. Process Region Stats
     const regionCounts = {};
+    ALL_PREDEFINED_REGIONS.forEach(r => {
+      regionCounts[r] = 0;
+    });
+    regionCounts["기타"] = 0;
+
     filteredMeetings.forEach(m => {
       let regionName = "기타";
       const addr = m.address || m.location_name || "";
@@ -592,12 +649,19 @@ function AdminAnalyticsPage() {
         else if (firstWord.startsWith("경상남") || firstWord.startsWith("경남")) regionName = "경남";
         else if (firstWord.startsWith("제주")) regionName = "제주";
       }
-      regionCounts[regionName] = (regionCounts[regionName] || 0) + 1;
+      regionCounts[regionName]++;
     });
 
     const sortedRegions = Object.entries(regionCounts)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count);
+
+    const isRegionTied = (regionName, count) => {
+      if (count === 0) return true;
+      const idx = sortedRegions.findIndex(r => r.name === regionName);
+      if (idx === -1) return true;
+      return sortedRegions.slice(3).some(r => r.count === count);
+    };
 
     const topRegions = sortedRegions.filter(r => r.name !== "기타").slice(0, 3);
     const othersRegionCount = sortedRegions.find(r => r.name === "기타")?.count || 0;
@@ -609,7 +673,8 @@ function AdminAnalyticsPage() {
         rank: idx + 1,
         name: r.name,
         count: r.count,
-        percentage: pct
+        percentage: pct,
+        isTied: isRegionTied(r.name, r.count)
       };
     });
 
@@ -620,20 +685,34 @@ function AdminAnalyticsPage() {
       rank: formattedRegions.length + 1,
       name: "기타",
       count: othersRegionCount || "-",
-      percentage: remainingPct
+      percentage: remainingPct,
+      isTied: false
     });
+
+    // Save full list of all regions for the detail modal
+    let fullRegionsList = sortedRegions
+      .filter(r => r.name !== "기타")
+      .map((r, idx) => ({
+        rank: idx + 1,
+        name: r.name,
+        count: r.count,
+        percentage: sortedRegionTotal > 0 ? Math.round((r.count / sortedRegionTotal) * 100) : 0
+      }));
 
     if (sortedRegionTotal === 0 && !isApiConnected) {
       // Default fallbacks for empty database
       const fallbackRegions = [
-        { rank: 1, name: "서울", count: activeTab === "오늘" ? 7 : activeTab === "7일" ? 43 : 180, percentage: 55 },
-        { rank: 2, name: "경기", count: activeTab === "오늘" ? 3 : activeTab === "7일" ? 20 : 82, percentage: 25 },
-        { rank: 3, name: "부산", count: activeTab === "오늘" ? 1 : activeTab === "7일" ? 9 : 39, percentage: 12 },
-        { rank: 4, name: "기타", count: activeTab === "오늘" ? 1 : activeTab === "7일" ? 6 : 27, percentage: 8 }
+        { rank: 1, name: "서울", count: activeTab === "오늘" ? 7 : activeTab === "7일" ? 43 : 180, percentage: 55, isTied: false },
+        { rank: 2, name: "경기", count: activeTab === "오늘" ? 3 : activeTab === "7일" ? 20 : 82, percentage: 25, isTied: false },
+        { rank: 3, name: "부산", count: activeTab === "오늘" ? 1 : activeTab === "7일" ? 9 : 39, percentage: 12, isTied: false },
+        { rank: 4, name: "인천", count: activeTab === "오늘" ? 1 : activeTab === "7일" ? 4 : 15, percentage: 5, isTied: false },
+        { rank: 5, name: "대구", count: activeTab === "오늘" ? 0 : activeTab === "7일" ? 2 : 12, percentage: 3, isTied: false }
       ];
-      setRegionPercentages(fallbackRegions);
+      setRegionPercentages(fallbackRegions.slice(0, 4));
+      setAllRegionsData(fallbackRegions);
     } else {
       setRegionPercentages(formattedRegions);
+      setAllRegionsData(fullRegionsList);
     }
 
     // 8. Process Weekly Stats
@@ -661,9 +740,10 @@ function AdminAnalyticsPage() {
     });
 
     const weeklyTotal = filteredMeetings.length;
+    let fullWeeklyList = [...formattedWeekly];
     if (weeklyTotal === 0 && !isApiConnected) {
       // Fallback values for empty state
-      const fallbackWeekly = [
+      fullWeeklyList = [
         { day: "일", percentage: 75, count: activeTab === "오늘" ? 3 : activeTab === "7일" ? 18 : 74 },
         { day: "월", percentage: 40, count: activeTab === "오늘" ? 1 : activeTab === "7일" ? 10 : 39 },
         { day: "화", percentage: 45, count: activeTab === "오늘" ? 1 : activeTab === "7일" ? 11 : 44 },
@@ -672,10 +752,35 @@ function AdminAnalyticsPage() {
         { day: "금", percentage: 80, count: activeTab === "오늘" ? 3 : activeTab === "7일" ? 19 : 79 },
         { day: "토", percentage: 100, count: activeTab === "오늘" ? 4 : activeTab === "7일" ? 24 : 98 }
       ];
-      setWeeklyPercentages(fallbackWeekly);
+      setWeeklyPercentages(fullWeeklyList);
     } else {
       setWeeklyPercentages(formattedWeekly);
     }
+    setAllWeeklyData(fullWeeklyList);
+
+    // 9. Process User Registration By Date
+    const userRegsByDate = {};
+    filteredUsers.forEach(u => {
+      if (u.created_at) {
+        const d = new Date(u.created_at);
+        const key = d.toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
+        userRegsByDate[key] = (userRegsByDate[key] || 0) + 1;
+      }
+    });
+    let sortedUserRegs = Object.entries(userRegsByDate)
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    if (sortedUserRegs.length === 0 && !isApiConnected) {
+      sortedUserRegs = [
+        { date: "1일", count: activeTab === "오늘" ? 5 : activeTab === "7일" ? 35 : 120 },
+        { date: "8일", count: activeTab === "오늘" ? 8 : activeTab === "7일" ? 58 : 240 },
+        { date: "15일", count: activeTab === "오늘" ? 12 : activeTab === "7일" ? 92 : 450 },
+        { date: "22일", count: activeTab === "오늘" ? 15 : activeTab === "7일" ? 120 : 610 },
+        { date: "30일", count: activeTab === "오늘" ? 18 : activeTab === "7일" ? 150 : 810 }
+      ];
+    }
+    setAllUserData(sortedUserRegs);
 
   }, [activeTab, rawData, isApiConnected]);
 
@@ -705,6 +810,21 @@ function AdminAnalyticsPage() {
     );
   }
 
+  if (error) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "400px", gap: "16px", padding: "20px", textAlign: "center" }}>
+        <AlertCircle size={48} color="#ef4444" />
+        <span style={{ fontSize: "15px", color: "#ef4444", fontWeight: 600 }}>{error}</span>
+        <button 
+          onClick={() => { setError(""); window.location.reload(); }}
+          style={{ padding: "8px 16px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}
+        >
+          다시 시도하기
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="analytics-page">
       {/* Upper Title Description & Filter row */}
@@ -728,12 +848,12 @@ function AdminAnalyticsPage() {
 
       {/* 1. Metric Widget Cards Grid (4 Columns) */}
       <section className="admin-stats-grid-4">
-        {/* Card 1: Revenue Card with mini wave background graph */}
+        {/* Card 1: Revenue Card */}
         <div className="admin-stat-card">
           <div className="admin-stat-card__main">
             <span className="admin-stat-card__title">총 수익</span>
             <div className="admin-stat-card__value">
-              ₩{stats.revenue.toLocaleString()}
+              {stats.revenue.toLocaleString()}원
             </div>
             <span className={`admin-stat-card__trend ${stats.revenueTrendIsUp ? "admin-stat-card__trend--up" : "admin-stat-card__trend--danger"}`}>
               {stats.revenueTrendIsUp ? "▲" : "▼"} {stats.revenueTrend} <span style={{ color: "#94a3b8" }}>{activeTab === "오늘" ? "전일 대비" : activeTab === "7일" ? "전주 대비" : "전월 대비"}</span>
@@ -742,11 +862,6 @@ function AdminAnalyticsPage() {
           <div className="admin-stat-card__icon-box admin-stat-card__icon-box--blue">
             <DollarSign size={20} />
           </div>
-          {/* Mini Wave graph SVG background */}
-          <svg className="admin-stat-card__bg-svg" viewBox="0 0 100 30" preserveAspectRatio="none">
-            <path d="M0,25 Q15,10 30,22 T60,5 T90,28 T100,20 L100,30 L0,30 Z" fill="#eff6ff" />
-            <path d="M0,25 Q15,10 30,22 T60,5 T90,28 T100,20" fill="none" stroke="#3b82f6" strokeWidth="1" />
-          </svg>
         </div>
 
         {/* Card 2: New Members */}
@@ -785,19 +900,25 @@ function AdminAnalyticsPage() {
 
         {/* Card 4: Issues Warning Card */}
         <button type="button" className="admin-stat-card" onClick={() => navigate("/admin/reports")} style={{ textAlign: "left" }}>
-          <div className="admin-stat-card__main">
+          <div className="admin-stat-card__main" style={{ width: "100%" }}>
             <span className="admin-stat-card__title">신고/이슈 현황</span>
-            <div style={{ display: "flex", gap: "20px", marginTop: "4px" }}>
+            <div style={{ display: "flex", gap: "12px", marginTop: "4px" }}>
               <div>
-                <div style={{ fontSize: "11px", color: "#ef4444", fontWeight: 700 }}>대기 중인 이슈</div>
-                <div style={{ fontSize: "24px", fontWeight: 800, color: "#ef4444" }}>
-                  {stats.reports.pending}<span style={{ fontSize: "14px", fontWeight: 500, color: "#64748b", marginLeft: "2px" }}>건</span>
+                <div style={{ fontSize: "11px", color: "#ef4444", fontWeight: 700 }}>처리 전</div>
+                <div style={{ fontSize: "22px", fontWeight: 800, color: "#ef4444" }}>
+                  {stats.reports.pending}<span style={{ fontSize: "12px", fontWeight: 500, color: "#64748b", marginLeft: "2px" }}>건</span>
                 </div>
               </div>
-              <div style={{ borderLeft: "1px solid #e2e8f0", paddingLeft: "16px" }}>
-                <div style={{ fontSize: "11px", color: "#475569", fontWeight: 700 }}>처리 완료</div>
-                <div style={{ fontSize: "24px", fontWeight: 800, color: "#0f172a" }}>
-                  {stats.reports.resolved}<span style={{ fontSize: "14px", fontWeight: 500, color: "#64748b", marginLeft: "2px" }}>건</span>
+              <div style={{ borderLeft: "1px solid #e2e8f0", paddingLeft: "12px" }}>
+                <div style={{ fontSize: "11px", color: "#2563eb", fontWeight: 700 }}>처리 완료</div>
+                <div style={{ fontSize: "22px", fontWeight: 800, color: "#2563eb" }}>
+                  {stats.reports.resolved}<span style={{ fontSize: "12px", fontWeight: 500, color: "#64748b", marginLeft: "2px" }}>건</span>
+                </div>
+              </div>
+              <div style={{ borderLeft: "1px solid #e2e8f0", paddingLeft: "12px" }}>
+                <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700 }}>반려</div>
+                <div style={{ fontSize: "22px", fontWeight: 800, color: "#475569" }}>
+                  {stats.reports.dismissed}<span style={{ fontSize: "12px", fontWeight: 500, color: "#64748b", marginLeft: "2px" }}>건</span>
                 </div>
               </div>
             </div>
@@ -814,8 +935,23 @@ function AdminAnalyticsPage() {
         <section className="admin-panel-card" style={{ marginBottom: 0 }}>
           <div className="admin-panel-card__header">
             <h2 className="admin-panel-card__title">회원 증가 추이</h2>
-            <button type="button" className="admin-panel-card__more-btn">
-              <MoreHorizontal size={18} />
+            <button 
+              type="button" 
+              className="admin-panel-card__more-btn"
+              onClick={() => setDetailModal({ type: "users", title: "회원 가입 상세 내역", data: allUserData })}
+              style={{
+                fontSize: "12px",
+                fontWeight: 600,
+                color: "#2563eb",
+                background: "rgba(37, 99, 235, 0.08)",
+                border: "none",
+                padding: "4px 8px",
+                borderRadius: "4px",
+                cursor: "pointer",
+                transition: "background 0.2s"
+              }}
+            >
+              상세보기
             </button>
           </div>
           <div className="admin-panel-card__body">
@@ -880,8 +1016,23 @@ function AdminAnalyticsPage() {
         <section className="admin-panel-card" style={{ marginBottom: 0 }}>
           <div className="admin-panel-card__header">
             <h2 className="admin-panel-card__title">인기 스포츠</h2>
-            <button type="button" className="admin-panel-card__more-btn">
-              <MoreHorizontal size={18} />
+            <button 
+              type="button" 
+              className="admin-panel-card__more-btn"
+              onClick={() => setDetailModal({ type: "sports", title: "스포츠 종목별 전체 현황", data: allSportsData })}
+              style={{
+                fontSize: "12px",
+                fontWeight: 600,
+                color: "#2563eb",
+                background: "rgba(37, 99, 235, 0.08)",
+                border: "none",
+                padding: "4px 8px",
+                borderRadius: "4px",
+                cursor: "pointer",
+                transition: "background 0.2s"
+              }}
+            >
+              상세보기
             </button>
           </div>
           <div className="admin-panel-card__body" style={{ padding: "24px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: "16px" }}>
@@ -896,11 +1047,13 @@ function AdminAnalyticsPage() {
               paddingRight: "10px"
             }}>
               {sportPercentages.map((sport, index) => {
-                // Color codes based on rank
+                if (sport.isTied && sport.name !== "기타") return null;
+
+                // Color codes based on rank (Gold, Silver, Bronze, Slate)
                 const gradients = [
-                  "linear-gradient(to top, #2563eb, #60a5fa)", // 1st: Blue
-                  "linear-gradient(to top, #ea580c, #fb923c)", // 2nd: Orange
-                  "linear-gradient(to top, #059669, #34d399)", // 3rd: Green
+                  "linear-gradient(to top, #ca8a04, #f59e0b)", // 1st: Gold
+                  "linear-gradient(to top, #94a3b8, #cbd5e1)", // 2nd: Silver
+                  "linear-gradient(to top, #b45309, #d97706)", // 3rd: Bronze
                   "linear-gradient(to top, #64748b, #94a3b8)"  // 4th/기타: Slate Gray
                 ];
                 const gradient = gradients[index] || gradients[0];
@@ -938,7 +1091,8 @@ function AdminAnalyticsPage() {
             {/* Legend Labels row underneath the bars */}
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "16px" }}>
               {sportPercentages.map((sport, index) => {
-                const colors = ["#2563eb", "#ea580c", "#059669", "#64748b"];
+                if (sport.isTied && sport.name !== "기타") return null;
+                const colors = ["#ca8a04", "#64748b", "#b45309", "#64748b"];
                 const color = colors[index] || colors[0];
                 return (
                   <div key={sport.name} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "22%", gap: "2px" }}>
@@ -973,18 +1127,35 @@ function AdminAnalyticsPage() {
         <section className="admin-panel-card" style={{ marginBottom: 0 }}>
           <div className="admin-panel-card__header">
             <h2 className="admin-panel-card__title">지역별 모임 분포</h2>
-            <button type="button" className="admin-panel-card__more-btn">
-              <MoreHorizontal size={18} />
+            <button 
+              type="button" 
+              className="admin-panel-card__more-btn"
+              onClick={() => setDetailModal({ type: "regions", title: "지역별 모임 전체 분포", data: allRegionsData })}
+              style={{
+                fontSize: "12px",
+                fontWeight: 600,
+                color: "#2563eb",
+                background: "rgba(37, 99, 235, 0.08)",
+                border: "none",
+                padding: "4px 8px",
+                borderRadius: "4px",
+                cursor: "pointer",
+                transition: "background 0.2s"
+              }}
+            >
+              상세보기
             </button>
           </div>
           <div className="admin-panel-card__body" style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
             {regionPercentages.map((reg, index) => {
-              const colors = ["#3b82f6", "#f97316", "#10b981", "#64748b"];
+              if (reg.isTied && reg.name !== "기타") return null;
+
+              const colors = ["#ca8a04", "#94a3b8", "#b45309", "#64748b"];
               const color = colors[index] || colors[0];
               return (
                 <div key={reg.name} style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", fontWeight: 700, color: "#334155" }}>
-                    <span>{reg.rank}위 {reg.name}</span>
+                    <span>{reg.name === "기타" ? "기타" : `${reg.rank}위 ${reg.name}`}</span>
                     <span style={{ color }}>{reg.percentage}% ({reg.count}개)</span>
                   </div>
                   <div style={{ height: "10px", width: "100%", backgroundColor: "#f1f5f9", borderRadius: "5px", overflow: "hidden" }}>
@@ -1006,8 +1177,23 @@ function AdminAnalyticsPage() {
         <section className="admin-panel-card" style={{ marginBottom: 0 }}>
           <div className="admin-panel-card__header">
             <h2 className="admin-panel-card__title">요일별 활성도 분석</h2>
-            <button type="button" className="admin-panel-card__more-btn">
-              <MoreHorizontal size={18} />
+            <button 
+              type="button" 
+              className="admin-panel-card__more-btn"
+              onClick={() => setDetailModal({ type: "weekly", title: "요일별 모임 상세 활성도", data: allWeeklyData })}
+              style={{
+                fontSize: "12px",
+                fontWeight: 600,
+                color: "#2563eb",
+                background: "rgba(37, 99, 235, 0.08)",
+                border: "none",
+                padding: "4px 8px",
+                borderRadius: "4px",
+                cursor: "pointer",
+                transition: "background 0.2s"
+              }}
+            >
+              상세보기
             </button>
           </div>
           <div className="admin-panel-card__body" style={{ padding: "24px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: "16px" }}>
@@ -1141,6 +1327,102 @@ function AdminAnalyticsPage() {
           </div>
         </section>
       </div>
+
+      {detailModal && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(15, 23, 42, 0.65)",
+          backdropFilter: "blur(4px)",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          zIndex: 9999,
+          padding: "20px"
+        }} onMouseDown={(e) => e.target === e.currentTarget && setDetailModal(null)}>
+          <div style={{
+            backgroundColor: "#ffffff",
+            borderRadius: "16px",
+            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+            width: "100%",
+            maxWidth: "500px",
+            padding: "24px",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            maxHeight: "85vh"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", borderBottom: "1px solid #f1f5f9", paddingBottom: "12px" }}>
+              <h3 style={{ fontSize: "17px", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                {detailModal.title}
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setDetailModal(null)}
+                style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: "4px" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div style={{ overflowY: "auto", flex: 1, paddingRight: "4px" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid #f1f5f9" }}>
+                    <th style={{ padding: "10px 8px", fontSize: "13px", fontWeight: 700, color: "#64748b", width: "60px" }}>
+                      {detailModal.type === "users" ? "번호" : "순위"}
+                    </th>
+                    <th style={{ padding: "10px 8px", fontSize: "13px", fontWeight: 700, color: "#64748b" }}>
+                      {detailModal.type === "users" ? "가입 날짜" : detailModal.type === "sports" ? "종목" : detailModal.type === "regions" ? "지역" : "요일"}
+                    </th>
+                    <th style={{ padding: "10px 8px", fontSize: "13px", fontWeight: 700, color: "#64748b", width: "100px", textAlign: "right" }}>
+                      {detailModal.type === "users" ? "가입자 수" : "모임 수"}
+                    </th>
+                    <th style={{ padding: "10px 8px", fontSize: "13px", fontWeight: 700, color: "#64748b", width: "100px", textAlign: "right" }}>비율</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailModal.data.map((item, index) => {
+                    const isTop = index < 3;
+                    const rankColor = index === 0 ? "#2563eb" : index === 1 ? "#ea580c" : index === 2 ? "#10b981" : "#64748b";
+                    return (
+                      <tr key={index} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <td style={{ padding: "12px 8px", fontSize: "14px", fontWeight: 700, color: rankColor }}>
+                          {detailModal.type === "users" ? index + 1 : item.rank || index + 1}
+                        </td>
+                        <td style={{ padding: "12px 8px", fontSize: "14px", fontWeight: 600, color: "#1e293b" }}>
+                          {detailModal.type === "users" ? item.date : item.name || item.day}
+                        </td>
+                        <td style={{ padding: "12px 8px", fontSize: "14px", color: "#334155", textAlign: "right" }}>
+                          {detailModal.type === "users" ? `${item.count}명` : `${item.count}개`}
+                        </td>
+                        <td style={{ padding: "12px 8px", fontSize: "14px", fontWeight: 600, color: "#0f172a", textAlign: "right" }}>
+                          {detailModal.type === "users" ? "-" : `${item.percentage}%`}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            
+            <div style={{ marginTop: "20px", display: "flex", justifyContent: "flex-end" }}>
+              <button 
+                type="button" 
+                onClick={() => setDetailModal(null)}
+                style={{ padding: "8px 16px", background: "#f1f5f9", border: "none", borderRadius: "8px", color: "#475569", fontWeight: 700, cursor: "pointer", transition: "background 0.2s" }}
+                onMouseEnter={(e) => e.target.style.background = "#e2e8f0"}
+                onMouseLeave={(e) => e.target.style.background = "#f1f5f9"}
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

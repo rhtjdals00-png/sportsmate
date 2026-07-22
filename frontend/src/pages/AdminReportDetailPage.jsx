@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowLeft, ArrowUpRight, CheckCircle, MessageSquareText,
 import { adminApi } from "../api/adminApi";
 
 const statusLabel = {
-  pending: "대기 중",
+  pending: "처리 전",
   in_progress: "처리 중",
   resolved: "처리 완료",
   dismissed: "반려"
@@ -48,7 +48,7 @@ function UserRiskCard({ title, user, tone = "default" }) {
             <div><b>{stats.made_total || 0}</b><span>신고한 횟수</span></div>
             <div><b>{stats.made_dismissed || 0}</b><span>반려된 신고</span></div>
             <div><b>{stats.received_total || 0}</b><span>신고 받은 횟수</span></div>
-            <div><b>{stats.received_pending || 0}</b><span>대기 중 피신고</span></div>
+            <div><b>{stats.received_pending || 0}</b><span>처리 전 피신고</span></div>
             <div><b>{stats.hosted_meetings || 0}</b><span>개설 모임</span></div>
             <div><b>{stats.joined_meetings || 0}</b><span>참여 모임</span></div>
           </div>
@@ -254,7 +254,7 @@ function AdminReportDetailPage() {
         <label>
           처리 상태
           <select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}>
-            <option value="pending">대기 중</option>
+            <option value="pending">처리 전</option>
             <option value="in_progress">처리 중</option>
             <option value="resolved">처리 완료</option>
             <option value="dismissed">반려</option>

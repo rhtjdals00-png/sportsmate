@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlarmClock, CalendarClock, ChevronLeft, ChevronRight, Map as MapIcon, MapPin, Search } from "lucide-react";
+import { AlarmClock, CalendarClock, CalendarDays, ChevronLeft, ChevronRight, Map as MapIcon, MapPin, Repeat2, Search } from "lucide-react";
 import { meetingApi } from "../../../api/meetingApi";
 import { sportApi } from "../../../api/sportApi";
 import { locationApi } from "../../../api/locationApi";
@@ -745,32 +745,54 @@ function DesktopMeetingCreate() {
       <div className="screen-title">
         <div>
           <h1>모임 만들기</h1>
-          <span>PC 화면에서 입력 항목을 한 번에 확인하며 모임을 등록합니다.</span>
+          <span>함께 운동할 모임의 기본 정보와 일정을 등록하세요.</span>
         </div>
       </div>
 
       <form className="desktop-form-panel desktop-meeting-create-form" onSubmit={submit}>
-        <section>
-          <h2>종목 정보</h2>
-          <div className="desktop-form-grid">
+        <section className="desktop-meeting-create-section">
+          <div className="desktop-meeting-create-section__head">
+            <span>01</span>
+            <h2>종목 선택</h2>
+          </div>
+          <div className="desktop-form-grid desktop-form-grid--wide">
             <label>카테고리<select value={form.category_id} disabled={categories.loading || !categoryItems.length} onChange={(event) => updateCategory(event.target.value)}>{categoryItems.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
             <label>종목<select required value={form.sport_id} disabled={sports.loading || !sportItems.length} onChange={(event) => update("sport_id", event.target.value)}>{sportItems.map((sport) => <option key={sport.id} value={sport.id}>{sport.name}</option>)}</select></label>
-            <label>모임 방식<select value={form.meeting_type} onChange={(event) => updateMeetingType(event.target.value)}><option value="one_time">한 번만 진행</option><option value="regular">반복 진행</option></select></label>
           </div>
+          <fieldset className="desktop-meeting-type-selector">
+            <legend>모임 방식</legend>
+            <div role="group" aria-label="모임 방식">
+              <button type="button" className={form.meeting_type === "one_time" ? "is-selected" : ""} aria-pressed={form.meeting_type === "one_time"} onClick={() => updateMeetingType("one_time")}>
+                <CalendarDays size={18} />
+                일회성 모임
+              </button>
+              <button type="button" className={form.meeting_type === "regular" ? "is-selected" : ""} aria-pressed={form.meeting_type === "regular"} onClick={() => updateMeetingType("regular")}>
+                <Repeat2 size={18} />
+                정기 모임
+              </button>
+            </div>
+          </fieldset>
         </section>
 
-        <section>
-          <h2>기본 정보</h2>
+        <section className="desktop-meeting-create-section">
+          <div className="desktop-meeting-create-section__head">
+            <span>02</span>
+            <h2>기본 정보</h2>
+          </div>
           <div className="desktop-form-grid desktop-form-grid--wide">
             <label><span className="desktop-field-label-row">제목<em>{form.title.length}/{TITLE_MAX_LENGTH}</em></span><input required maxLength={TITLE_MAX_LENGTH} value={form.title} onChange={(event) => updateTitle(event.target.value)} placeholder="예: 여의도 한강 러닝 5km" /></label>
             <label>모집 목적<select value={purposeMode} onChange={(event) => updatePurposeMode(event.target.value)}>{purposeOptions.map((purpose) => <option key={purpose} value={purpose}>{purpose}</option>)}<option value={CUSTOM_PURPOSE}>기타</option></select></label>
             {purposeMode === CUSTOM_PURPOSE && <label className="desktop-form-full">기타 모집 목적<input required maxLength={30} value={form.purpose} onChange={(event) => update("purpose", event.target.value.slice(0, 30))} placeholder="모집 목적을 직접 입력하세요" /></label>}
             <label className="desktop-form-full">설명<textarea required rows="5" value={form.description} onChange={(event) => update("description", event.target.value)} /></label>
+            <label className="desktop-meeting-capacity">최대 인원<input min="2" max={maxLimit} type="number" value={form.max_participants} onChange={(event) => update("max_participants", event.target.value)} /></label>
           </div>
         </section>
 
-        <section>
-          <h2>일정 및 장소</h2>
+        <section className="desktop-meeting-create-section">
+          <div className="desktop-meeting-create-section__head">
+            <span>03</span>
+            <h2>일정</h2>
+          </div>
           <div className="desktop-form-grid desktop-meeting-schedule-grid">
             {form.meeting_type === "regular" && (
               <fieldset className="desktop-regular-schedule desktop-form-full">
@@ -778,7 +800,10 @@ function DesktopMeetingCreate() {
                 <p>선택한 기간 동안 지정한 요일에 일정이 반복됩니다.</p>
                 <p>종료일을 설정하지 않으면 이번 달부터 다다음 달까지 일정이 미리 생성됩니다.</p>
                 <div className="desktop-schedule-toggles">
-                  <label><input type="checkbox" checked={hasEndSchedule} onChange={(event) => toggleEndSchedule(event.target.checked)} /> 모임 종료일 설정</label>
+                  <button type="button" role="switch" aria-checked={hasEndSchedule} onClick={() => toggleEndSchedule(!hasEndSchedule)}>
+                    <span aria-hidden="true" />
+                    모임 종료일 설정
+                  </button>
                 </div>
                 <div className="desktop-regular-schedule__grid">
                   <label>모임 시작일<CalendarSelect label={"\ubaa8\uc784 \uc2dc\uc791\uc77c"} min={today} value={form.start_date} onChange={updateStartDate} icon={<CalendarClock size={18} />} /></label>
@@ -799,25 +824,12 @@ function DesktopMeetingCreate() {
               </fieldset>
             )}
             {form.meeting_type === "one_time" && (
-              <fieldset className="desktop-date-time-pair">
+              <fieldset className="desktop-date-time-pair desktop-form-full">
                 <legend>시작 일정</legend>
                 <label>시작일<CalendarSelect label={"\uc2dc\uc791\uc77c"} min={today} value={form.start_date} onChange={updateStartDate} icon={<CalendarClock size={18} />} /></label>
                 <label>시작 시간<span className="desktop-icon-input"><AlarmClock size={18} /><TimeSelect required value={form.start_time} onChange={updateStartTime} /></span></label>
               </fieldset>
             )}
-            <div className="desktop-location-picker desktop-form-full">
-              <label>{"도로명/주소 검색"}<span><Search size={18} /><input value={locationKeyword} placeholder={"예: 경기 화성시 동탄대로, 만세구 새솔동"} onChange={(event) => { selectedLocationKeywordRef.current = ""; setLocationKeyword(event.target.value); setLocationScope(""); setForm((prev) => ({ ...prev, address: event.target.value, location_name: "", latitude: undefined, longitude: undefined })); }} /></span></label>
-              {locationScope && <div className="desktop-location-scope"><MapPin size={16} /><span><strong>{locationScope}</strong>{" 안에서 검색 중"}</span><button type="button" onClick={clearLocationScope}>{"범위 해제"}</button></div>}
-              {showSelectedLocation && <div className="desktop-location-selected"><MapPin size={18} /><strong>{form.location_name || "선택된 주소"}</strong><span>{form.address}</span></div>}
-              <div className={`desktop-location-workspace ${showLocationResultsPanel ? "has-results" : "is-map-only"}`}>
-                {showLocationResultsPanel && (
-                  <div className="desktop-location-search-column">
-                    <div className="desktop-location-results">{locationLoading ? <span>{"\uac80\uc0c9 \uc911\uc785\ub2c8\ub2e4."}</span> : locationResults.map((place, index) => <button type="button" key={`${place.title}-${index}`} onClick={() => selectLocation(place)}><MapPin size={17} /><strong>{(place.title || place.address || "").replace(/<[^>]+>/g, "")}</strong><small>{place.address || place.road_address}</small></button>)}</div>
-                  </div>
-                )}
-                <DesktopLocationMap clientId={mapClientId} selectedLocation={form} results={locationResults} onSelect={selectLocation} />
-              </div>
-            </div>
             {(weather.loading || weather.forecast) && (
               <div className="desktop-form-full">
                 <DesktopWeatherCard
@@ -828,7 +840,26 @@ function DesktopMeetingCreate() {
                 />
               </div>
             )}
-            <label>최대 인원<input min="2" max={maxLimit} type="number" value={form.max_participants} onChange={(event) => update("max_participants", event.target.value)} /></label>
+          </div>
+        </section>
+
+        <section className="desktop-meeting-create-section">
+          <div className="desktop-meeting-create-section__head">
+            <span>04</span>
+            <h2>장소</h2>
+          </div>
+          <div className="desktop-location-picker">
+            <label>{"도로명/주소 검색"}<span><Search size={18} /><input value={locationKeyword} placeholder="도로명, 건물명 또는 장소를 검색하세요" onChange={(event) => { selectedLocationKeywordRef.current = ""; setLocationKeyword(event.target.value); setLocationScope(""); setForm((prev) => ({ ...prev, address: event.target.value, location_name: "", latitude: undefined, longitude: undefined })); }} /></span></label>
+            {locationScope && <div className="desktop-location-scope"><MapPin size={16} /><span><strong>{locationScope}</strong>{" 안에서 검색 중"}</span><button type="button" onClick={clearLocationScope}>{"범위 해제"}</button></div>}
+            {showSelectedLocation && <div className="desktop-location-selected"><MapPin size={18} /><strong>{form.location_name || "선택된 주소"}</strong><span>{form.address}</span></div>}
+            <div className={`desktop-location-workspace ${showLocationResultsPanel ? "has-results" : "is-map-only"}`}>
+              {showLocationResultsPanel && (
+                <div className="desktop-location-search-column">
+                  <div className="desktop-location-results">{locationLoading ? <span>{"검색 중입니다."}</span> : locationResults.map((place, index) => <button type="button" key={`${place.title}-${index}`} onClick={() => selectLocation(place)}><MapPin size={17} /><strong>{(place.title || place.address || "").replace(/<[^>]+>/g, "")}</strong><small>{place.address || place.road_address}</small></button>)}</div>
+                </div>
+              )}
+              <DesktopLocationMap clientId={mapClientId} selectedLocation={form} results={locationResults} onSelect={selectLocation} />
+            </div>
           </div>
         </section>
 

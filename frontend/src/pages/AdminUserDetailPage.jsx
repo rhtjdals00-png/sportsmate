@@ -169,6 +169,7 @@ function AdminUserDetailPage() {
   const { user: currentUser } = useAuth();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editForm, setEditForm] = useState({
     name: "",
@@ -216,9 +217,8 @@ function AdminUserDetailPage() {
         }
       } catch (err) {
         console.error("API error while loading user detail", err);
-        // Fallback to mock database
-        const fallback = userDetailDb[userId] || userDetailDb["1"];
-        setUserData({ ...fallback, id: Number(userId) });
+        setError("회원 상세 정보를 불러오는 데 실패했습니다. 서버 오류이거나 존재하지 않는 회원일 수 있습니다.");
+        setUserData(null);
       } finally {
         setLoading(false);
       }
@@ -325,11 +325,13 @@ function AdminUserDetailPage() {
     );
   }
 
-  if (!userData) {
+  if (error || !userData) {
     return (
-      <div style={{ padding: "20px", textAlign: "center" }}>
-        <p style={{ color: "#ef4444", fontWeight: 600 }}>회원 정보를 불러오지 못했습니다.</p>
-        <Link to="/admin/users" style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600 }}>
+      <div style={{ padding: "40px 20px", textAlign: "center" }}>
+        <p style={{ color: "#ef4444", fontWeight: 600, fontSize: "15px", marginBottom: "16px" }}>
+          {error || "회원 정보를 불러오지 못했습니다."}
+        </p>
+        <Link to="/admin/users" style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600, border: "1px solid #2563eb", padding: "8px 16px", borderRadius: "8px", display: "inline-block" }}>
           회원 목록으로 돌아가기
         </Link>
       </div>

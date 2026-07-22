@@ -3,10 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import { useResponsive } from "../hooks/useResponsive";
 
 
 function AuthCallbackPage() {
   const navigate = useNavigate();
+  const { isMobile } = useResponsive();
   const [message, setMessage] = useState("로그인 정보를 확인하고 있습니다.");
   const { completeOAuthCallback } = useAuth();
   const completeOAuthCallbackRef = useRef(completeOAuthCallback);
@@ -33,7 +35,8 @@ function AuthCallbackPage() {
         const errorMessage = error?.response?.data?.message || error?.message || "로그인 세션을 확인하지 못했습니다. 다시 로그인해주세요.";
         sessionStorage.setItem("sportsmate_auth_error", errorMessage);
         if (mounted) {
-          if (error?.response?.data?.code === "LOGIN_PROVIDER_MISMATCH") {
+          const authErrorCode = error?.response?.data?.code || error?.response?.data?.error;
+          if (["LOGIN_PROVIDER_MISMATCH", "AUTH_USER_ID_MISMATCH"].includes(authErrorCode)) {
             navigate("/login", { replace: true });
             return;
           }
@@ -61,6 +64,22 @@ function AuthCallbackPage() {
       window.clearInterval(authErrorRedirectTimer);
     };
   }, [navigate]);
+
+  if (!isMobile) {
+    return (
+      <div className="desktop-auth-page desktop-auth-page--callback">
+        <section className="desktop-auth-card desktop-auth-callback" aria-label="소셜 로그인 처리 중">
+          <div className="desktop-auth-callback__spinner" aria-hidden="true">
+            <Loader2 size={34} />
+          </div>
+          <div className="desktop-auth-card__head" role="status" aria-live="polite">
+            <h2>로그인 중입니다</h2>
+            <p>{message} 잠시만 기다려 주세요.</p>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <>

@@ -65,3 +65,37 @@ def add_settings_log(admin_name, changes):
         return True
     except Exception:
         return False
+
+
+DEFAULTS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "system_defaults.json")
+
+def load_system_defaults():
+    if os.path.exists(DEFAULTS_FILE):
+        try:
+            with open(DEFAULTS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    # fallback to factory defaults
+    return {
+        "siteName": "SportsMate",
+        "adminEmail": "admin@sportsmate.co.kr",
+        "maintenanceMode": False,
+        "suspensionGracePeriod": 30,
+        "defaultMaxParticipants": 6,
+        "mannerRatingDecrement": 1.5,
+        "autoBanReportCount": 5,
+        "sessionExpiryMinutes": 60,
+        "termsVersion": "v1.4",
+        "supabaseUrl": os.getenv("SUPABASE_URL", "https://ssuncptlzlmuulqmtnqf.supabase.co"),
+        "kakaoApiKey": os.getenv("KAKAO_REST_API_KEY", "5d3ec3100e15e07c16c5a3799a090f1c"),
+        "googleClientId": "40413-t9tr8ha.apps.googleusercontent.com"
+    }
+
+def save_system_defaults(defaults):
+    try:
+        with open(DEFAULTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(defaults, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False

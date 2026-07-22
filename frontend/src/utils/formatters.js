@@ -29,12 +29,28 @@ function validDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function formatTime(value) {
+function timeParts(value) {
   const date = validDate(value);
-  if (!date) return "";
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
+  if (!date) return null;
+  const hour24 = date.getHours();
+  return {
+    period: hour24 < 12 ? "오전" : "오후",
+    time: `${String(hour24 % 12 || 12).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`,
+  };
+}
+
+export function formatKoreanTime(value) {
+  const parts = timeParts(value);
+  return parts ? `${parts.period} ${parts.time}` : "";
+}
+
+export function formatKoreanTimeRange(startValue, endValue) {
+  const start = timeParts(startValue);
+  const end = timeParts(endValue);
+  if (!start) return "";
+  if (!end) return `${start.period} ${start.time}`;
+  const endLabel = start.period === end.period ? end.time : `${end.period} ${end.time}`;
+  return `${start.period} ${start.time}~${endLabel}`;
 }
 
 export function parseRepeatDays(repeatRule, repeatDays = []) {
@@ -61,9 +77,7 @@ export function formatRegularMeetingSchedule(meeting, fallback = "정기 일정"
   const days = parseRepeatDays(meeting?.repeat_rule, meeting?.repeat_days);
   if (!days.length) return fallback;
   const template = getRegularSessionTemplate(meeting);
-  const startTime = formatTime(template?.start_at);
-  const endTime = formatTime(template?.end_at);
-  const timeRange = startTime ? `${startTime}${endTime ? `~${endTime}` : ""}` : "";
+  const timeRange = formatKoreanTimeRange(template?.start_at, template?.end_at);
   return `매주 ${days.map((day) => REPEAT_DAY_LABELS[day]).join("·")}${timeRange ? ` ${timeRange}` : ""}`;
 }
 

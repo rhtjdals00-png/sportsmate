@@ -669,6 +669,116 @@
   grid-column: 1 / -1;
 }
 
+.desktop-meeting-create-form {
+  gap: 0;
+  overflow: visible;
+  border-radius: 8px;
+  padding: 0 28px 28px;
+}
+
+.desktop-meeting-create-form > .desktop-meeting-create-section {
+  gap: 20px;
+  padding: 28px 0;
+}
+
+.desktop-meeting-create-form > .desktop-meeting-create-section + .desktop-meeting-create-section {
+  border-top: 1px solid #e2e8f0;
+}
+
+.desktop-meeting-create-section__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.desktop-meeting-create-section__head > span {
+  display: inline-grid;
+  min-width: 32px;
+  height: 28px;
+  place-items: center;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.desktop-meeting-create-section__head h2 {
+  font-size: 18px;
+}
+
+.desktop-meeting-type-selector {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.desktop-meeting-type-selector legend {
+  margin-bottom: 8px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.desktop-meeting-type-selector > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(100%, 560px);
+  gap: 4px;
+  border: 1px solid #dbe4f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 4px;
+}
+
+.desktop-meeting-type-selector button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.desktop-meeting-type-selector button:hover,
+.desktop-meeting-type-selector button:focus-visible {
+  background: #ffffff;
+  color: #2563eb;
+}
+
+.desktop-meeting-type-selector button:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 1px;
+}
+
+.desktop-meeting-type-selector button.is-selected {
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.18);
+}
+
+.desktop-meeting-create-form .desktop-meeting-capacity {
+  width: calc(50% - 8px);
+}
+
+.desktop-meeting-create-form .desktop-form-grid input,
+.desktop-meeting-create-form .desktop-form-grid select,
+.desktop-meeting-create-form .desktop-form-grid textarea {
+  border-radius: 8px;
+}
+
+.desktop-meeting-create-form .desktop-form-grid textarea {
+  min-height: 120px;
+}
+
 .desktop-weather-card {
   display: grid;
   gap: 14px;
@@ -1651,5 +1761,157 @@
   font-size: 12px;
   font-weight: 900;
   cursor: pointer;
+}
+
+.desktop-meeting-create-form .desktop-date-time-pair,
+.desktop-meeting-create-form .desktop-regular-schedule {
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.desktop-meeting-create-form .desktop-date-time-pair {
+  padding: 18px;
+}
+
+.desktop-meeting-create-form .desktop-regular-schedule {
+  padding: 20px;
+}
+
+.desktop-meeting-create-form .desktop-schedule-toggles {
+  color: #334155;
+}
+
+.desktop-meeting-create-form .desktop-schedule-toggles button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  background: transparent;
+  color: #334155;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.desktop-meeting-create-form .desktop-schedule-toggles button > span {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: #cbd5e1;
+  transition: background 160ms ease;
+}
+
+.desktop-meeting-create-form .desktop-schedule-toggles button > span::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+  content: "";
+  transition: transform 160ms ease;
+}
+
+.desktop-meeting-create-form .desktop-schedule-toggles button[aria-checked="true"] > span {
+  background: #2563eb;
+}
+
+.desktop-meeting-create-form .desktop-schedule-toggles button[aria-checked="true"] > span::after {
+  transform: translateX(16px);
+}
+
+.desktop-meeting-create-form .desktop-schedule-toggles button:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 3px;
+}
+
+.desktop-meeting-create-form .desktop-location-picker {
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.desktop-meeting-create-form .desktop-location-picker input {
+  min-width: 0;
+  width: 100%;
+  flex: 1;
+}
+
+.desktop-meeting-create-form .desktop-location-workspace {
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.4fr);
+}
+
+.desktop-meeting-create-form .desktop-location-workspace.is-map-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.desktop-meeting-create-form .desktop-location-results {
+  max-height: 360px;
+}
+
+.desktop-meeting-create-form .desktop-location-map-panel {
+  grid-template-rows: auto 360px;
+}
+
+.desktop-meeting-create-form .desktop-location-map {
+  min-height: 360px;
+  border-radius: 8px;
+}
+
+.desktop-meeting-create-form > .desktop-form-actions {
+  padding-top: 24px;
+}
+
+.desktop-meeting-create-form > .desktop-form-actions button {
+  min-height: 46px;
+  border-radius: 8px;
+  background: #2563eb;
+  padding: 0 24px;
+  cursor: pointer;
+}
+
+.desktop-meeting-create-form > .desktop-form-actions button:hover,
+.desktop-meeting-create-form > .desktop-form-actions button:focus-visible {
+  background: #1d4ed8;
+}
+
+.desktop-meeting-create-form > .desktop-form-actions button:focus-visible {
+  outline: 3px solid #bfdbfe;
+  outline-offset: 2px;
+}
+
+@media (max-width: 980px) {
+  .desktop-meeting-create-form .desktop-location-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .desktop-meeting-create-form .desktop-location-map-panel {
+    grid-template-rows: auto 340px;
+  }
+
+  .desktop-meeting-create-form .desktop-location-map {
+    min-height: 340px;
+  }
+}
+
+@media (max-width: 720px) {
+  .desktop-meeting-create-form {
+    padding-inline: 20px;
+  }
+
+  .desktop-meeting-create-form .desktop-meeting-capacity {
+    width: 100%;
+  }
+
+  .desktop-meeting-type-selector > div,
+  .desktop-date-time-pair {
+    grid-template-columns: 1fr;
+  }
 }
 

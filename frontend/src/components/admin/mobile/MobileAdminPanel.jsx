@@ -69,7 +69,7 @@ function MobileAdminPanel({ title = "운영 대시보드" }) {
   ];
 
   const handleReportAction = (reportId, currentStatus) => {
-    const isWaiting = currentStatus === "대기 중" || currentStatus === "pending";
+    const isWaiting = currentStatus === "처리 전" || currentStatus === "pending";
     if (isWaiting) {
       alert(`신고 번호 #${reportId} 처리를 시작합니다.`);
       setReports(prev => prev.map(r => r.id === reportId ? { ...r, status: "처리 완료" } : r));
@@ -86,7 +86,7 @@ function MobileAdminPanel({ title = "운영 대시보드" }) {
     reporter: r.reporter_name || "신고자",
     reason: r.reason || "상세 사유가 제공되지 않았습니다.",
     date: r.created_at ? new Date(r.created_at).toLocaleDateString().replace(/\s/g, "").replace(/\.$/, "") : "2023.10.27",
-    status: r.status === "pending" || r.status === "대기 중" ? "대기 중" : "처리 완료"
+    status: r.status === "pending" || r.status === "대기 중" ? "처리 전" : "처리 완료"
   }));
 
   // Get recent 4 users
@@ -204,7 +204,7 @@ function MobileAdminPanel({ title = "운영 대시보드" }) {
         ) : (
           <div style={{ display: 'grid', gap: '8px' }}>
             {recentReports.map((report) => {
-              const isWaiting = report.status === "대기 중";
+              const isWaiting = report.status === "처리 전";
               return (
                 <div 
                   key={report.id}

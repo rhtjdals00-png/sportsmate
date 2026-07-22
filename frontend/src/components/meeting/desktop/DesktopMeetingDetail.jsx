@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Bike, CalendarClock, CircleDot, Dumbbell, Eye, Footprints, LocateFixed, Map, MapPin, MessageSquareText, Mountain, Navigation, Pin, Route, Search, Star, Trophy, UserRound, UsersRound, X } from "lucide-react";
+import { Bike, CalendarClock, CircleAlert, CircleDot, Dumbbell, Eye, Footprints, LocateFixed, Map, MapPin, MessageSquareText, Mountain, Navigation, Pin, Route, Search, Star, Trophy, UserRound, UsersRound, X } from "lucide-react";
 import EmptyState from "../../common/EmptyState.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import { meetingApi } from "../../../api/meetingApi";
 import { locationApi } from "../../../api/locationApi";
+import { reportApi } from "../../../api/reportApi";
 import { weatherApi } from "../../../api/weatherApi";
 import { useAsync } from "../../../hooks/useAsync";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
@@ -31,6 +32,15 @@ function parseMeetingDateTime(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function oneTimeOperationEndAt(meeting) {
+  const explicitEnd = parseMeetingDateTime(meeting?.end_at);
+  if (explicitEnd) return explicitEnd;
+  const fallbackEnd = parseMeetingDateTime(meeting?.start_at);
+  if (!fallbackEnd) return null;
+  fallbackEnd.setHours(23, 59, 59, 999);
+  return fallbackEnd;
+}
+
 function isMeetingOperationEnded(meeting) {
   if (!meeting) return false;
   if (meeting.meeting_type === "regular") {
@@ -38,7 +48,7 @@ function isMeetingOperationEnded(meeting) {
     const endAt = parseMeetingDateTime(meeting.end_at);
     return Boolean(endAt && Date.now() >= endAt.getTime());
   }
-  const endAt = parseMeetingDateTime(meeting.end_at || meeting.start_at);
+  const endAt = oneTimeOperationEndAt(meeting);
   return Boolean(endAt && Date.now() >= endAt.getTime());
 }
 
@@ -163,6 +173,7 @@ function MeetingLocationMap({ clientId, meeting }) {
 }
 
 function MeetingDirections({ meeting }) {
+  const originSearchRequestRef = useRef(0);
   const [originKeyword, setOriginKeyword] = useState("");
   const [originResults, setOriginResults] = useState([]);
   const [originLoading, setOriginLoading] = useState(false);
@@ -172,7 +183,11 @@ function MeetingDirections({ meeting }) {
 
   useEffect(() => {
     const keyword = originKeyword.trim();
+    const requestId = originSearchRequestRef.current + 1;
+    originSearchRequestRef.current = requestId;
+
     if (!keyword || selectedOrigin?.address === keyword) {
+      setOriginLoading(false);
       setOriginResults([]);
       return;
     }
@@ -180,9 +195,21 @@ function MeetingDirections({ meeting }) {
     const timer = window.setTimeout(() => {
       setOriginLoading(true);
       locationApi.searchPlaces({ keyword, size: 6 })
-        .then((data) => setOriginResults(data.items || []))
-        .catch(() => setOriginResults([]))
-        .finally(() => setOriginLoading(false));
+        .then((data) => {
+          if (originSearchRequestRef.current === requestId) {
+            setOriginResults(data.items || []);
+          }
+        })
+        .catch(() => {
+          if (originSearchRequestRef.current === requestId) {
+            setOriginResults([]);
+          }
+        })
+        .finally(() => {
+          if (originSearchRequestRef.current === requestId) {
+            setOriginLoading(false);
+          }
+        });
     }, 300);
 
     return () => window.clearTimeout(timer);
@@ -250,33 +277,34 @@ function MeetingDirections({ meeting }) {
         </button>
       </div>
 
-      <label className="desktop-meeting-directions__search">
-        <Search size={17} />
-        <input
-          value={originKeyword}
-          placeholder="출발지 주소나 장소명을 검색하세요"
-          onChange={(event) => {
-            setSelectedOrigin(null);
-            setOriginKeyword(event.target.value);
-          }}
-        />
-      </label>
+      <div className="desktop-meeting-directions__search-wrap">
+        <label className="desktop-meeting-directions__search">
+          <Search size={17} />
+          <input
+            value={originKeyword}
+            placeholder="출발지 주소나 장소명을 검색하세요"
+            autoComplete="off"
+            aria-expanded={originLoading || originResults.length > 0}
+            onChange={(event) => {
+              setSelectedOrigin(null);
+              setOriginKeyword(event.target.value);
+            }}
+          />
+        </label>
 
-      {(originLoading || originResults.length > 0) && (
-        <div className="desktop-meeting-directions__results">
-          {originLoading ? (
-            <span>출발지를 검색 중입니다.</span>
-          ) : (
-            originResults.map((place, index) => (
+        {(originLoading || originResults.length > 0) && (
+          <div className="desktop-meeting-directions__results">
+            {originLoading && <span>출발지를 검색 중입니다.</span>}
+            {originResults.map((place, index) => (
               <button type="button" key={`${place.title}-${index}`} onClick={() => selectOrigin(place)}>
                 <MapPin size={16} />
                 <strong>{(place.title || place.address || "").replace(/<[^>]+>/g, "")}</strong>
                 <small>{place.address || place.road_address}</small>
               </button>
-            ))
-          )}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
 
       {selectedOrigin && (
         <div className="desktop-meeting-directions__selected">
@@ -311,7 +339,7 @@ function SportFallbackHero({ meeting }) {
   );
 }
 
-function DesktopMeetingDetail() {
+function DesktopMeetingDetail({ recordedViewCount = null }) {
   const { meetingId } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
@@ -324,7 +352,11 @@ function DesktopMeetingDetail() {
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinMessage, setJoinMessage] = useState("");
   const [joinError, setJoinError] = useState("");
+  const [reportReason, setReportReason] = useState("");
+  const [reporting, setReporting] = useState(false);
+  const [reportFeedback, setReportFeedback] = useState({ text: "", tone: "notice" });
   const joinTextareaRef = useRef(null);
+  const participationCancelButtonRef = useRef(null);
   const [weather, setWeather] = useState({ loading: true, forecast: null });
   const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId, refreshKey]);
 
@@ -350,6 +382,22 @@ function DesktopMeetingDetail() {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [isJoinModalOpen, joining]);
+
+  useEffect(() => {
+    if (!participationConfirm) return undefined;
+    const timer = window.setTimeout(() => participationCancelButtonRef.current?.focus(), 0);
+    const onKeyDown = (event) => {
+      if (event.key === "Escape" && !cancelling) {
+        setParticipationConfirm(null);
+        setParticipationError("");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [participationConfirm, cancelling]);
 
   useEffect(() => {
     let active = true;
@@ -392,6 +440,42 @@ function DesktopMeetingDetail() {
   }
 
   const meeting = detail.data.meeting;
+
+  const submitReport = async (event) => {
+    event.preventDefault();
+    if (!isAuthenticated) {
+      navigate("/login", { state: { from: `/meetings/${meeting.id}` } });
+      return;
+    }
+
+    const reasonDetail = reportReason.trim();
+    if (reasonDetail.length < 5) {
+      setReportFeedback({ text: "신고 사유를 5자 이상 자세히 입력해 주세요.", tone: "error" });
+      return;
+    }
+
+    setReporting(true);
+    setReportFeedback({ text: "", tone: "notice" });
+    try {
+      await reportApi.create({
+        target_type: "meeting",
+        target_id: meeting.id,
+        reason: "other",
+        reason_detail: reasonDetail,
+        context: JSON.stringify({
+          meeting_id: meeting.id,
+          meeting_title: meeting.title,
+          source: "desktop_meeting_detail"
+        })
+      });
+      setReportReason("");
+      setReportFeedback({ text: "신고가 접수되었습니다. 관리자가 확인 후 처리합니다.", tone: "success" });
+    } catch (error) {
+      setReportFeedback({ text: error.response?.data?.message || "신고를 접수하지 못했습니다.", tone: "error" });
+    } finally {
+      setReporting(false);
+    }
+  };
   const myParticipant = meeting.my_participant;
   const isHost = user?.id === meeting.host?.id || myParticipant?.role === "host";
   const isClosed = meeting.status !== "open";
@@ -456,41 +540,47 @@ function DesktopMeetingDetail() {
     }
   };
 
-  const cancelJoinRequest = async () => {
-    if (myParticipant?.status !== "pending" || isMutatingParticipation) return;
-    const ok = window.confirm("참가 신청을 취소하시겠습니까?");
-    if (!ok) return;
+  const closeParticipationConfirm = () => {
+    if (cancelling) return;
+    setParticipationConfirm(null);
+    setParticipationError("");
+  };
 
+  const openParticipationConfirm = (type) => {
+    if (isMutatingParticipation) return;
+    if (type === "cancel" && myParticipant?.status !== "pending") return;
+    if (type === "leave" && !canLeaveMeeting) return;
+    setParticipationError("");
+    setParticipationConfirm(type);
+  };
+
+  const confirmParticipationChange = async (event) => {
+    event?.preventDefault();
+    if (!participationConfirm || cancelling) return;
+    const actionType = participationConfirm;
     setCancelling(true);
     setMessage({ text: "", tone: "notice" });
+    setParticipationError("");
     try {
       await meetingApi.cancelJoin(meeting.id);
+      setParticipationConfirm(null);
+      setMessage({
+        text: actionType === "leave" ? "모임에서 나왔습니다." : "참가 신청을 취소했습니다.",
+        tone: "notice"
+      });
       setRefreshKey((value) => value + 1);
     } catch (error) {
-      setMessage({ text: error.response?.data?.message || "신청 취소를 처리하지 못했습니다.", tone: "error" });
+      setParticipationError(
+        error.response?.data?.message
+          || (actionType === "leave" ? "모임 나가기를 처리하지 못했습니다." : "신청 취소를 처리하지 못했습니다.")
+      );
     } finally {
       setCancelling(false);
     }
   };
 
-  const leaveMeeting = async () => {
-    if (myParticipant?.status !== "approved" || !canLeaveMeeting) return;
-    const ok = window.confirm("모임에서 나가시겠습니까?");
-    if (!ok) return;
-
-    setCancelling(true);
-    setMessage({ text: "", tone: "notice" });
-    try {
-      await meetingApi.cancelJoin(meeting.id);
-      setRefreshKey((value) => value + 1);
-    } catch (error) {
-      setMessage({ text: error.response?.data?.message || "모임 나가기를 처리하지 못했습니다.", tone: "error" });
-    } finally {
-      setCancelling(false);
-    }
-  };
-
-  const statusLabel = getStatusLabel(meeting.status);
+  const displayStatus = isOperationEnded ? "closed" : meeting.status;
+  const statusLabel = isOperationEnded ? "운영종료" : getStatusLabel(meeting.status);
   const participantLabel = getParticipantLabel(myParticipant);
   const actionLabel = getActionLabel({
     joining,
@@ -502,7 +592,11 @@ function DesktopMeetingDetail() {
     status: meeting.status,
     myParticipant
   });
-  const actionHandler = canCancelApplication ? cancelJoinRequest : canLeaveMeeting ? leaveMeeting : openJoinModal;
+  const actionHandler = canCancelApplication
+    ? () => openParticipationConfirm("cancel")
+    : canLeaveMeeting
+      ? () => openParticipationConfirm("leave")
+      : openJoinModal;
   const actionDisabled = canCancelApplication || canLeaveMeeting ? false : !canJoin;
   const hostSummary = meeting.host_summary || {};
   const coverImage = getMeetingCoverImage(meeting);
@@ -531,7 +625,7 @@ function DesktopMeetingDetail() {
             </div>
             <p>{meeting.description || "등록된 모임 설명이 없습니다."}</p>
             <div className="desktop-meeting-detail__chips">
-              <span className={`desktop-meeting-status ${getStatusClass(meeting.status)}`}>{statusLabel}</span>
+              <span className={`desktop-meeting-status ${getStatusClass(displayStatus)}`}>{statusLabel}</span>
               <span className="desktop-meeting-detail__approval-chip">방장 승인 필요</span>
               {participantLabel && <span className="desktop-meeting-relation-badge">{participantLabel}</span>}
             </div>
@@ -561,6 +655,44 @@ function DesktopMeetingDetail() {
               <MeetingLocationMap clientId={mapClientId} meeting={meeting} />
               <MeetingDirections meeting={meeting} />
             </div>
+          </section>
+
+          <section className="desktop-section desktop-meeting-detail__report">
+            <div className="desktop-section__head">
+              <div>
+                <h2>모임 신고</h2>
+                <p>운영 정책에 어긋나는 모임이라면 관리자에게 알려주세요.</p>
+              </div>
+            </div>
+            <form onSubmit={submitReport}>
+              <label htmlFor="desktop-meeting-report-reason">신고 사유</label>
+              <textarea
+                id="desktop-meeting-report-reason"
+                required
+                minLength={5}
+                maxLength={2000}
+                rows={5}
+                value={reportReason}
+                onChange={(event) => {
+                  setReportReason(event.target.value);
+                  if (reportFeedback.text) setReportFeedback({ text: "", tone: "notice" });
+                }}
+                placeholder="신고 사유를 자세히 입력해 주세요. (최소 5자)"
+                disabled={reporting}
+              />
+              <div className="desktop-meeting-detail__report-meta">
+                <small>입력한 내용은 모임 운영 확인을 위해 관리자에게 전달됩니다.</small>
+                <span>{reportReason.length} / 2000</span>
+              </div>
+              {reportFeedback.text ? (
+                <p className={`desktop-meeting-detail__report-feedback is-${reportFeedback.tone}`} role="status">
+                  {reportFeedback.text}
+                </p>
+              ) : null}
+              <button type="submit" disabled={reporting || reportReason.trim().length < 5}>
+                {reporting ? "접수 중..." : "신고 접수"}
+              </button>
+            </form>
           </section>
         </main>
 
@@ -613,7 +745,7 @@ function DesktopMeetingDetail() {
               )}
               <div><MapPin size={18} /><span>{meeting.location_name || "장소 미정"}</span></div>
               <div><UsersRound size={18} /><span>{meeting.current_participants}/{meeting.max_participants}명</span></div>
-              <div><Eye size={18} /><span>조회 {meeting.view_count || 0}</span></div>
+              <div><Eye size={18} /><span>조회 {Math.max(Number(meeting.view_count || 0), Number(recordedViewCount || 0))}</span></div>
             </dl>
 
             {message.text && <p className={`desktop-meeting-detail__message is-${message.tone}`}>{message.text}</p>}
@@ -675,6 +807,34 @@ function DesktopMeetingDetail() {
           </form>
         </div>
       )}
+
+      {participationConfirm && (
+        <div className="desktop-participation-confirm" role="dialog" aria-modal="true" aria-labelledby="desktop-participation-confirm-title" aria-describedby="desktop-participation-confirm-description">
+          <button className="desktop-participation-confirm__backdrop" type="button" onClick={closeParticipationConfirm} aria-label="확인창 닫기" disabled={cancelling} />
+          <form className="desktop-participation-confirm__panel" onSubmit={confirmParticipationChange}>
+            <span className="desktop-participation-confirm__icon" aria-hidden="true"><CircleAlert size={24} /></span>
+            <div className="desktop-participation-confirm__copy">
+              <h2 id="desktop-participation-confirm-title">
+                {participationConfirm === "leave" ? "모임에서 나갈까요?" : "참가 신청을 취소할까요?"}
+              </h2>
+              <p id="desktop-participation-confirm-description">
+                {participationConfirm === "leave"
+                  ? "나가면 참가자 목록과 모임 채팅에서 제외됩니다. 다시 참여하려면 참가 신청과 방장 승인이 필요합니다."
+                  : "취소 후에도 모집 중인 모임에는 다시 참가 신청할 수 있습니다."}
+              </p>
+            </div>
+            {participationError && <p className="desktop-participation-confirm__error">{participationError}</p>}
+            <div className="desktop-participation-confirm__actions">
+              <button ref={participationCancelButtonRef} type="button" onClick={closeParticipationConfirm} disabled={cancelling}>
+                {participationConfirm === "leave" ? "계속 참여하기" : "신청 유지하기"}
+              </button>
+              <button className="is-danger" type="submit" disabled={cancelling}>
+                {cancelling ? "처리 중..." : participationConfirm === "leave" ? "모임 나가기" : "신청 취소하기"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
@@ -695,7 +855,7 @@ function getStatusClass(status) {
 
 function getParticipantLabel(participant) {
   if (!participant) return "";
-  if (participant.role === "host") return "내가 만든 모임";
+  if (participant.role === "host") return "내가 관리하는 모임";
   if (participant.status === "pending") return "신청 대기중";
   if (participant.status === "approved") return "참여중";
   if (participant.status === "rejected") return "신청 거절됨";

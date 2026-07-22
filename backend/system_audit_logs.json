@@ -68,5 +68,26 @@
     "action_type": "회원 관리",
     "description": "회원 강경근naver(ID 54)의 계정 활성화 상태 변경 작업을 수행했습니다.",
     "target_id": 54
+  },
+  {
+    "timestamp": "2026-07-21 17:26:58",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 고성민(ID 22)의 권한을 admin(으)로 변경, 회원 개인 정보 수정 작업을 수행했습니다.",
+    "target_id": 22
+  },
+  {
+    "timestamp": "2026-07-22 15:44:34",
+    "admin": "ms",
+    "action_type": "설정 변경",
+    "description": "시스템 환경 설정을 변경했습니다. (기본 개설 최대 정원 변경: 29 ➔ 30, 폐쇄 유예 기간 변경: 29 ➔ 30)",
+    "target_id": null
+  },
+  {
+    "timestamp": "2026-07-22 16:56:13",
+    "admin": "ms",
+    "action_type": "신고 처리",
+    "description": "신고 #6 (asdfasdfasdf) 상태를 dismissed(으)로 저장했습니다.",
+    "target_id": 6
   }
 ]

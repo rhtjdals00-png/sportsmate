@@ -6,6 +6,7 @@ import LoadingCards from "../../common/LoadingCards.jsx";
 import { chatApi } from "../../../api/chatApi";
 import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { useAsync } from "../../../hooks/useAsync";
+import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
 
 function formatChatTime(value) {
   if (!value) return "방금";
@@ -16,16 +17,21 @@ function formatChatTime(value) {
   }).format(new Date(value));
 }
 
+function meetingOperationEndTime(meeting) {
+  const explicitEnd = new Date(meeting?.end_at || "");
+  if (Number.isFinite(explicitEnd.getTime())) return explicitEnd.getTime();
+  if (meeting?.meeting_type !== "one_time" || !meeting?.start_at) return null;
+  const fallbackEnd = new Date(meeting.start_at);
+  if (!Number.isFinite(fallbackEnd.getTime())) return null;
+  fallbackEnd.setHours(23, 59, 59, 999);
+  return fallbackEnd.getTime();
+}
+
 function isReadOnlyRoom(room) {
-  if (room?.is_read_only || room?.meeting?.is_chat_read_only) return true;
+  if (typeof room?.is_read_only === "boolean") return room.is_read_only;
+  if (typeof room?.meeting?.is_chat_read_only === "boolean") return room.meeting.is_chat_read_only;
   const meeting = room?.meeting || {};
-  if (["closed", "cancelled", "suspended"].includes(String(meeting.status || ""))) return true;
-  const labelText = `${room?.chat_status_label || ""} ${meeting.chat_status_label || ""} ${meeting.status_label || ""}`;
-  if (/마감|종료|취소|폐쇄/.test(labelText)) return true;
-  const endValue = meeting.end_at || meeting.start_at;
-  if (!endValue) return false;
-  const endTime = new Date(endValue).getTime();
-  return Number.isFinite(endTime) && endTime <= Date.now();
+  return isMeetingLifecycleEnded(meeting);
 }
 
 function DesktopChatList() {

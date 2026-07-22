@@ -7,6 +7,7 @@ import { locationApi } from "../../../api/locationApi";
 import { meetingApi } from "../../../api/meetingApi";
 import { sportApi } from "../../../api/sportApi";
 import { useAsync } from "../../../hooks/useAsync";
+import { formatRegularMeetingSchedule } from "../../../utils/formatters";
 import { getMeetingCoverImage } from "../../../utils/sportThumbnails";
 import { koreaRegions } from "../../../data/koreaRegions";
 
@@ -134,6 +135,13 @@ function getDateLabel(value) {
 
 function getDisplayStartAt(meeting) {
   return meeting.meeting_type === "regular" ? meeting.next_session?.start_at || meeting.start_at : meeting.start_at;
+}
+
+function getScheduleLabel(meeting) {
+  if (meeting.meeting_type === "regular") {
+    return formatRegularMeetingSchedule(meeting, "") || getDateLabel(getDisplayStartAt(meeting));
+  }
+  return getDateLabel(getDisplayStartAt(meeting));
 }
 
 function getMeetingTypeLabel(type) {
@@ -835,7 +843,7 @@ function DesktopMeetingRow({ meeting }) {
         </span>
         <span>
           <CalendarClock size={16} />
-          <b>{getDateLabel(getDisplayStartAt(meeting))}</b>
+          <b>{getScheduleLabel(meeting)}</b>
         </span>
       </span>
       <span className="desktop-meeting-row__people">

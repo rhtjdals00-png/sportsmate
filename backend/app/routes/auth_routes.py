@@ -4,7 +4,7 @@ from sqlalchemy import text
 
 from app.extensions import db
 from app.models import User
-from app.services.auth_service import InvalidStoredProviderError, LoginProviderMismatchError, LoginProviderRequiredError, login_user, login_with_supabase, register_user, restore_user, sync_supabase_user, verify_supabase_user
+from app.services.auth_service import AuthUserIdMismatchError, InvalidStoredProviderError, LoginProviderMismatchError, LoginProviderRequiredError, restore_user, sync_supabase_user, verify_supabase_user
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -21,6 +21,10 @@ FIELD_LABELS = {
 }
 
 SUPPORTED_LOGIN_PROVIDERS = {"email", "google", "kakao"}
+LEGACY_AUTH_DISABLED_RESPONSE = {
+    "error": "LEGACY_AUTH_DISABLED",
+    "message": "지원이 종료된 인증 방식입니다.",
+}
 
 
 def normalize_phone_number(value):
@@ -146,6 +150,13 @@ def sync_user():
 
     try:
         return jsonify(sync_supabase_user(data))
+    except AuthUserIdMismatchError as error:
+        return jsonify({
+            "success": False,
+            "error": "AUTH_USER_ID_MISMATCH",
+            "code": "AUTH_USER_ID_MISMATCH",
+            "message": str(error),
+        }), 409
     except LoginProviderRequiredError as error:
         return jsonify({
             "success": False,
@@ -174,32 +185,17 @@ def sync_user():
 
 @auth_bp.post("/register")
 def register():
-    try:
-        return jsonify(register_user(request.get_json() or {})), 201
-    except ValueError as error:
-        return jsonify({"message": str(error)}), 400
+    return jsonify(LEGACY_AUTH_DISABLED_RESPONSE), 410
 
 
 @auth_bp.post("/login")
 def login():
-    try:
-        return jsonify(login_user(request.get_json() or {}))
-    except ValueError as error:
-        msg = str(error)
-        if "서비스 점검" in msg:
-            return jsonify({"message": msg, "maintenance": True}), 503
-        return jsonify({"message": msg}), 401
+    return jsonify(LEGACY_AUTH_DISABLED_RESPONSE), 410
 
 
 @auth_bp.post("/social-login")
 def social_login():
-    try:
-        return jsonify(login_with_supabase(request.get_json() or {}))
-    except ValueError as error:
-        msg = str(error)
-        if "서비스 점검" in msg:
-            return jsonify({"message": msg, "maintenance": True}), 503
-        return jsonify({"message": msg}), 401
+    return jsonify(LEGACY_AUTH_DISABLED_RESPONSE), 410
 
 
 @auth_bp.post("/logout")

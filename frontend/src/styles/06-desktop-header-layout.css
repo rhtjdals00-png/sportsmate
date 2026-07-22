@@ -314,6 +314,12 @@
   padding: 0;
 }
 
+.desktop-shell.desktop-shell--standalone-applicants {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
 .desktop-main__inner {
   padding: 28px 0 48px;
 }

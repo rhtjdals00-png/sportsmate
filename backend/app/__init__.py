@@ -20,7 +20,7 @@ def create_app(config_class=Config):
         try:
             user_id = int(jwt_data["sub"])
             user = User.query.get(user_id)
-            if not user or not user.is_active:
+            if not user or not user.is_active or user.status == "withdrawn_pending" or user.role == "pending_withdrawal":
                 return None
             return user
         except Exception:
@@ -32,7 +32,7 @@ def create_app(config_class=Config):
         try:
             user_id = int(jwt_data["sub"])
             user = User.query.get(user_id)
-            if not user or not user.is_active:
+            if not user or not user.is_active or user.status == "withdrawn_pending" or user.role == "pending_withdrawal":
                 return True
             return False
         except Exception:

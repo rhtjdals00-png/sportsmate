@@ -26,6 +26,20 @@ function AdminSettingsPage() {
     kakaoApiKey: "5d3ec3100e15e07c16c5a3799a090f1c",
     googleClientId: "40413-t9tr8ha.apps.googleusercontent.com"
   });
+  const [defaultSettings, setDefaultSettings] = useState({
+    siteName: "SportsMate",
+    adminEmail: "admin@sportsmate.co.kr",
+    maintenanceMode: false,
+    suspensionGracePeriod: 30,
+    defaultMaxParticipants: 6,
+    mannerRatingDecrement: 1.5,
+    autoBanReportCount: 5,
+    sessionExpiryMinutes: 60,
+    termsVersion: "v1.4",
+    supabaseUrl: "https://ssuncptlzlmuulqmtnqf.supabase.co",
+    kakaoApiKey: "5d3ec3100e15e07c16c5a3799a090f1c",
+    googleClientId: "40413-t9tr8ha.apps.googleusercontent.com"
+  });
   const [lastSync, setLastSync] = useState(null);
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [logs, setLogs] = useState([]);
@@ -51,8 +65,20 @@ function AdminSettingsPage() {
     }
   };
 
+  const fetchDefaults = async () => {
+    try {
+      const res = await adminApi.getSettingsDefaults();
+      if (res) {
+        setDefaultSettings(res);
+      }
+    } catch (err) {
+      console.error("Failed to load settings defaults", err);
+    }
+  };
+
   useEffect(() => {
     fetchSettings();
+    fetchDefaults();
   }, []);
 
   const handleChange = (e) => {
@@ -98,21 +124,24 @@ function AdminSettingsPage() {
   };
 
   const handleReset = () => {
-    if (window.confirm("설정 값을 기본값으로 초기화하시겠습니까?")) {
-      setSettings({
-        siteName: "SportsMate",
-        adminEmail: "admin@sportsmate.co.kr",
-        maintenanceMode: false,
-        suspensionGracePeriod: 30,
-        defaultMaxParticipants: 6,
-        mannerRatingDecrement: 1.5,
-        autoBanReportCount: 5,
-        sessionExpiryMinutes: 60,
-        termsVersion: "v1.4",
-        supabaseUrl: "https://rhtjdals00-png.supabase.co",
-        kakaoApiKey: "8f7b2a9d6e4c3f5b8a0d2f9e4c1b5a7d",
-        googleClientId: "40413-t9tr8ha.apps.googleusercontent.com"
-      });
+    if (window.confirm("설정 값을 관리자가 저장해 둔 '기본값'으로 초기화하시겠습니까?")) {
+      setSettings(defaultSettings);
+    }
+  };
+
+  const handleSaveAsDefault = async () => {
+    if (window.confirm("현재 화면에 입력된 값들을 관리자 전용 '시스템 기본값'으로 새로 지정하시겠습니까?\n이후 '기본값 초기화'를 누르면 현재 저장하는 값으로 되돌아갑니다.")) {
+      setLoading(true);
+      try {
+        await adminApi.updateSettingsDefaults(settings);
+        alert("현재 입력한 값이 시스템 기본값으로 성공적으로 지정되었습니다.");
+        await fetchDefaults();
+      } catch (err) {
+        console.error("Failed to save default settings", err);
+        alert("기본값 지정에 실패했습니다.");
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -192,7 +221,9 @@ function AdminSettingsPage() {
             </legend>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginTop: "10px" }}>
               <div>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>서비스명</label>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>
+                  서비스명 <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500 }}>(기본값: {defaultSettings.siteName})</span>
+                </label>
                 <input 
                   type="text" 
                   name="siteName" 
@@ -203,7 +234,9 @@ function AdminSettingsPage() {
                 />
               </div>
               <div>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>대표 이메일</label>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>
+                  대표 이메일 <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500 }}>(기본값: {defaultSettings.adminEmail})</span>
+                </label>
                 <input 
                   type="email" 
                   name="adminEmail" 
@@ -227,7 +260,9 @@ function AdminSettingsPage() {
                 <label htmlFor="maintenanceMode" style={{ display: "block", fontSize: "13px", fontWeight: 700, color: settings.maintenanceMode ? "#ef4444" : "#1e293b", cursor: "pointer" }}>
                   서비스 점검 모드 활성화 (Maintenance Mode)
                 </label>
-                <span style={{ fontSize: "11px", color: "#64748b" }}>활성화 시, 일반 유저는 웹사이트 접속 시 점검 안내 화면으로 리다이렉트됩니다.</span>
+                <span style={{ fontSize: "11px", color: "#64748b" }}>
+                  활성화 시, 일반 유저는 웹사이트 접속 시 점검 안내 화면으로 리다이렉트됩니다. <span style={{ color: "#94a3b8" }}>(기본값: {defaultSettings.maintenanceMode ? "켜짐" : "꺼짐"})</span>
+                </span>
               </div>
             </div>
           </fieldset>
@@ -252,11 +287,13 @@ function AdminSettingsPage() {
                     min="1"
                     required
                   />
-                  <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 500 }}>일 (기본값: 30일)</span>
+                  <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 500 }}>일 (기본값: {defaultSettings.suspensionGracePeriod}일)</span>
                 </div>
               </div>
               <div>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>기본 개설 최대 정원</label>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>
+                  기본 개설 최대 정원
+                </label>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <input 
                     type="number" 
@@ -267,7 +304,7 @@ function AdminSettingsPage() {
                     min="2"
                     required
                   />
-                  <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 500 }}>명</span>
+                  <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 500 }}>명 (기본값: {defaultSettings.defaultMaxParticipants}명)</span>
                 </div>
               </div>
               <div style={{ gridColumn: "span 2" }}>
@@ -285,7 +322,7 @@ function AdminSettingsPage() {
                     min="0"
                     required
                   />
-                  <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 500 }}>도 (신고 사유 정당성 검증 후 차감 적용)</span>
+                  <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 500 }}>도 (신고 사유 정당성 검증 후 차감 적용 / 기본값: {defaultSettings.mannerRatingDecrement}도)</span>
                 </div>
               </div>
             </div>
@@ -311,11 +348,13 @@ function AdminSettingsPage() {
                     min="1"
                     required
                   />
-                  <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 500 }}>회 누적 시 일시 정지</span>
+                  <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 500 }}>회 누적 시 일시 정지 (기본값: {defaultSettings.autoBanReportCount}회)</span>
                 </div>
               </div>
               <div>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>관리자 세션 만료 시간</label>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>
+                  관리자 세션 만료 시간
+                </label>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <input 
                     type="number" 
@@ -326,11 +365,13 @@ function AdminSettingsPage() {
                     min="5"
                     required
                   />
-                  <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 500 }}>분</span>
+                  <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 500 }}>분 (기본값: {defaultSettings.sessionExpiryMinutes}분)</span>
                 </div>
               </div>
               <div style={{ gridColumn: "span 2" }}>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>회원가입 약관(Terms) 버전</label>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>
+                  회원가입 약관(Terms) 버전 <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500 }}>(기본값: {defaultSettings.termsVersion})</span>
+                </label>
                 <input 
                   type="text" 
                   name="termsVersion" 
@@ -350,7 +391,9 @@ function AdminSettingsPage() {
             </legend>
             <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "10px" }}>
               <div>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>Supabase Project URL</label>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>
+                  Supabase Project URL <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500 }}>(기본값: {defaultSettings.supabaseUrl})</span>
+                </label>
                 <input 
                   type="text" 
                   name="supabaseUrl" 
@@ -362,7 +405,9 @@ function AdminSettingsPage() {
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                 <div>
-                  <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>Kakao Developers API Key</label>
+                  <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>
+                    Kakao Developers API Key <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500 }}>(기본값 설정됨)</span>
+                  </label>
                   <div style={{ position: "relative" }}>
                     <input 
                       type={showKakaoApiKey ? "text" : "password"} 
@@ -383,7 +428,9 @@ function AdminSettingsPage() {
                   </div>
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>Google Cloud Client ID</label>
+                  <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>
+                    Google Cloud Client ID <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500 }}>(기본값 설정됨)</span>
+                  </label>
                   <div style={{ position: "relative" }}>
                     <input 
                       type={showGoogleClientId ? "text" : "password"} 
@@ -437,6 +484,36 @@ function AdminSettingsPage() {
             >
               <RefreshCw size={15} />
               <span>기본값 초기화</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSaveAsDefault}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "8px 20px",
+                borderRadius: "8px",
+                border: "1px solid #cbd5e1",
+                backgroundColor: "#ffffff",
+                color: "#475569",
+                fontSize: "14px",
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "all 0.15s ease"
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = "#f8fafc";
+                e.currentTarget.style.borderColor = "#94a3b8";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = "#ffffff";
+                e.currentTarget.style.borderColor = "#cbd5e1";
+              }}
+            >
+              <Save size={15} />
+              <span>현재 값을 기본값으로 지정</span>
             </button>
 
             <button

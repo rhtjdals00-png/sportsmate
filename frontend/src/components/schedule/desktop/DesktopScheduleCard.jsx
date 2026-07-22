@@ -1,5 +1,7 @@
 import { CalendarClock, CalendarX, Crown, FileText, LayoutDashboard, MessageCircle, Pencil } from "lucide-react";
 import { Link } from "react-router-dom";
+import { formatKoreanTime } from "../../../utils/formatters";
+import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
 
 const ACTION_ICONS = {
   detail: FileText,
@@ -22,6 +24,13 @@ function isSameDay(a, b) {
     && a.getDate() === b.getDate();
 }
 
+function endOfScheduleDay(value) {
+  const date = validScheduleDate(value);
+  if (!date) return null;
+  date.setHours(23, 59, 59, 999);
+  return date;
+}
+
 function getDday(value) {
   const target = validScheduleDate(value);
   if (!target) return "D-?";
@@ -41,26 +50,25 @@ export function getDesktopScheduleState(item) {
   if (meetingStatus === "suspended") {
     return { label: "운영중지", isEnded: true, state: "suspended" };
   }
-  if (meetingStatus === "completed") {
-    return { label: "종료됨", isEnded: true, state: "ended" };
-  }
-
   const now = new Date();
   const start = validScheduleDate(item.startAt ?? item.rawTime);
-  const end = validScheduleDate(item.endAt ?? item.endTime);
+  const explicitEnd = validScheduleDate(item.endAt ?? item.endTime);
+  const end = explicitEnd || (item.meetingType === "one_time" ? endOfScheduleDay(start) : null);
   const operationEnd = validScheduleDate(item.operationEndAt);
 
   if (!start) {
-    if (operationEnd && operationEnd < now) {
-      return { label: "종료됨", isEnded: true, state: "ended" };
-    }
-    return { label: "예정 없음", isEnded: false, state: "unscheduled" };
+    return { label: isRegular ? "다음 일정 준비" : "예정 없음", isEnded: false, state: "unscheduled" };
   }
   if (end) {
-    if (now >= end) return { label: "종료됨", isEnded: true, state: "ended" };
-    if (now >= start) return { label: "진행 중", isEnded: false, state: "active" };
-  } else if (now > start) {
-    return { label: "종료됨", isEnded: true, state: "ended" };
+    if (now >= start && now < end) return { label: "진행 중", isEnded: false, state: "active" };
+    if (now >= end && isSameDay(end, now)) {
+      return { label: "오늘 일정 완료", isEnded: false, state: "today" };
+    }
+    if (now >= end) {
+      return { label: isRegular ? "다음 일정 준비" : "예정 없음", isEnded: false, state: "unscheduled" };
+    }
+  } else if (now > start && !isSameDay(start, now)) {
+    return { label: isRegular ? "다음 일정 준비" : "예정 없음", isEnded: false, state: "unscheduled" };
   }
   if (isSameDay(start, now)) {
     return { label: "D-DAY", isEnded: false, state: "today" };
@@ -72,6 +80,10 @@ export function formatScheduleTime(value) {
   const date = validScheduleDate(value);
   if (!date) return "시간 미정";
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+export function formatScheduleTimeLabel(value) {
+  return formatKoreanTime(value) || "시간 미정";
 }
 
 function ScheduleAction({ action }) {
@@ -101,7 +113,7 @@ function DesktopScheduleCard({ item, actions = [], highlighted = false, chatbotH
           {isManaged && <span className="desktop-schedule-card__badge is-managed">현재 관리 중</span>}
           <span className={`desktop-schedule-card__badge is-state is-${scheduleState.state}`}>{scheduleState.label}</span>
         </div>
-        <span className="desktop-schedule-card__time">{formatScheduleTime(startAt)}</span>
+        <span className="desktop-schedule-card__time">{formatScheduleTimeLabel(startAt)}</span>
         <h3>{item.title}</h3>
         <p>{item.location ?? item.place} · {item.currentParticipants ?? item.current_participants ?? 0}/{item.maxParticipants ?? item.max_participants ?? 0}명</p>
         {item.sessionStatus === "cancelled" && (

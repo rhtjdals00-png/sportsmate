@@ -151,6 +151,24 @@ class Meeting(db.Model, TimestampMixin):
             } if participant else None
         }
 
+
+class MeetingView(db.Model):
+    __tablename__ = "meeting_views"
+
+    id = db.Column(db.Integer, primary_key=True)
+    meeting_id = db.Column(
+        db.Integer,
+        db.ForeignKey("meetings.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    viewer_key = db.Column(db.String(64), nullable=False)
+    viewed_at = db.Column(db.DateTime, default=kst_now, nullable=False, index=True)
+
+    __table_args__ = (
+        db.UniqueConstraint("meeting_id", "viewer_key", name="uq_meeting_view_viewer"),
+    )
+
 class MeetingSession(db.Model, TimestampMixin):
     __tablename__ = "meeting_sessions"
 

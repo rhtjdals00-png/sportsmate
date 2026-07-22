@@ -10,6 +10,7 @@ import { useAsync } from "../../../hooks/useAsync";
 import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { getMeetingCoverImage, isUsingSportThumbnail, getSportIconUrl, getMeetingCustomCoverImage, getSportNameFromMeeting } from "../../../utils/sportThumbnails";
+import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
 
 function formatChatTime(value) {
   if (!value) return "방금";
@@ -159,13 +160,15 @@ function MobileChatList() {
     });
   }, [sortedMeetingItems, meetingFilter, user]);
 
-  const isMeetingClosed = (meeting) => {
-    if (!meeting) return true;
-    return meeting.status === "closed" || meeting.status === "cancelled" || new Date(meeting.start_at) < new Date();
+  const isMeetingClosed = (room) => {
+    if (!room?.meeting) return true;
+    if (typeof room.is_read_only === "boolean") return room.is_read_only;
+    if (typeof room.meeting.is_chat_read_only === "boolean") return room.meeting.is_chat_read_only;
+    return isMeetingLifecycleEnded(room.meeting);
   };
 
-  const activeMeetingItems = filteredMeetingItems.filter((room) => !isMeetingClosed(room.meeting));
-  const closedMeetingItems = filteredMeetingItems.filter((room) => isMeetingClosed(room.meeting));
+  const activeMeetingItems = filteredMeetingItems.filter((room) => !isMeetingClosed(room));
+  const closedMeetingItems = filteredMeetingItems.filter((room) => isMeetingClosed(room));
 
   // 폴링 (리얼타임 미연결 시)
   useEffect(() => {
@@ -330,7 +333,7 @@ function MobileChatList() {
                   </div>
                   <div className="chat-room-card__content">
                     <div className="chat-room-card__topline" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '3px', overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '2px', overflow: 'hidden' }}>
                         <Badge tone={isHost ? "warning" : "sky"} style={{ flexShrink: 0, fontSize: '10px', padding: '2px 5px' }}>
                           {isHost ? "방장" : "참여"}
                         </Badge>
@@ -449,7 +452,7 @@ function MobileChatList() {
                   style={{ cursor: 'pointer', userSelect: 'none' }}
                 >
                   <div>
-                    <h2>모집/활동 종료된 모임 채팅방</h2>
+                    <h2>활동 종료된 모임 채팅방</h2>
                   </div>
                   <div style={{ color: '#64748b', display: 'flex', alignItems: 'center' }}>
                     <ChevronDown size={20} style={{ transform: isClosedChatsExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s ease-in-out' }} />
@@ -517,7 +520,7 @@ function MobileChatList() {
                       </div>
                       <div className="chat-room-card__content">
                         <div className="chat-room-card__topline" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', overflow: 'hidden' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '2px', overflow: 'hidden' }}>
                             <Badge tone="gray" style={{ flexShrink: 0, fontSize: '10px', padding: '2px 5px' }}>
                               종료
                             </Badge>
@@ -756,21 +759,33 @@ function MobileChatList() {
         />
       )}
 
-      {leaveConfirmOpen ? (
-        <div className="chat-vote-confirm" role="dialog" aria-modal="true" aria-label="채팅방 나가기">
-          <button className="chat-vote-modal__backdrop" type="button" onClick={() => setLeaveConfirmOpen(false)} aria-label="닫기" />
-          <section>
-            <strong>채팅방을 나갈까요?</strong>
-            <p>{leaveTargetRoom?.meeting?.title || "이 채팅방"}에서 나가면 모임 참여도 함께 취소됩니다.</p>
-            <div className="chat-vote-confirm__actions">
-              <button type="button" onClick={() => setLeaveConfirmOpen(false)}>취소</button>
-              <button type="button" className="is-danger" onClick={leaveRoom} disabled={leavingRoom}>
+      {leaveConfirmOpen && (
+        <div role="dialog" aria-modal="true" aria-label="채팅방 나가기" style={{
+          position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
+        }}>
+          <button type="button" onClick={() => setLeaveConfirmOpen(false)} aria-label="닫기" style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', border: 'none', cursor: 'pointer', width: '100%', height: '100%'
+          }} />
+          <section style={{
+            position: 'relative', background: '#fff', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '320px', zIndex: 10
+          }}>
+            <strong style={{ display: 'block', fontSize: '18px', fontWeight: 'bold', marginBottom: '8px', color: '#0f172a' }}>채팅방을 나갈까요?</strong>
+            <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.5, marginBottom: '24px' }}>
+              <strong style={{ color: '#0f172a' }}>{leaveTargetRoom?.meeting?.title || "이 채팅방"}</strong>에서 나가면 모임 참여도 함께 취소됩니다.
+            </p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="button" onClick={() => setLeaveConfirmOpen(false)} style={{
+                flex: 1, padding: '12px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer'
+              }}>취소</button>
+              <button type="button" onClick={leaveRoom} disabled={leavingRoom} style={{
+                flex: 1, padding: '12px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', opacity: leavingRoom ? 0.7 : 1
+              }}>
                 {leavingRoom ? "나가는 중" : "나가기"}
               </button>
             </div>
           </section>
         </div>
-      ) : null}
+      )}
     </>
   );
 }

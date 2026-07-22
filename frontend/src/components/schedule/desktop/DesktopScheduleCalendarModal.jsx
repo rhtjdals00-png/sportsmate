@@ -1,8 +1,10 @@
 import { ChevronLeft, ChevronRight, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getMeetingCoverImage } from "../../../utils/sportThumbnails";
-import { formatRegularMeetingSchedule } from "../../../utils/formatters";
-import DesktopScheduleCard, { formatScheduleTime, getDesktopScheduleState, validScheduleDate } from "./DesktopScheduleCard.jsx";
+import { formatKoreanTime, formatKoreanTimeRange, formatRegularMeetingSchedule } from "../../../utils/formatters";
+import DesktopScheduleCard, { formatScheduleTime, formatScheduleTimeLabel, getDesktopScheduleState, validScheduleDate } from "./DesktopScheduleCard.jsx";
+import { getMeetingOperationEndAt } from "../../../utils/meetingLifecycle.js";
+
 
 const FALLBACK_IMAGE = "/images/logo.png";
 const SCHEDULE_REASON_MAX_LENGTH = 255;
@@ -13,9 +15,16 @@ function formatDateTime(value) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${month}.${day}(${weekday}) ${hours}:${minutes}`;
+  return `${month}.${day}(${weekday}) ${formatKoreanTime(date)}`;
+}
+
+function formatScheduleRange(startValue, endValue) {
+  const start = validScheduleDate(startValue);
+  if (!start) return "일정 미정";
+  const month = String(start.getMonth() + 1).padStart(2, "0");
+  const day = String(start.getDate()).padStart(2, "0");
+  const weekday = ["일", "월", "화", "수", "목", "금", "토"][start.getDay()];
+  return `${month}.${day}(${weekday}) ${formatKoreanTimeRange(start, endValue)}`;
 }
 
 function isUpcoming(value) {
@@ -51,7 +60,7 @@ export function normalizeDesktopScheduleMeeting(meeting, participantStatus = "jo
   const fallbackNextSession = currentSession || scheduledSessions.find((session) => isUpcoming(session.start_at));
   const nextSession = isRegular ? meeting.next_session || fallbackNextSession || null : null;
   const lastSession = isRegular ? [...scheduledSessions].reverse().find((session) => validScheduleDate(session.start_at)) : null;
-  const operationEndAt = meeting.end_at || null;
+  const operationEndAt = getMeetingOperationEndAt(meeting);
   const useLastSession = isRegular && !nextSession && operationEndAt && validScheduleDate(operationEndAt) < now;
   const startAt = isRegular ? (nextSession?.start_at || (useLastSession ? lastSession?.start_at : null) || null) : meeting.start_at;
   const endAt = isRegular ? (nextSession?.end_at || (useLastSession ? lastSession?.end_at : null) || null) : meeting.end_at;
@@ -305,7 +314,7 @@ function DesktopScheduleCalendarModal({
                         {hasSuspendedEvent && <span className="desktop-schedule-calendar__marker is-suspended" title="운영중지 일정 포함">중지</span>}
                       </span>
                     )}
-                    {cell.items[0] && <><small>{cell.items[0].title}</small><em>{cell.items.length > 1 ? `+${cell.items.length - 1}개 더보기` : `${cellStatus(cell.items[0])} · ${formatScheduleTime(cell.items[0].startAt)}`}</em></>}
+                    {cell.items[0] && <><small>{cell.items[0].title}</small><em>{cell.items.length > 1 ? `+${cell.items.length - 1}개 더보기` : `${cellStatus(cell.items[0])} · ${formatScheduleTimeLabel(cell.items[0].startAt)}`}</em></>}
                   </button>
                 );
               })}
@@ -378,7 +387,7 @@ export function DesktopScheduleChangeModal({ item, submitting, error, onClose, o
         <button className="desktop-schedule-calendar-modal__close" type="button" aria-label="일정 변경 닫기" onClick={onClose} disabled={submitting}><X size={19} /></button>
         <h2 className="desktop-schedule-calendar-modal__title">일정 변경</h2>
         <p className="desktop-schedule-action__guide">선택한 일정만 변경되며 다른 정기 일정에는 영향을 주지 않습니다.</p>
-        <div className="desktop-schedule-action__current"><b>{item.title}</b><span>현재 일정 {formatDateTime(item.startAt)}{item.endAt ? `~${formatScheduleTime(item.endAt)}` : ""}</span></div>
+        <div className="desktop-schedule-action__current"><b>{item.title}</b><span>현재 일정 {formatScheduleRange(item.startAt, item.endAt)}</span></div>
         <div className="desktop-schedule-action__grid">
           <label>변경 날짜 *<input type="date" value={dateValue} onChange={(event) => setDateValue(event.target.value)} /></label>
           <label>시작 시간 *<input type="time" value={startValue} onChange={(event) => setStartValue(event.target.value)} /></label>

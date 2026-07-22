@@ -11,6 +11,10 @@
   width: min(100%, 560px);
 }
 
+.desktop-auth-page--callback {
+  width: min(100%, 480px);
+}
+
 .desktop-auth-card {
   width: 100%;
   border: 1px solid #e2e8f0;
@@ -41,6 +45,38 @@
   margin: 0;
   color: #64748b;
   line-height: 1.55;
+}
+
+.desktop-auth-callback {
+  display: grid;
+  justify-items: center;
+  gap: 20px;
+  padding-block: 46px;
+}
+
+.desktop-auth-callback__spinner {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  border-radius: 50%;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.desktop-auth-callback__spinner svg {
+  animation: desktopAuthSpinner 900ms linear infinite;
+}
+
+.desktop-auth-callback .desktop-auth-card__head h2 {
+  margin-top: 0;
+  font-size: 24px;
+}
+
+@keyframes desktopAuthSpinner {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .desktop-auth-form {

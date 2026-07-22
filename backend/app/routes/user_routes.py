@@ -5,7 +5,7 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
-from app.models import Meeting, MeetingSession, Participant, Review, Sport, User, UserProfile
+from app.models import Attendance, Meeting, MeetingSession, Participant, Review, Sport, User, UserProfile
 from app.services.meeting_service import ensure_regular_meeting_sessions
 from app.utils.timezone import kst_now
 
@@ -153,7 +153,9 @@ def delete_me():
     
     try:
         user.status = "withdrawn_pending"
+        user.role = "pending_withdrawal"
         user.withdrawn_at = kst_now()
+        user.deleted_at = kst_now()
         db.session.commit()
         return jsonify({
             "message": "30일 탈퇴 유예 기간이 시작되었습니다. 30일 이내 재로그인 시 계정을 복구할 수 있습니다.",
@@ -172,12 +174,14 @@ def delete_me():
 def cancel_account_deletion():
     user = user_query().get_or_404(int(get_jwt_identity()))
     
-    if user.role != "pending_withdrawal":
+    if user.role != "pending_withdrawal" and user.status != "withdrawn_pending":
         return jsonify({"message": "탈퇴 대기 중인 계정이 아닙니다."}), 400
         
     try:
         user.role = "user"
+        user.status = "active"
         user.deleted_at = None
+        user.withdrawn_at = None
         db.session.commit()
         return jsonify({"message": "탈퇴가 성공적으로 철회되었습니다.", "user": user.to_dict()})
     except Exception as e:
@@ -256,6 +260,11 @@ def attach_schedule_sessions(meetings, include_cancelled=False):
 @jwt_required()
 def my_meetings():
     user_id = int(get_jwt_identity())
+    attendance_count = Attendance.query.filter(
+        Attendance.user_id == user_id,
+        Attendance.meeting_session_id.isnot(None),
+        Attendance.status == "present",
+    ).count()
     hosted_items = meetings_for_user(user_id, hosted=True)
     joined_items = meetings_for_user(user_id, status="approved")
     pending_items = meetings_for_user(user_id, status="pending")
@@ -264,7 +273,64 @@ def my_meetings():
     hosted = [hydrated[meeting.id] for meeting in hosted_items]
     joined = [hydrated[meeting.id] for meeting in joined_items]
     pending = [hydrated[meeting.id] for meeting in pending_items]
-    return jsonify({"hosted": hosted, "joined": joined, "pending": pending})
+    return jsonify({
+        "hosted": hosted,
+        "joined": joined,
+        "pending": pending,
+        "attendance_count": attendance_count,
+    })
+
+
+@user_bp.get("/me/attendance-history")
+@jwt_required()
+def my_attendance_history():
+    user_id = int(get_jwt_identity())
+    rows = (
+        Attendance.query
+        .join(MeetingSession, Attendance.meeting_session_id == MeetingSession.id)
+        .options(joinedload(Attendance.meeting_session).joinedload(MeetingSession.meeting))
+        .filter(
+            Attendance.user_id == user_id,
+            Attendance.status.in_(["present", "absent"]),
+        )
+        .order_by(MeetingSession.start_at.desc())
+        .all()
+    )
+
+    present_count = sum(row.status == "present" for row in rows)
+    absent_count = sum(row.status == "absent" for row in rows)
+    total_count = present_count + absent_count
+    attendance_rate = round((present_count / total_count) * 100) if total_count else 0
+
+    items = []
+    for row in rows:
+        session = row.meeting_session
+        meeting = session.meeting if session else None
+        items.append({
+            "id": row.id,
+            "status": row.status,
+            "checked_at": row.checked_at.isoformat() if row.checked_at else None,
+            "meeting": {
+                "id": meeting.id,
+                "title": meeting.title,
+            } if meeting else None,
+            "session": {
+                "id": session.id,
+                "session_number": session.session_number,
+                "start_at": session.start_at.isoformat() if session.start_at else None,
+                "end_at": session.end_at.isoformat() if session.end_at else None,
+            } if session else None,
+        })
+
+    return jsonify({
+        "summary": {
+            "total_count": total_count,
+            "present_count": present_count,
+            "absent_count": absent_count,
+            "attendance_rate": attendance_rate,
+        },
+        "items": items,
+    })
 
 
 @user_bp.get("/me/calendar")
