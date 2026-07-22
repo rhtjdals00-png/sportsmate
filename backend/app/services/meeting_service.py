@@ -969,6 +969,107 @@ def recalculate_current_participants(meeting, *, sync_status=True):
     return approved_count
 
 
+def _eligible_host_candidate_query(meeting_id, excluded_user_id):
+    return (
+        Participant.query
+        .join(User, User.id == Participant.user_id)
+        .filter(
+            Participant.meeting_id == meeting_id,
+            Participant.status == "approved",
+            Participant.user_id != excluded_user_id,
+            User.is_active.is_(True),
+            User.role.notin_(["suspended", "pending_withdrawal"]),
+        )
+        .order_by(
+            case((Participant.approved_at.is_(None), 1), else_=0),
+            Participant.approved_at.asc(),
+            case((Participant.requested_at.is_(None), 1), else_=0),
+            Participant.requested_at.asc(),
+            Participant.id.asc(),
+        )
+    )
+
+
+def _apply_host_transfer(meeting, target_participant, previous_host_id, *, automatic=False):
+    if not meeting or not target_participant:
+        raise ValueError("방장 위임 정보를 확인할 수 없습니다.")
+
+    stale_hosts = Participant.query.filter_by(meeting_id=meeting.id, role="host").all()
+    for participant in stale_hosts:
+        participant.role = "member"
+
+    previous_host = Participant.query.filter_by(meeting_id=meeting.id, user_id=previous_host_id).first()
+    if previous_host:
+        previous_host.role = "member"
+
+    target_participant.role = "host"
+    meeting.host_id = target_participant.user_id
+    nickname = _display_name(target_participant.user)
+    reason = "기존 방장의 계정 정지로" if automatic else "기존 방장의 위임으로"
+    _add_meeting_system_message(meeting, target_participant.user_id, f"{reason} {nickname}님이 새 방장이 되었습니다.")
+    create_notification(
+        user_id=target_participant.user_id,
+        type="meeting_host_transfer",
+        title="방장 권한 위임",
+        message=f"{meeting.title} 모임의 새 방장이 되었습니다.",
+        link_url=f"/host/meetings/{meeting.id}",
+        commit=False,
+        send_push=False,
+    )
+    db.session.flush()
+    return target_participant
+
+
+def transfer_meeting_host(meeting_id, target_user_id, current_host_id):
+    meeting = Meeting.query.filter_by(id=meeting_id).with_for_update().first()
+    if not meeting:
+        raise ValueError("모임을 찾을 수 없습니다.")
+    if meeting.host_id != current_host_id:
+        raise PermissionError("현재 방장만 방장 권한을 위임할 수 있습니다.")
+    if meeting.status in {"cancelled", "suspended"} or is_meeting_operation_ended(meeting):
+        raise ValueError("종료되거나 운영 중지된 모임은 방장을 위임할 수 없습니다.")
+    if target_user_id == current_host_id:
+        raise ValueError("현재 방장에게 다시 위임할 수 없습니다.")
+
+    target = (
+        Participant.query
+        .join(User, User.id == Participant.user_id)
+        .filter(
+            Participant.meeting_id == meeting.id,
+            Participant.user_id == target_user_id,
+            Participant.status == "approved",
+            User.is_active.is_(True),
+            User.role.notin_(["suspended", "pending_withdrawal"]),
+        )
+        .with_for_update(of=Participant)
+        .first()
+    )
+    if not target:
+        raise ValueError("방장으로 위임할 수 있는 활성 참가자가 아닙니다.")
+
+    _apply_host_transfer(meeting, target, current_host_id)
+    db.session.commit()
+    try:
+        send_web_push(target.user_id, "방장 권한 위임", f"{meeting.title} 모임의 새 방장이 되었습니다.", f"/host/meetings/{meeting.id}")
+    except Exception as error:
+        current_app.logger.warning("Host transfer push notification failed: %s", error)
+    return target, meeting
+
+
+def reassign_hosted_meetings_for_suspended_user(user_id):
+    transfers = []
+    meetings = Meeting.query.filter(Meeting.host_id == user_id).with_for_update().all()
+    for meeting in meetings:
+        if meeting.status in {"cancelled", "suspended"} or is_meeting_operation_ended(meeting):
+            continue
+        candidate = _eligible_host_candidate_query(meeting.id, user_id).with_for_update(of=Participant).first()
+        if not candidate:
+            continue
+        _apply_host_transfer(meeting, candidate, user_id, automatic=True)
+        transfers.append({"meeting_id": meeting.id, "new_host_user_id": candidate.user_id})
+    return transfers
+
+
 def update_application(meeting_id, applicant_user_id, host_id, status):
     meeting = Meeting.query.get_or_404(meeting_id)
     if meeting.status == "suspended":
@@ -1032,6 +1133,12 @@ def list_meeting_members(meeting_id, host_id):
             "approved_at": participant.approved_at.isoformat() if participant.approved_at else None,
             "is_host": participant.user_id == meeting.host_id or participant.role == "host",
             "can_kick": participant.user_id != meeting.host_id and participant.role != "host",
+            "can_transfer_host": (
+                participant.user_id != meeting.host_id
+                and participant.role != "host"
+                and participant.user.is_active
+                and participant.user.role not in {"suspended", "pending_withdrawal"}
+            ),
             "user": {
                 "id": participant.user.id,
                 "nickname": participant.user.nickname,

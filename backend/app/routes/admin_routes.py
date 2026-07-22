@@ -598,7 +598,10 @@ def update_user(user_id):
             profile.preferred_sports = data["preferred_sports"]
             
     is_suspended = (user.role == "suspended" or not user.is_active)
+    host_transfers = []
     if is_suspended and not was_suspended:
+        from app.services.meeting_service import reassign_hosted_meetings_for_suspended_user
+        host_transfers = reassign_hosted_meetings_for_suspended_user(user.id)
         from app.services.notification_service import create_notification
         create_notification(
             user_id=user.id,
@@ -641,7 +644,7 @@ def update_user(user_id):
         target_id=user_id
     )
 
-    return jsonify({"user": user.to_dict()})
+    return jsonify({"user": user.to_dict(), "host_transfers": host_transfers})
 
 
 @admin_bp.get("/settings")

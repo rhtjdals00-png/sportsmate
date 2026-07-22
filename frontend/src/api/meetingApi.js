@@ -3,6 +3,9 @@ import { apiClient } from "./client";
 export const meetingApi = {
   list: (params = {}) => apiClient.get("/meetings", { params }).then((res) => res.data),
   detail: (id) => apiClient.get(`/meetings/${id}`).then((res) => res.data),
+  recordView: (id, viewerId) => apiClient.post(`/meetings/${id}/views`, null, {
+    headers: { "X-Sportsmate-Viewer": viewerId }
+  }).then((res) => res.data),
   sessions: (id) => apiClient.get(`/meetings/${id}/sessions`).then((res) => res.data),
   create: (payload) => apiClient.post("/meetings", payload).then((res) => res.data),
   update: (id, payload) => apiClient.patch(`/meetings/${id}`, payload).then((res) => res.data),
@@ -20,6 +23,7 @@ export const meetingApi = {
   reject: (meetingId, userId) =>
     apiClient.patch(`/meetings/${meetingId}/applicants/${userId}/reject`).then((res) => res.data),
   kickMember: (meetingId, userId) => apiClient.delete(`/meetings/${meetingId}/members/${userId}`).then((res) => res.data),
+  transferHost: (meetingId, userId) => apiClient.patch(`/meetings/${meetingId}/host`, { user_id: userId }).then((res) => res.data),
   reviews: (id) => apiClient.get(`/meetings/${id}/reviews`).then((res) => res.data),
   createReview: (id, payload) => apiClient.post(`/meetings/${id}/reviews`, payload).then((res) => res.data),
   notices: (id) => apiClient.get(`/meetings/${id}/notices`).then((res) => res.data),

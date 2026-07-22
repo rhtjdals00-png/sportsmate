@@ -1997,7 +1997,7 @@
   gap: 10px;
 }
 
-.mobile-shell .stats-grid span {
+.mobile-shell .stats-grid button {
   min-height: 72px;
   border-color: rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.12);
@@ -2197,9 +2197,15 @@
 }
 
 .mobile-shell .sticky-cta {
+  right: auto;
   bottom: calc(82px + env(safe-area-inset-bottom));
+  left: 50%;
+  width: 100%;
   max-width: 430px;
+  margin: 0;
   padding: 0 16px;
+  box-sizing: border-box;
+  transform: translateX(-50%);
 }
 
 .mobile-shell .sticky-cta .button {
@@ -2208,6 +2214,7 @@
 
 .mobile-shell .sticky-cta__split {
   display: grid;
+  width: 100%;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   gap: 10px;
 }
@@ -2229,9 +2236,19 @@
 
 .mobile-shell .sticky-cta__message {
   justify-self: stretch;
+  margin: 0;
+  border: 1px solid rgba(79, 70, 229, 0.18);
   border-radius: 16px;
+  background: rgba(255, 255, 255, 0.98);
+  color: var(--mobile-primary);
   padding: 11px 13px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
   text-align: center;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
 }
 
 .mobile-shell .sticky-cta__message--notice {
@@ -2241,7 +2258,22 @@
 
 .mobile-shell .sticky-cta__message--error {
   border: 1px solid rgba(239, 68, 68, 0.2);
+  background: #fff7f7;
   color: #b91c1c;
+}
+
+.mobile-shell .sticky-cta__message--success {
+  border-color: rgba(16, 185, 129, 0.24);
+  background: #f0fdf4;
+  color: #047857;
+}
+
+.mobile-shell .mobile-meeting-report-hint {
+  display: block;
+  color: var(--mobile-muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .mobile-shell .review-form {
@@ -2472,7 +2504,7 @@
   margin: 14px 0 18px;
 }
 
-.mobile-shell .stats-grid span {
+.mobile-shell .stats-grid button {
   display: grid;
   min-height: 92px;
   align-content: center;
@@ -2484,6 +2516,22 @@
   padding: 10px 6px;
   text-align: center;
   box-shadow: 0 14px 28px rgba(30, 41, 59, 0.06);
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.mobile-shell .stats-grid button::after {
+  content: "상세보기 ›";
+  color: var(--mobile-primary);
+  font-size: 9px;
+  font-weight: 900;
+  opacity: 0.72;
+}
+
+.mobile-shell .stats-grid button:active {
+  border-color: var(--mobile-primary);
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.14);
+  transform: translateY(1px) scale(0.98);
 }
 
 .mobile-shell .stats-grid small {
@@ -3574,6 +3622,245 @@
 .mobile-shell .host-notice-editor,
 .mobile-shell .host-notice-history {
   gap: 15px;
+}
+
+.mobile-shell .mobile-host-transfer {
+  gap: 14px;
+}
+
+.mobile-shell .mobile-host-transfer__description {
+  margin: 0;
+  color: var(--mobile-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.mobile-shell .mobile-host-transfer__list {
+  display: grid;
+  gap: 9px;
+}
+
+.mobile-shell .mobile-host-transfer__member {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--mobile-soft-border);
+  border-radius: 16px;
+  background: #f8faff;
+  padding: 10px;
+}
+
+.mobile-shell .mobile-host-transfer__profile {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.mobile-shell .mobile-host-transfer__profile > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.mobile-shell .mobile-host-transfer__profile b {
+  overflow: hidden;
+  color: var(--mobile-ink);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-shell .mobile-host-transfer__profile small {
+  color: var(--mobile-muted);
+  font-size: 11px;
+}
+
+.mobile-shell .mobile-host-transfer__avatar {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid #bfdbfe;
+  border-radius: 50%;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.mobile-shell .mobile-host-transfer__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mobile-shell .mobile-host-transfer__member .button {
+  width: auto;
+  min-width: 88px;
+  min-height: 38px;
+  flex: 0 0 auto;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.mobile-shell .mobile-host-transfer__message,
+.mobile-shell .mobile-host-transfer__empty {
+  margin: 0;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: var(--mobile-muted);
+  padding: 11px 12px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.mobile-shell .mobile-host-transfer__message.is-error {
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.mobile-shell .mobile-chat-load-older {
+  justify-self: center;
+  min-height: 34px;
+  margin: 4px auto 12px;
+  border: 1px solid #dbe4ff;
+  border-radius: 999px;
+  background: #fff;
+  color: #475569;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mobile-shell .mobile-chat-load-older:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.mobile-shell .mobile-chat-latest-jump {
+  position: fixed;
+  z-index: 45;
+  right: max(18px, calc((100vw - 430px) / 2 + 18px));
+  bottom: calc(148px + env(safe-area-inset-bottom));
+  min-height: 36px;
+  border: 1px solid rgba(79, 70, 229, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--mobile-primary);
+  padding: 0 13px;
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: 0 10px 24px rgba(30, 41, 59, 0.14);
+}
+
+.mobile-shell .mobile-chat-read-only {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mobile-muted);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.mobile-shell .mobile-chat-notice-modal > section {
+  max-height: min(72vh, 620px);
+  overflow: hidden;
+}
+
+.mobile-shell .mobile-chat-notice-modal__summary {
+  margin: 0;
+  color: var(--mobile-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mobile-shell .mobile-chat-notice-list {
+  display: grid;
+  max-height: min(52vh, 440px);
+  gap: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+
+.mobile-shell .mobile-chat-notice-list article {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--mobile-soft-border);
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 13px 14px;
+}
+
+.mobile-shell .mobile-chat-notice-list article.is-pinned {
+  border-color: rgba(79, 70, 229, 0.24);
+  background: #f5f3ff;
+}
+
+.mobile-shell .mobile-chat-notice-list article > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mobile-shell .mobile-chat-notice-list article span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  background: #e0e7ff;
+  color: var(--mobile-primary);
+  padding: 4px 7px;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.mobile-shell .mobile-chat-notice-list article time {
+  margin-left: auto;
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.mobile-shell .mobile-chat-notice-list article strong {
+  color: var(--mobile-ink);
+  font-size: 14px;
+}
+
+.mobile-shell .mobile-chat-notice-list article p {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mobile-shell .mobile-chat-notice-modal__empty,
+.mobile-shell .mobile-chat-notice-modal__error {
+  margin: 0;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: var(--mobile-muted);
+  padding: 14px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.mobile-shell .mobile-chat-notice-modal__error {
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
 .mobile-shell .host-vote-editor,
@@ -7552,4 +7839,149 @@
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.9);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+/* 모바일 날씨 상세: 데스크톱용 3열 카드가 고정 폭 모바일 셸 안에서 눌리지 않도록 재배치 */
+.mobile-shell .desktop-weather-page {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  padding: 28px 16px 112px;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.mobile-shell .desktop-weather-page__title {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.mobile-shell .desktop-weather-page__title > div,
+.mobile-shell .desktop-weather-search,
+.mobile-shell .desktop-weather-search input {
+  min-width: 0;
+}
+
+.mobile-shell .desktop-weather-page__title h1 {
+  font-size: 24px;
+}
+
+.mobile-shell .desktop-weather-page__title p {
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+.mobile-shell .desktop-weather-page__title button {
+  flex: 0 0 auto;
+  padding: 9px 11px;
+  white-space: nowrap;
+}
+
+.mobile-shell .desktop-weather-search > label {
+  height: 52px;
+  padding: 0 14px;
+}
+
+.mobile-shell .desktop-weather-search input {
+  text-overflow: ellipsis;
+}
+
+.mobile-shell .desktop-weather-current {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 20px;
+  padding: 24px 20px;
+  border-radius: 20px;
+}
+
+.mobile-shell .desktop-weather-current__place {
+  min-width: 0;
+  align-items: flex-start;
+}
+
+.mobile-shell .desktop-weather-current__place > span {
+  min-width: 0;
+}
+
+.mobile-shell .desktop-weather-current__place strong {
+  display: block;
+  font-size: 18px;
+  line-height: 1.45;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.mobile-shell .desktop-weather-current__main {
+  justify-content: center;
+  min-width: 0;
+}
+
+.mobile-shell .desktop-weather-current__main strong {
+  font-size: 44px;
+}
+
+.mobile-shell .desktop-weather-current__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.mobile-shell .desktop-weather-current__metrics span {
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 5px;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 12%);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.mobile-shell .desktop-weather-current > p {
+  grid-column: auto;
+  line-height: 1.55;
+  word-break: keep-all;
+}
+
+.mobile-shell .desktop-weather-loading {
+  padding: 48px 20px;
+}
+
+.mobile-shell .desktop-weather-hourly__list {
+  grid-auto-columns: 94px;
+}
+
+.mobile-shell .desktop-weather-daily .desktop-section__head {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mobile-shell .desktop-weather-daily .desktop-section__head > div {
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.mobile-shell .desktop-weather-daily article {
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 10px;
+  padding: 14px 4px;
+}
+
+.mobile-shell .desktop-weather-daily article > span {
+  min-width: 0;
+}
+
+.mobile-shell .desktop-weather-daily article > span:nth-child(n + 3) {
+  grid-column: 1 / -1;
+}
+
+.mobile-shell .desktop-weather-extended__head {
+  align-items: flex-start;
+  flex-wrap: wrap;
 }

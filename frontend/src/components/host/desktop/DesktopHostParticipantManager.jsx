@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { CalendarCheck, MapPin, Star, Trophy, X } from "lucide-react";
 import Button from "../../common/Button.jsx";
 import EmptyState from "../../common/EmptyState.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import { meetingApi } from "../../../api/meetingApi";
 import { useAsync } from "../../../hooks/useAsync";
+import { formatExerciseLevel } from "../../../utils/formatters";
 
 function parseMeetingDate(value) {
   if (!value) return null;
@@ -38,13 +40,15 @@ function requestErrorMessage(error, fallback) {
   return error?.response?.data?.message || error?.message || fallback;
 }
 
-function DesktopHostParticipantManager({ meetingId, meeting: meetingProp = null, onMeetingUpdated, embedded = false }) {
+function DesktopHostParticipantManager({ meetingId, meeting: meetingProp = null, onMeetingUpdated, onHostTransferred, embedded = false }) {
   const [activeTab, setActiveTab] = useState("pending");
   const [refreshKey, setRefreshKey] = useState(0);
   const [meetingRefreshKey, setMeetingRefreshKey] = useState(0);
   const [decidingUserId, setDecidingUserId] = useState(null);
   const [kickingUserId, setKickingUserId] = useState(null);
+  const [transferringUserId, setTransferringUserId] = useState(null);
   const [message, setMessage] = useState({ text: "", tone: "notice" });
+  const [selectedApplicant, setSelectedApplicant] = useState(null);
 
   const detail = useAsync(
     () => meetingProp ? Promise.resolve({ meeting: meetingProp }) : meetingApi.detail(meetingId),
@@ -75,6 +79,7 @@ function DesktopHostParticipantManager({ meetingId, meeting: meetingProp = null,
       if (action === "approve") await meetingApi.approve(meetingId, userId);
       else await meetingApi.reject(meetingId, userId);
       setMessage({ text: action === "approve" ? "참가 신청을 승인했습니다." : "참가 신청을 거절했습니다.", tone: "notice" });
+      setSelectedApplicant(null);
       refreshParticipantData();
     } catch (error) {
       setMessage({ text: requestErrorMessage(error, "참가 신청을 처리하지 못했습니다."), tone: "error" });
@@ -101,6 +106,27 @@ function DesktopHostParticipantManager({ meetingId, meeting: meetingProp = null,
       setMessage({ text: requestErrorMessage(error, "참가자를 내보내지 못했습니다."), tone: "error" });
     } finally {
       setKickingUserId(null);
+    }
+  };
+
+  const transferHost = async (member) => {
+    if (transferringUserId !== null || !member?.can_transfer_host || kickBlocked) return;
+    const nickname = member.user?.nickname || "참가자";
+    const confirmed = window.confirm(
+      `${nickname}님에게 방장 권한을 위임하시겠습니까?\n\n위임 즉시 현재 방장은 일반 참가자로 변경되며, 이 관리 페이지에 더 이상 접근할 수 없습니다.`
+    );
+    if (!confirmed) return;
+
+    setTransferringUserId(member.user_id);
+    setMessage({ text: "", tone: "notice" });
+    try {
+      const result = await meetingApi.transferHost(meetingId, member.user_id);
+      window.alert(`${result.new_host?.nickname || nickname}님에게 방장 권한을 위임했습니다.`);
+      if (onHostTransferred) onHostTransferred(result);
+      else window.location.assign(`/meetings/${meetingId}`);
+    } catch (error) {
+      setMessage({ text: requestErrorMessage(error, "방장 권한을 위임하지 못했습니다."), tone: "error" });
+      setTransferringUserId(null);
     }
   };
 
@@ -162,19 +188,24 @@ function DesktopHostParticipantManager({ meetingId, meeting: meetingProp = null,
                   return (
                     <tr key={item.id}>
                       <td>
-                        <div className="table-user">
+                        <button
+                          type="button"
+                          className="table-user desktop-host-applicant-profile-button"
+                          onClick={() => setSelectedApplicant(item)}
+                          aria-label={`${item.user.nickname}님의 프로필 보기`}
+                        >
                           <img src={item.user.profile_image_url || "/img/test3.png"} alt="" />
-                          <span><b>{item.user.nickname}</b><small>승인 대기</small></span>
-                        </div>
+                          <span><b>{item.user.nickname}</b><small>프로필 보기</small></span>
+                        </button>
                       </td>
                       <td className="desktop-host-participant-table__message">{item.join_message || "참여 신청 메시지가 없습니다."}</td>
                       <td>{formatParticipantDate(item.requested_at)}</td>
                       <td>
                         <div className="table-actions">
-                          <Button type="button" onClick={() => decideApplicant(item.user.id, "approve")} disabled={isDeciding}>
+                          <Button type="button" className="desktop-host-applicant-action" onClick={() => decideApplicant(item.user.id, "approve")} disabled={isDeciding}>
                             {isDeciding ? "처리 중..." : "승인"}
                           </Button>
-                          <Button type="button" variant="danger" onClick={() => decideApplicant(item.user.id, "reject")} disabled={isDeciding}>
+                          <Button type="button" className="desktop-host-applicant-action" onClick={() => decideApplicant(item.user.id, "reject")} disabled={isDeciding}>
                             거절
                           </Button>
                         </div>
@@ -203,6 +234,7 @@ function DesktopHostParticipantManager({ meetingId, meeting: meetingProp = null,
               {memberItems.map((member) => {
                 const isHost = member.is_host || member.role === "host";
                 const isKicking = kickingUserId === member.user_id;
+                const isTransferring = transferringUserId === member.user_id;
                 return (
                   <tr key={member.id}>
                     <td>
@@ -214,10 +246,19 @@ function DesktopHostParticipantManager({ meetingId, meeting: meetingProp = null,
                     <td><span className={`desktop-host-participant-role is-${isHost ? "host" : "member"}`}>{isHost ? "방장" : "참가자"}</span></td>
                     <td>{formatParticipantDate(member.approved_at)}</td>
                     <td>
-                      {!isHost && member.can_kick && !kickBlocked ? (
-                        <Button type="button" variant="danger" onClick={() => kickMember(member)} disabled={isKicking}>
-                          {isKicking ? "처리 중..." : "강퇴"}
-                        </Button>
+                      {!isHost && !kickBlocked ? (
+                        <div className="desktop-host-member-actions">
+                          {member.can_transfer_host ? (
+                            <Button type="button" className="desktop-host-transfer-action" onClick={() => transferHost(member)} disabled={transferringUserId !== null || kickingUserId !== null}>
+                              {isTransferring ? "위임 중..." : "방장 위임"}
+                            </Button>
+                          ) : null}
+                          {member.can_kick ? (
+                            <Button type="button" variant="danger" onClick={() => kickMember(member)} disabled={isKicking || transferringUserId !== null}>
+                              {isKicking ? "처리 중..." : "강퇴"}
+                            </Button>
+                          ) : null}
+                        </div>
                       ) : null}
                     </td>
                   </tr>
@@ -229,6 +270,51 @@ function DesktopHostParticipantManager({ meetingId, meeting: meetingProp = null,
       ) : (
         <EmptyState title="참가자 정보를 불러올 수 없습니다." description="모임 참가자 정보를 다시 확인해 주세요." />
       )}
+      {selectedApplicant ? (
+        <div
+          className="desktop-applicant-profile-backdrop"
+          role="presentation"
+          onMouseDown={(event) => event.target === event.currentTarget && setSelectedApplicant(null)}
+        >
+          <section className="desktop-applicant-profile-modal" role="dialog" aria-modal="true" aria-labelledby="applicant-profile-title">
+            <button className="desktop-applicant-profile-modal__close" type="button" onClick={() => setSelectedApplicant(null)} aria-label="닫기">
+              <X size={18} />
+            </button>
+            <header className="desktop-applicant-profile-modal__header">
+              <img src={selectedApplicant.user.profile_image_url || "/images/logo.png"} alt="" />
+              <div>
+                <span>참가 신청자</span>
+                <h2 id="applicant-profile-title">{selectedApplicant.user.nickname}</h2>
+                {selectedApplicant.user.user_tag ? <em>#{selectedApplicant.user.user_tag}</em> : null}
+              </div>
+            </header>
+
+            <p className={`desktop-applicant-profile-modal__bio${selectedApplicant.user.profile?.bio ? "" : " is-empty"}`}>
+              {selectedApplicant.user.profile?.bio || "아직 한 줄 소개가 없습니다."}
+            </p>
+
+            <div className="desktop-applicant-profile-modal__stats">
+              <article><Star size={17} /><span>평점</span><strong>{Number(selectedApplicant.user.profile?.rating_average || 0).toFixed(1)}</strong></article>
+              <article><CalendarCheck size={17} /><span>참여율</span><strong>{Math.round(Number(selectedApplicant.user.profile?.attendance_rate || 0))}%</strong></article>
+              <article><Trophy size={17} /><span>누적 참여</span><strong>{selectedApplicant.user.profile?.attendance_count || 0}회</strong></article>
+            </div>
+
+            <dl className="desktop-applicant-profile-modal__details">
+              <div><dt><MapPin size={15} />선호 지역</dt><dd>{selectedApplicant.user.profile?.region || "미설정"}</dd></div>
+              <div><dt>관심 종목</dt><dd>{selectedApplicant.user.profile?.preferred_sports || "미설정"}</dd></div>
+              <div><dt>운동 수준</dt><dd>{formatExerciseLevel(selectedApplicant.user.profile?.exercise_level)}</dd></div>
+              <div><dt>신청 메시지</dt><dd>{selectedApplicant.join_message || "참여 신청 메시지가 없습니다."}</dd></div>
+            </dl>
+
+            <footer className="desktop-applicant-profile-modal__actions">
+              <Button type="button" className="desktop-host-applicant-action" onClick={() => decideApplicant(selectedApplicant.user.id, "reject")} disabled={decidingUserId !== null}>거절</Button>
+              <Button type="button" className="desktop-host-applicant-action" onClick={() => decideApplicant(selectedApplicant.user.id, "approve")} disabled={decidingUserId !== null}>
+                {decidingUserId === selectedApplicant.user.id ? "처리 중..." : "승인"}
+              </Button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }

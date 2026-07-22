@@ -1,5 +1,6 @@
 import { CalendarClock, CalendarX, Crown, FileText, LayoutDashboard, MessageCircle, Pencil } from "lucide-react";
 import { Link } from "react-router-dom";
+import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
 
 const ACTION_ICONS = {
   detail: FileText,
@@ -41,26 +42,28 @@ export function getDesktopScheduleState(item) {
   if (meetingStatus === "suspended") {
     return { label: "운영중지", isEnded: true, state: "suspended" };
   }
-  if (meetingStatus === "completed") {
-    return { label: "종료됨", isEnded: true, state: "ended" };
-  }
-
   const now = new Date();
   const start = validScheduleDate(item.startAt ?? item.rawTime);
   const end = validScheduleDate(item.endAt ?? item.endTime);
-  const operationEnd = validScheduleDate(item.operationEndAt);
+  const isRegular = (item.meetingType ?? item.meeting_type) === "regular";
+
+  if (isMeetingLifecycleEnded(item, now)) {
+    return { label: "종료됨", isEnded: true, state: "ended" };
+  }
 
   if (!start) {
-    if (operationEnd && operationEnd < now) {
-      return { label: "종료됨", isEnded: true, state: "ended" };
-    }
-    return { label: "예정 없음", isEnded: false, state: "unscheduled" };
+    return { label: isRegular ? "다음 일정 준비" : "예정 없음", isEnded: false, state: "unscheduled" };
   }
   if (end) {
-    if (now >= end) return { label: "종료됨", isEnded: true, state: "ended" };
-    if (now >= start) return { label: "진행 중", isEnded: false, state: "active" };
-  } else if (now > start) {
-    return { label: "종료됨", isEnded: true, state: "ended" };
+    if (now >= start && now < end) return { label: "진행 중", isEnded: false, state: "active" };
+    if (now >= end && isSameDay(end, now)) {
+      return { label: "오늘 일정 완료", isEnded: false, state: "today" };
+    }
+    if (now >= end) {
+      return { label: isRegular ? "다음 일정 준비" : "예정 없음", isEnded: false, state: "unscheduled" };
+    }
+  } else if (now > start && !isSameDay(start, now)) {
+    return { label: isRegular ? "다음 일정 준비" : "예정 없음", isEnded: false, state: "unscheduled" };
   }
   if (isSameDay(start, now)) {
     return { label: "D-DAY", isEnded: false, state: "today" };

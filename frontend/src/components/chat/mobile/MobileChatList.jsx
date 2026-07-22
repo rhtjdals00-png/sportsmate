@@ -10,6 +10,7 @@ import { useAsync } from "../../../hooks/useAsync";
 import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { getMeetingCoverImage, isUsingSportThumbnail, getSportIconUrl, getMeetingCustomCoverImage, getSportNameFromMeeting } from "../../../utils/sportThumbnails";
+import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
 
 function formatChatTime(value) {
   if (!value) return "방금";
@@ -159,23 +160,15 @@ function MobileChatList() {
     });
   }, [sortedMeetingItems, meetingFilter, user]);
 
-  const isMeetingCompleted = (meeting) => {
-    if (!meeting) return true;
-    if (meeting.status === "completed" || meeting.status === "cancelled") return true;
-    let dateToCompare = meeting.end_at || meeting.start_at;
-    if (meeting.meeting_type === "regular" && meeting.next_session?.start_at) {
-      dateToCompare = meeting.next_session.end_at || meeting.next_session.start_at;
-    }
-    if (!dateToCompare) return false;
-    const meetingEndTime = new Date(dateToCompare);
-    if (!meeting.end_at && (!meeting.next_session || !meeting.next_session.end_at)) {
-      meetingEndTime.setHours(meetingEndTime.getHours() + 2);
-    }
-    return meetingEndTime < new Date();
+  const isMeetingClosed = (room) => {
+    if (!room?.meeting) return true;
+    if (typeof room.is_read_only === "boolean") return room.is_read_only;
+    if (typeof room.meeting.is_chat_read_only === "boolean") return room.meeting.is_chat_read_only;
+    return isMeetingLifecycleEnded(room.meeting);
   };
 
-  const activeMeetingItems = filteredMeetingItems.filter((room) => !isMeetingCompleted(room.meeting));
-  const closedMeetingItems = filteredMeetingItems.filter((room) => isMeetingCompleted(room.meeting));
+  const activeMeetingItems = filteredMeetingItems.filter((room) => !isMeetingClosed(room));
+  const closedMeetingItems = filteredMeetingItems.filter((room) => isMeetingClosed(room));
 
   // 폴링 (리얼타임 미연결 시)
   useEffect(() => {

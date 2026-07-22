@@ -18,7 +18,7 @@ function MobileHostDashboard() {
       <MobileHeader title="방장 관리" />
       <section className="host-mobile-hero">
         <span>HOST CENTER</span>
-        <h1>내가 만든 모임을 운영해요</h1>
+        <h1>내가 관리하는 모임을 운영해요</h1>
         <p>신청자 승인, 공지, 투표, 출석 관리를 한곳에서 확인합니다.</p>
       </section>
       <section className="host-dashboard-stats">
@@ -29,7 +29,7 @@ function MobileHostDashboard() {
         </div>
       </section>
       <section className="section">
-        <div className="section-title"><h2>내가 만든 모임</h2></div>
+        <div className="section-title"><h2>내가 관리하는 모임</h2></div>
         {meetings.loading ? (
           <LoadingCards count={2} />
         ) : meetingItems.length ? (

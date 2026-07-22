@@ -117,8 +117,14 @@ function HostMeetingManagePage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [notice, setNotice] = useState({ title: "", content: "", is_pinned: true, notice_type: "text", session_id: null });
   const [isDeletingMeeting, setIsDeletingMeeting] = useState(false);
+  const [transferringUserId, setTransferringUserId] = useState(null);
+  const [transferError, setTransferError] = useState("");
   const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId, refreshKey]);
   const notices = useAsync(() => meetingApi.notices(meetingId), [meetingId, refreshKey]);
+  const mobileMembers = useAsync(
+    () => isMobile ? meetingApi.getMembers(meetingId) : Promise.resolve({ items: [] }),
+    [isMobile, meetingId, refreshKey]
+  );
 
   if (detail.loading) return <LoadingCards count={2} />;
   if (detail.error || !detail.data?.meeting) {
@@ -134,6 +140,28 @@ function HostMeetingManagePage() {
 
   const meeting = detail.data.meeting;
   const noticeItems = notices.data?.items || [];
+  const transferableMembers = (mobileMembers.data?.items || []).filter((member) => member.can_transfer_host);
+
+  const transferHost = async (member) => {
+    if (transferringUserId !== null || !member?.can_transfer_host) return;
+
+    const nickname = member.user?.nickname || "참가자";
+    const confirmed = window.confirm(
+      `${nickname}님에게 방장 권한을 위임하시겠습니까?\n\n위임 즉시 현재 방장은 일반 참가자로 변경되며, 이 관리 페이지에 더 이상 접근할 수 없습니다.`
+    );
+    if (!confirmed) return;
+
+    setTransferringUserId(member.user_id);
+    setTransferError("");
+    try {
+      const result = await meetingApi.transferHost(meeting.id, member.user_id);
+      window.alert(`${result.new_host?.nickname || nickname}님에게 방장 권한을 위임했습니다.`);
+      navigate(`/meetings/${meeting.id}`);
+    } catch (error) {
+      setTransferError(error?.response?.data?.message || error?.message || "방장 권한을 위임하지 못했습니다.");
+      setTransferringUserId(null);
+    }
+  };
 
   const cancelMeeting = async () => {
     const ok = window.confirm("모집 종료하시겠습니까?");
@@ -215,6 +243,7 @@ function HostMeetingManagePage() {
         deleteMeeting={deleteMeeting}
         isDeletingMeeting={isDeletingMeeting}
         onMeetingUpdated={() => setRefreshKey((value) => value + 1)}
+        onHostTransferred={() => navigate(`/meetings/${meeting.id}`)}
       />
     );
   }
@@ -239,6 +268,56 @@ function HostMeetingManagePage() {
           <Link to={`/host/meetings/${meeting.id}/attendance`}><ClipboardCheck size={18} /> 출석 관리</Link>
           <Link to={`/host/meetings/${meeting.id}/vote`}><Vote size={18} /> 투표 관리</Link>
         </div>
+        <section className="detail-card mobile-host-transfer">
+          <div className="host-section-head">
+            <div>
+              <span><ShieldCheck size={15} />방장 위임</span>
+              <h2>새 방장을 선택해 주세요</h2>
+            </div>
+            <strong>{transferableMembers.length}명</strong>
+          </div>
+          <p className="mobile-host-transfer__description">
+            위임하면 현재 방장은 일반 참가자로 변경되고 새 방장이 모임을 관리합니다.
+          </p>
+          {transferError ? <p className="mobile-host-transfer__message is-error">{transferError}</p> : null}
+          {mobileMembers.error ? (
+            <p className="mobile-host-transfer__message is-error">
+              {mobileMembers.error?.response?.data?.message || "참가자 정보를 불러오지 못했습니다."}
+            </p>
+          ) : null}
+          <div className="mobile-host-transfer__list">
+            {transferableMembers.map((member) => {
+              const nickname = member.user?.nickname || "참가자";
+              const isTransferring = transferringUserId === member.user_id;
+              return (
+                <article key={member.id || member.user_id} className="mobile-host-transfer__member">
+                  <div className="mobile-host-transfer__profile">
+                    <span className="mobile-host-transfer__avatar">
+                      {member.user?.profile_image_url ? (
+                        <img src={member.user.profile_image_url} alt="" />
+                      ) : nickname.slice(0, 1)}
+                    </span>
+                    <span>
+                      <b>{nickname}</b>
+                      <small>현재 참가 중</small>
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => transferHost(member)}
+                    disabled={transferringUserId !== null}
+                  >
+                    {isTransferring ? "위임 중..." : "방장 위임"}
+                  </Button>
+                </article>
+              );
+            })}
+            {!mobileMembers.loading && !mobileMembers.error && transferableMembers.length === 0 ? (
+              <p className="mobile-host-transfer__empty">위임할 수 있는 참가자가 없습니다.</p>
+            ) : null}
+            {mobileMembers.loading ? <p className="mobile-host-transfer__empty">참가자 정보를 불러오는 중...</p> : null}
+          </div>
+        </section>
         <section className="detail-card host-notice-editor">
           <div className="host-section-head">
             <div>
@@ -316,7 +395,7 @@ function hostMeetingStatusClass(status) {
   return "closed";
 }
 
-function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading, setNotice, submitNotice, toggleMeetingStatus, deleteMeeting, isDeletingMeeting, onMeetingUpdated }) {
+function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading, setNotice, submitNotice, toggleMeetingStatus, deleteMeeting, isDeletingMeeting, onMeetingUpdated, onHostTransferred }) {
   const [activeTab, setActiveTab] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -946,6 +1025,7 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
             meetingId={meeting.id}
             meeting={meeting}
             onMeetingUpdated={onMeetingUpdated}
+            onHostTransferred={onHostTransferred}
             embedded
           />
         )}

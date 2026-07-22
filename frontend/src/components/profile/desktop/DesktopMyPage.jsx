@@ -1,6 +1,7 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   CalendarDays,
+  CheckCircle2,
   Camera,
   Cloud,
   CloudRain,
@@ -16,7 +17,8 @@ import {
   Sparkles,
   Sun,
   Users,
-  X
+  X,
+  XCircle
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { userApi } from "../../../api/userApi";
@@ -273,13 +275,48 @@ function MeetingFilterChips({ value, onChange }) {
   );
 }
 
+function AttendanceHistoryContent({ data, error }) {
+  const summary = data?.summary || {};
+  const items = data?.items || [];
+
+  if (error) return <p className="attendance-history-state is-error">참여 기록을 불러오지 못했습니다.</p>;
+  return (
+    <div className="profile-attendance-history">
+      <section className="attendance-history-summary" aria-label="출석 요약">
+        <article><CalendarDays size={20} /><span>참여율</span><strong>{summary.attendance_rate || 0}%</strong></article>
+        <article><CheckCircle2 size={20} /><span>누적 참여</span><strong>{summary.present_count || 0}회</strong></article>
+        <article><XCircle size={20} /><span>불참</span><strong>{summary.absent_count || 0}회</strong></article>
+      </section>
+      <section className="attendance-history-list">
+        <div className="attendance-history-list-head"><h2>회차별 기록</h2><span>총 {summary.total_count || 0}회</span></div>
+        {!items.length ? <p className="attendance-history-state">아직 확정된 출석 기록이 없습니다.</p> : null}
+        {items.map((item) => {
+          const isPresent = item.status === "present";
+          return (
+            <article className="attendance-history-item" key={item.id}>
+              <div className={`attendance-history-status ${isPresent ? "is-present" : "is-absent"}`}>
+                {isPresent ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
+                <strong>{isPresent ? "참여" : "불참"}</strong>
+              </div>
+              <div className="attendance-history-info">
+                <Link to={item.meeting?.id ? `/meetings/${item.meeting.id}` : "/mypage"}>{item.meeting?.title || "모임 정보 없음"}</Link>
+                <p>{item.session?.session_number ? `${item.session.session_number}회차 · ` : ""}{formatDateTime(item.session?.start_at)}</p>
+              </div>
+            </article>
+          );
+        })}
+      </section>
+    </div>
+  );
+}
+
 function ScheduleItem({ item, variant = "schedule" }) {
   const isHost = item.state === "host";
   const showTypeTag = Boolean(item.meetingTypeLabel);
   const scheduleState = getDesktopScheduleState(item);
   const recruitment = recruitmentTag(item.status);
   return (
-    <article className={`proto-schedule-item proto-schedule-item--profile ${isHost ? "proto-schedule-item--host" : ""}`}>
+    <article className={`proto-schedule-item proto-schedule-item--profile ${isHost ? "proto-schedule-item--host" : ""} ${scheduleState.isEnded ? "is-ended" : ""}`}>
       {isHost && (
         <Link className="schedule-manage-btn is-active" to={`/host/meetings/${item.id}`}>
           <LayoutDashboard size={14} />
@@ -338,7 +375,7 @@ function DesktopMyPage() {
   useEffect(() => {
     const panel = searchParams.get("panel");
     if (panel) {
-      const validPanels = ["schedule", "hosted", "joined", "reviews"];
+      const validPanels = ["schedule", "hosted", "joined", "reviews", "attendance"];
       setActiveActivity(validPanels.includes(panel) ? panel : "schedule");
     }
     if (searchParams.get("calendar") === "1") {
@@ -368,6 +405,10 @@ function DesktopMyPage() {
   );
   const meetingsState = useAsync(
     () => (canUseProtectedUserApi ? userApi.myMeetings() : Promise.resolve({ hosted: [], joined: [], pending: [] })),
+    [canUseProtectedUserApi, authUser?.id, refreshKey]
+  );
+  const attendanceState = useAsync(
+    () => (canUseProtectedUserApi ? userApi.myAttendanceHistory() : Promise.resolve({ summary: {}, items: [] })),
     [canUseProtectedUserApi, authUser?.id, refreshKey]
   );
   const writtenReviewsState = useAsync(
@@ -470,6 +511,7 @@ function DesktopMyPage() {
   const savedIntro = profile.bio || "";
   const hostedMeetings = (meetingsState.data?.hosted || []).map((meeting) => normalizeDesktopScheduleMeeting(meeting, "host"));
   const joinedMeetings = (meetingsState.data?.joined || []).map((meeting) => normalizeDesktopScheduleMeeting(meeting, "joined"));
+  const attendanceCount = Number(meetingsState.data?.attendance_count || 0);
   const filteredHostedMeetings = useMemo(
     () => filterMeetingItems(hostedMeetings, createdMeetingFilter),
     [createdMeetingFilter, hostedMeetings]
@@ -535,15 +577,17 @@ function DesktopMyPage() {
 
   const activityPanels = {
     schedule: { label: "다가오는 일정", count: scheduled.length, items: scheduled },
-    hosted: { label: "내가 만든 모임", count: filteredHostedMeetings.length, items: filteredHostedMeetings, sourceCount: hostedMeetings.length, filter: createdMeetingFilter, setFilter: setCreatedMeetingFilter },
-    joined: { label: "참여한 모임", count: filteredJoinedMeetings.length, items: filteredJoinedMeetings, sourceCount: joinedMeetings.length, filter: joinedMeetingFilter, setFilter: setJoinedMeetingFilter },
-    reviews: { label: "후기 관리", count: writtenReviews.length + receivedReviews.length, items: [] }
+    hosted: { label: "내가 관리하는 모임", count: filteredHostedMeetings.length, items: filteredHostedMeetings, sourceCount: hostedMeetings.length, filter: createdMeetingFilter, setFilter: setCreatedMeetingFilter },
+    joined: { label: "참여 중인 모임", count: filteredJoinedMeetings.length, items: filteredJoinedMeetings, sourceCount: joinedMeetings.length, filter: joinedMeetingFilter, setFilter: setJoinedMeetingFilter },
+    reviews: { label: "후기 관리", count: writtenReviews.length + receivedReviews.length, items: [] },
+    attendance: { label: "참여 기록", count: attendanceState.data?.summary?.total_count || 0, unit: "회", items: [] }
   };
   const activityMenu = [
     { key: "schedule", label: "다가오는 일정", icon: CalendarDays },
-    { key: "hosted", label: "내가 만든 모임", icon: Crown },
-    { key: "joined", label: "참여한 모임", icon: Users },
-    { key: "reviews", label: "후기 관리", icon: FileText }
+    { key: "hosted", label: "내가 관리하는 모임", icon: Crown },
+    { key: "joined", label: "참여 중인 모임", icon: Users },
+    { key: "reviews", label: "후기 관리", icon: FileText },
+    { key: "attendance", label: "참여 기록", icon: CheckCircle2 }
   ];
   const activePanel = activityPanels[activeActivity];
   const startIntroEdit = () => {
@@ -691,9 +735,9 @@ function DesktopMyPage() {
               )}
             </div>
             <div className="profile-stats-row">
-              <span><b>{formatRating(profile.rating_average)}</b><em>평점</em></span>
-              <span><b>{formatAttendanceRate(profile.attendance_rate)}</b><em>참여율</em></span>
-              <span><b>{joinedMeetings.length}회</b><em>누적 참여</em></span>
+              <button type="button" onClick={() => { setReviewSubTab("received"); setActiveActivity("reviews"); }}><b>{formatRating(profile.rating_average)}</b><em>평점</em></button>
+              <button type="button" onClick={() => setActiveActivity("attendance")}><b>{formatAttendanceRate(profile.attendance_rate)}</b><em>참여율</em></button>
+              <button type="button" onClick={() => setActiveActivity("attendance")}><b>{attendanceCount}회</b><em>누적 참여</em></button>
             </div>
           </section>
           <section className="page-card profile-preference-card">
@@ -722,7 +766,7 @@ function DesktopMyPage() {
           </div>
           <div className="section-head profile-schedule-head">
             <div>
-              <h2>{activePanel.label} <span className="schedule-count-inline">{activePanel.count}개</span></h2>
+              <h2>{activePanel.label} <span className="schedule-count-inline">{activePanel.count}{activePanel.unit || "개"}</span></h2>
             </div>
             <div className={`profile-schedule-actions ${!["schedule", "hosted", "joined"].includes(activeActivity) ? "is-placeholder" : ""}`}>
               {["hosted", "joined"].includes(activeActivity) ? (
@@ -735,7 +779,9 @@ function DesktopMyPage() {
             </div>
           </div>
           <div className="profile-schedule-body">
-            {(meetingsState.loading || reviewsLoading) && <p className="empty-schedule">활동 정보를 불러오는 중입니다.</p>}
+            {(((["schedule", "hosted", "joined"].includes(activeActivity)) && meetingsState.loading)
+              || (activeActivity === "reviews" && reviewsLoading)
+              || (activeActivity === "attendance" && attendanceState.loading)) && <p className="empty-schedule">활동 정보를 불러오는 중입니다.</p>}
             {!meetingsState.loading && !reviewsLoading && activeActivity === "reviews" && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
                 {/* Sub tabs */}
@@ -873,16 +919,19 @@ function DesktopMyPage() {
                 )}
               </div>
             )}
-            {!meetingsState.loading && !reviewsLoading && activeActivity !== "reviews" && (
+            {!attendanceState.loading && activeActivity === "attendance" && (
+              <AttendanceHistoryContent data={attendanceState.data} error={attendanceState.error} />
+            )}
+            {!meetingsState.loading && !reviewsLoading && !["reviews", "attendance"].includes(activeActivity) && (
               activePanel.items.length
                 ? activePanel.items.map((item) => <ScheduleItem key={`${item.state}-${item.id}`} item={item} variant={activeActivity} />)
                 : <p className="empty-schedule">
                     {["hosted", "joined"].includes(activeActivity) && activePanel.sourceCount > 0
                       ? "해당 조건의 모임이 없습니다."
                       : activeActivity === "hosted"
-                        ? "아직 만든 모임이 없습니다."
+                        ? "아직 관리하는 모임이 없습니다."
                         : activeActivity === "joined"
-                          ? "아직 참여한 모임이 없습니다."
+                          ? "아직 참여 중인 모임이 없습니다."
                           : "표시할 항목이 없습니다."}
                   </p>
             )}

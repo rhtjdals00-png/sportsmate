@@ -1,19 +1,22 @@
 import hashlib
+import hmac
 import secrets
 from datetime import timedelta
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required, verify_jwt_in_request
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import Attendance, ChatMessage, ChatRoom, Meeting, MeetingSession, Notice, Participant, Review, Sport, User, Vote, VoteOption, VoteResponse
-from app.services.meeting_service import cancel_meeting_session, close_expired_one_time_meetings, create_meeting, create_review, get_next_meeting_session, join_meeting, kick_meeting_member, list_meeting_members, list_meeting_sessions, list_meetings, recalculate_current_participants, update_application, update_meeting, update_meeting_session
+from app.models import Attendance, ChatMessage, ChatRoom, Meeting, MeetingSession, MeetingView, Notice, Participant, Review, Sport, User, Vote, VoteOption, VoteResponse
+from app.services.meeting_service import cancel_meeting_session, close_expired_one_time_meetings, create_meeting, create_review, get_next_meeting_session, join_meeting, kick_meeting_member, list_meeting_members, list_meeting_sessions, list_meetings, recalculate_current_participants, transfer_meeting_host, update_application, update_meeting, update_meeting_session
 from app.utils.meeting_state import is_meeting_operation_ended, meeting_chat_is_read_only
 from app.utils.timezone import kst_now, parse_client_datetime
 
 meeting_bp = Blueprint("meetings", __name__)
+MEETING_VIEW_DEDUPLICATION_WINDOW = timedelta(minutes=30)
 
 
 @meeting_bp.get("/config")
@@ -112,14 +115,66 @@ def show(meeting_id):
         joinedload(Meeting.participants),
         joinedload(Meeting.chat_room),
     ).get_or_404(meeting_id)
-    meeting.view_count += 1
-    db.session.commit()
     data = meeting.to_dict(current_user_id=current_user_id)
     next_session = get_next_meeting_session(meeting.id) if meeting.meeting_type == "regular" else None
     data["next_session"] = next_session.to_dict() if next_session else None
     if meeting.host:
         data["host_summary"] = host_summary(meeting.host)
     return jsonify({"meeting": data})
+
+
+@meeting_bp.post("/<int:meeting_id>/views")
+def record_view(meeting_id):
+    meeting = Meeting.query.get_or_404(meeting_id)
+    current_user_id = current_user_id_optional()
+    browser_id = str(request.headers.get("X-Sportsmate-Viewer", "")).strip()
+
+    if current_user_id:
+        viewer_identity = f"user:{current_user_id}"
+    elif 16 <= len(browser_id) <= 128:
+        viewer_identity = f"browser:{browser_id}"
+    else:
+        return jsonify({"message": "브라우저 식별 정보가 필요합니다."}), 400
+
+    secret = str(current_app.config["JWT_SECRET_KEY"]).encode("utf-8")
+    viewer_key = hmac.new(secret, viewer_identity.encode("utf-8"), hashlib.sha256).hexdigest()
+    now = kst_now()
+    cutoff = now - MEETING_VIEW_DEDUPLICATION_WINDOW
+
+    existing_view = (
+        MeetingView.query
+        .filter_by(meeting_id=meeting_id, viewer_key=viewer_key)
+        .with_for_update()
+        .first()
+    )
+    if existing_view and existing_view.viewed_at > cutoff:
+        return jsonify({"counted": False, "view_count": meeting.view_count})
+
+    try:
+        if existing_view:
+            existing_view.viewed_at = now
+        else:
+            db.session.add(MeetingView(
+                meeting_id=meeting_id,
+                viewer_key=viewer_key,
+                viewed_at=now,
+            ))
+            db.session.flush()
+
+        Meeting.query.filter_by(id=meeting_id).update(
+            {Meeting.view_count: Meeting.view_count + 1},
+            synchronize_session=False,
+        )
+        db.session.commit()
+    except IntegrityError:
+        # Simultaneous requests for the same first view are collapsed by the
+        # unique constraint. The request that inserted first owns the count.
+        db.session.rollback()
+        current_count = db.session.get(Meeting, meeting_id).view_count
+        return jsonify({"counted": False, "view_count": current_count})
+
+    current_count = db.session.get(Meeting, meeting_id).view_count
+    return jsonify({"counted": True, "view_count": current_count})
 
 
 @meeting_bp.get("/<int:meeting_id>/sessions")
@@ -248,9 +303,23 @@ def applicants(meeting_id):
         .filter_by(meeting_id=meeting_id, status="pending")
         .all()
     )
+    applicant_user_ids = [item.user_id for item in items]
+    attendance_counts = {}
+    if applicant_user_ids:
+        attendance_counts = dict(
+            db.session.query(Attendance.user_id, func.count(Attendance.id))
+            .filter(
+                Attendance.user_id.in_(applicant_user_ids),
+                Attendance.meeting_session_id.isnot(None),
+                Attendance.status == "present",
+            )
+            .group_by(Attendance.user_id)
+            .all()
+        )
     item_data = []
     for item in items:
         data = item.to_dict()
+        data["user"]["profile"]["attendance_count"] = attendance_counts.get(item.user_id, 0)
         data["requested_at"] = item.requested_at.isoformat() if item.requested_at else None
         item_data.append(data)
     return jsonify({"items": item_data, "count": len(item_data)})
@@ -365,6 +434,30 @@ def kick_member(meeting_id, user_id):
     try:
         participant, meeting = kick_meeting_member(meeting_id, user_id, current_user_id)
         return jsonify({"participant": participant.to_dict(), "meeting": meeting.to_dict(current_user_id=current_user_id)})
+    except PermissionError as error:
+        return jsonify({"message": str(error)}), 403
+    except ValueError as error:
+        return jsonify({"message": str(error)}), 400
+
+
+@meeting_bp.patch("/<int:meeting_id>/host")
+@jwt_required()
+def transfer_host(meeting_id):
+    data = request.get_json() or {}
+    try:
+        target_user_id = int(data.get("user_id"))
+    except (TypeError, ValueError):
+        return jsonify({"message": "위임할 참가자를 선택해 주세요."}), 400
+
+    try:
+        participant, meeting = transfer_meeting_host(meeting_id, target_user_id, int(get_jwt_identity()))
+        return jsonify({
+            "meeting": meeting.to_dict(),
+            "new_host": {
+                "user_id": participant.user_id,
+                "nickname": participant.user.nickname if participant.user else "참가자",
+            },
+        })
     except PermissionError as error:
         return jsonify({"message": str(error)}), 403
     except ValueError as error:

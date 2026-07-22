@@ -5,6 +5,7 @@ import EmptyState from "../../common/EmptyState.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import { meetingApi } from "../../../api/meetingApi";
 import { locationApi } from "../../../api/locationApi";
+import { reportApi } from "../../../api/reportApi";
 import { weatherApi } from "../../../api/weatherApi";
 import { useAsync } from "../../../hooks/useAsync";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
@@ -311,7 +312,7 @@ function SportFallbackHero({ meeting }) {
   );
 }
 
-function DesktopMeetingDetail() {
+function DesktopMeetingDetail({ recordedViewCount = null }) {
   const { meetingId } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
@@ -324,6 +325,9 @@ function DesktopMeetingDetail() {
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinMessage, setJoinMessage] = useState("");
   const [joinError, setJoinError] = useState("");
+  const [reportReason, setReportReason] = useState("");
+  const [reporting, setReporting] = useState(false);
+  const [reportFeedback, setReportFeedback] = useState({ text: "", tone: "notice" });
   const joinTextareaRef = useRef(null);
   const [weather, setWeather] = useState({ loading: true, forecast: null });
   const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId, refreshKey]);
@@ -392,6 +396,42 @@ function DesktopMeetingDetail() {
   }
 
   const meeting = detail.data.meeting;
+
+  const submitReport = async (event) => {
+    event.preventDefault();
+    if (!isAuthenticated) {
+      navigate("/login", { state: { from: `/meetings/${meeting.id}` } });
+      return;
+    }
+
+    const reasonDetail = reportReason.trim();
+    if (reasonDetail.length < 5) {
+      setReportFeedback({ text: "신고 사유를 5자 이상 자세히 입력해 주세요.", tone: "error" });
+      return;
+    }
+
+    setReporting(true);
+    setReportFeedback({ text: "", tone: "notice" });
+    try {
+      await reportApi.create({
+        target_type: "meeting",
+        target_id: meeting.id,
+        reason: "other",
+        reason_detail: reasonDetail,
+        context: JSON.stringify({
+          meeting_id: meeting.id,
+          meeting_title: meeting.title,
+          source: "desktop_meeting_detail"
+        })
+      });
+      setReportReason("");
+      setReportFeedback({ text: "신고가 접수되었습니다. 관리자가 확인 후 처리합니다.", tone: "success" });
+    } catch (error) {
+      setReportFeedback({ text: error.response?.data?.message || "신고를 접수하지 못했습니다.", tone: "error" });
+    } finally {
+      setReporting(false);
+    }
+  };
   const myParticipant = meeting.my_participant;
   const isHost = user?.id === meeting.host?.id || myParticipant?.role === "host";
   const isClosed = meeting.status !== "open";
@@ -562,6 +602,44 @@ function DesktopMeetingDetail() {
               <MeetingDirections meeting={meeting} />
             </div>
           </section>
+
+          <section className="desktop-section desktop-meeting-detail__report">
+            <div className="desktop-section__head">
+              <div>
+                <h2>모임 신고</h2>
+                <p>운영 정책에 어긋나는 모임이라면 관리자에게 알려주세요.</p>
+              </div>
+            </div>
+            <form onSubmit={submitReport}>
+              <label htmlFor="desktop-meeting-report-reason">신고 사유</label>
+              <textarea
+                id="desktop-meeting-report-reason"
+                required
+                minLength={5}
+                maxLength={2000}
+                rows={5}
+                value={reportReason}
+                onChange={(event) => {
+                  setReportReason(event.target.value);
+                  if (reportFeedback.text) setReportFeedback({ text: "", tone: "notice" });
+                }}
+                placeholder="신고 사유를 자세히 입력해 주세요. (최소 5자)"
+                disabled={reporting}
+              />
+              <div className="desktop-meeting-detail__report-meta">
+                <small>입력한 내용은 모임 운영 확인을 위해 관리자에게 전달됩니다.</small>
+                <span>{reportReason.length} / 2000</span>
+              </div>
+              {reportFeedback.text ? (
+                <p className={`desktop-meeting-detail__report-feedback is-${reportFeedback.tone}`} role="status">
+                  {reportFeedback.text}
+                </p>
+              ) : null}
+              <button type="submit" disabled={reporting || reportReason.trim().length < 5}>
+                {reporting ? "접수 중..." : "신고 접수"}
+              </button>
+            </form>
+          </section>
         </main>
 
         <aside className="desktop-meeting-detail__side">
@@ -613,7 +691,7 @@ function DesktopMeetingDetail() {
               )}
               <div><MapPin size={18} /><span>{meeting.location_name || "장소 미정"}</span></div>
               <div><UsersRound size={18} /><span>{meeting.current_participants}/{meeting.max_participants}명</span></div>
-              <div><Eye size={18} /><span>조회 {meeting.view_count || 0}</span></div>
+              <div><Eye size={18} /><span>조회 {Math.max(Number(meeting.view_count || 0), Number(recordedViewCount || 0))}</span></div>
             </dl>
 
             {message.text && <p className={`desktop-meeting-detail__message is-${message.tone}`}>{message.text}</p>}
@@ -695,7 +773,7 @@ function getStatusClass(status) {
 
 function getParticipantLabel(participant) {
   if (!participant) return "";
-  if (participant.role === "host") return "내가 만든 모임";
+  if (participant.role === "host") return "내가 관리하는 모임";
   if (participant.status === "pending") return "신청 대기중";
   if (participant.status === "approved") return "참여중";
   if (participant.status === "rejected") return "신청 거절됨";
