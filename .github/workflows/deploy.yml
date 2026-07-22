@@ -20,6 +20,7 @@ jobs:
           host: ${{ secrets.ORACLE_HOST }}
           username: ${{ secrets.ORACLE_USER }}
           key: ${{ secrets.ORACLE_SSH_KEY }}
+          ommand_timeout: 30m
 
           script: |
             cd /var/www/sportsmate
