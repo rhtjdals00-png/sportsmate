@@ -10,7 +10,6 @@ import { useAsync } from "../hooks/useAsync";
 import { useResponsive } from "../hooks/useResponsive";
 import { userApi } from "../api/userApi";
 import { Navigate, useSearchParams } from "react-router-dom";
-import { useSearchParams } from "react-router-dom";
 import { isMeetingLifecycleEnded } from "../utils/meetingLifecycle.js";
 
 function MyMeetingsPage() {
