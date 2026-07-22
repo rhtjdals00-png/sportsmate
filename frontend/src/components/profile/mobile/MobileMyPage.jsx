@@ -249,7 +249,7 @@ function MobileMyPage() {
         <Link to="/mypage/meetings" style={{ fontWeight: 'bold', color: '#4f46e5' }}>📝 내 전체 모임 목록 보기</Link>
         <Link to="/mypage/meetings?tab=hosted">내가 만든 모임 <span>{hostedCount}</span></Link>
         <Link to="/mypage/meetings?tab=joined">참여 중인 모임 <span>{joinedCount}</span></Link>
-        <Link to="/meetings">관심 모임</Link>
+
         <Link to="/support" className="mobile-my-support-link" style={{ borderTop: '1px solid #f1f5f9', marginTop: '4px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Headphones size={18} style={{ color: '#64748b' }} />

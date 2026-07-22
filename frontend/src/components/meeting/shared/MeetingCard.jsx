@@ -27,11 +27,7 @@ const parseRepeatDays = (rule) => {
 
 function MeetingCard({ meeting, compact = false }) {
   let isPast = false;
-  if (meeting.meeting_type === "regular") {
-    if (meeting.end_at) {
-      isPast = new Date(meeting.end_at) < new Date();
-    }
-  } else {
+  if (meeting.meeting_type === "one_time" && meeting.start_at) {
     isPast = new Date(meeting.start_at) < new Date();
   }
   const actualStatus = meeting.status === "cancelled" ? "cancelled" : (isPast ? "closed" : meeting.status);

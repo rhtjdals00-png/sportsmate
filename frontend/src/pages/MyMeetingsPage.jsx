@@ -23,7 +23,7 @@ function MyMeetingsPage() {
     { id: "hosted", label: "내가 만든 모임" },
     { id: "joined", label: "참여 중" },
     { id: "pending", label: "승인 대기" },
-    { id: "closed", label: "모집 종료" }
+    { id: "completed", label: "종료된 모임" }
   ];
 
   const setTab = (tab) => {
@@ -36,22 +36,33 @@ function MyMeetingsPage() {
   if (!isMobile) return <DesktopMyMeetings />;
 
   const now = new Date();
-  const isMeetingClosed = (meeting) =>
-    meeting.status === "closed" || meeting.status === "cancelled" || new Date(meeting.start_at) < now;
+  const isMeetingCompleted = (meeting) => {
+    if (meeting.status === "completed" || meeting.status === "cancelled") return true;
+    let dateToCompare = meeting.end_at || meeting.start_at;
+    if (meeting.meeting_type === "regular" && meeting.next_session?.start_at) {
+      dateToCompare = meeting.next_session.end_at || meeting.next_session.start_at;
+    }
+    if (!dateToCompare) return false;
+    const meetingEndTime = new Date(dateToCompare);
+    if (!meeting.end_at && (!meeting.next_session || !meeting.next_session.end_at)) {
+      meetingEndTime.setHours(meetingEndTime.getHours() + 2);
+    }
+    return meetingEndTime < now;
+  };
 
   const allHosted = meetings.data?.hosted || [];
   const allJoined = meetings.data?.joined || [];
   const pending = meetings.data?.pending || [];
 
-  const hosted = allHosted.filter((m) => !isMeetingClosed(m));
-  const joined = allJoined.filter((m) => !isMeetingClosed(m));
+  const hosted = allHosted.filter((m) => !isMeetingCompleted(m));
+  const joined = allJoined.filter((m) => !isMeetingCompleted(m));
   
-  const closedHosted = allHosted.filter((m) => isMeetingClosed(m)).sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
-  const closedJoined = allJoined.filter((m) => isMeetingClosed(m)).sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
+  const closedHosted = allHosted.filter((m) => isMeetingCompleted(m)).sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
+  const closedJoined = allJoined.filter((m) => isMeetingCompleted(m)).sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
 
   const closed = [
-    ...allHosted.filter(isMeetingClosed),
-    ...allJoined.filter(isMeetingClosed)
+    ...allHosted.filter(isMeetingCompleted),
+    ...allJoined.filter(isMeetingCompleted)
   ].sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
 
   return (
@@ -87,7 +98,7 @@ function MyMeetingsPage() {
                   onClick={() => setHostedExpanded(!hostedExpanded)}
                   style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', padding: '0 0 12px 4px', cursor: 'pointer', width: '100%', textAlign: 'left' }}
                 >
-                  <h3 style={{ fontSize: '15px', fontWeight: 'bold', color: '#64748b', margin: 0 }}>모집 종료된 모임</h3>
+                  <h3 style={{ fontSize: '15px', fontWeight: 'bold', color: '#64748b', margin: 0 }}>종료된 모임</h3>
                   {hostedExpanded ? <ChevronUp size={16} color="#64748b" /> : <ChevronDown size={16} color="#64748b" />}
                 </button>
                 {hostedExpanded && (
@@ -117,7 +128,7 @@ function MyMeetingsPage() {
                   onClick={() => setJoinedExpanded(!joinedExpanded)}
                   style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', padding: '0 0 12px 4px', cursor: 'pointer', width: '100%', textAlign: 'left' }}
                 >
-                  <h3 style={{ fontSize: '15px', fontWeight: 'bold', color: '#64748b', margin: 0 }}>모집 종료된 모임</h3>
+                  <h3 style={{ fontSize: '15px', fontWeight: 'bold', color: '#64748b', margin: 0 }}>종료된 모임</h3>
                   {joinedExpanded ? <ChevronUp size={16} color="#64748b" /> : <ChevronDown size={16} color="#64748b" />}
                 </button>
                 {joinedExpanded && (
@@ -136,12 +147,12 @@ function MyMeetingsPage() {
               <p className="subtle-text">승인 대기 중인 모임이 없습니다.</p>
             )}
           </section>}
-          {activeTab === "closed" && <section className="section">
-            <div className="section-title"><h2>모집 종료된 모임</h2></div>
+          {activeTab === "completed" && <section className="section">
+            <div className="section-title"><h2>종료된 모임</h2></div>
             {closed.length ? (
               <div className="card-list">{closed.map((meeting) => <MeetingCard key={meeting.id} meeting={meeting} compact />)}</div>
             ) : (
-              <p className="subtle-text">모집 종료된 모임이 없습니다.</p>
+              <p className="subtle-text">종료된 모임이 없습니다.</p>
             )}
           </section>}
         </div>

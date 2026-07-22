@@ -17,6 +17,7 @@ import { voteApi } from "../../../api/voteApi";
 import { chatApi } from "../../../api/chatApi";
 import { weatherApi } from "../../../api/weatherApi";
 import MobileWeatherCard from "./MobileWeatherCard.jsx";
+import MobileQrScanner from "../../attendance/MobileQrScanner.jsx";
 
 function getDisplayStartAt(meeting) {
   return meeting?.meeting_type === "regular" ? meeting?.next_session?.start_at || meeting?.start_at : meeting?.start_at;
@@ -58,6 +59,21 @@ function MobileMeetingDetail() {
     () => detailCanViewMemberContent ? meetingApi.votes(meetingId) : Promise.resolve({ items: [] }),
     [meetingId, refreshKey, detailCanViewMemberContent]
   );
+
+  const handleQrScan = async (decodedText) => {
+    try {
+      const tokenMatch = decodedText.match(/checkin\/([^/?]+)/);
+      const token = tokenMatch ? tokenMatch[1] : decodedText;
+
+      await meetingApi.qrCheckin(token);
+      setIsScanning(false);
+      setMessage({ text: "출석 처리가 완료되었습니다!", tone: "notice" });
+      setRefreshKey(k => k + 1);
+    } catch (err) {
+      setIsScanning(false);
+      setMessage({ text: err.response?.data?.message || "유효하지 않은 QR 코드이거나 출석 처리에 실패했습니다.", tone: "danger" });
+    }
+  };
 
   useEffect(() => {
     if (!message.text) return undefined;
@@ -613,36 +629,10 @@ function MobileMeetingDetail() {
       />
 
       {isScanning && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 100, background: '#000',
-          display: 'flex', flexDirection: 'column'
-        }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '16px 20px', background: 'rgba(0,0,0,0.5)', color: '#fff'
-          }}>
-            <span style={{ fontSize: '18px', fontWeight: 'bold' }}>QR 스캔하여 출석체크</span>
-            <button 
-              onClick={() => setIsScanning(false)}
-              style={{ background: 'none', border: 'none', color: '#fff', fontSize: '16px', padding: '4px' }}
-            >
-              닫기
-            </button>
-          </div>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ 
-              width: '250px', height: '250px', border: '2px dashed rgba(255,255,255,0.4)', 
-              borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              flexDirection: 'column', gap: '12px'
-            }}>
-              <QrCode size={48} color="rgba(255,255,255,0.4)" />
-              <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '14px' }}>카메라 영역 준비 중...</span>
-            </div>
-          </div>
-          <div style={{ padding: '24px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>
-            방장이 띄운 출석 QR 코드를 사각형 안에 맞춰주세요.
-          </div>
-        </div>
+        <MobileQrScanner 
+          onClose={() => setIsScanning(false)} 
+          onScan={handleQrScan} 
+        />
       )}
     </>
   );
