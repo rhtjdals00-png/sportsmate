@@ -39,6 +39,7 @@ import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { voteApi } from "../../../api/voteApi";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { useAsync } from "../../../hooks/useAsync";
+import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
 
 const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
 let naverMapClientIdPromise;
@@ -149,11 +150,10 @@ function meetingOperationEndTime(meeting) {
 }
 
 function isReadOnlyRoomItem(item) {
-  if (item?.is_read_only || item?.meeting?.is_chat_read_only) return true;
+  if (typeof item?.is_read_only === "boolean") return item.is_read_only;
+  if (typeof item?.meeting?.is_chat_read_only === "boolean") return item.meeting.is_chat_read_only;
   const meeting = item?.meeting || {};
-  if (["completed", "cancelled", "suspended"].includes(String(meeting.status || ""))) return true;
-  const endTime = meetingOperationEndTime(meeting);
-  return endTime !== null && endTime <= Date.now();
+  return isMeetingLifecycleEnded(meeting);
 }
 
 function mapUrl(message) {

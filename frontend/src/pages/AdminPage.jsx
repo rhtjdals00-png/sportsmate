@@ -25,8 +25,8 @@ const mockStats = {
 };
 
 const mockReports = [
-  { id: 1, type: "욕설", target: "User_FC02", reporter: "킥마스터", date: "2023.10.27", status: "대기 중" },
-  { id: 2, type: "노쇼", target: "러닝초보", reporter: "야간러너", date: "2023.10.26", status: "대기 중" },
+  { id: 1, type: "욕설", target: "User_FC02", reporter: "킥마스터", date: "2023.10.27", status: "처리 전" },
+  { id: 2, type: "노쇼", target: "러닝초보", reporter: "야간러너", date: "2023.10.26", status: "처리 전" },
   { id: 3, type: "기타", target: "스팸계정99", reporter: "농구조아", date: "2023.10.25", status: "처리 완료" },
   { id: 4, type: "욕설", target: "화난사람", reporter: "테니스킹", date: "2023.10.24", status: "처리 완료" }
 ];
@@ -40,7 +40,7 @@ const mockNewUsers = [
 
 const reportStatusTone = {
   pending: "pending",
-  "대기 중": "pending",
+  "처리 전": "pending",
   in_progress: "progress",
   "처리 중": "progress",
   resolved: "resolved",
@@ -60,7 +60,7 @@ function AdminPage() {
     totalMeetings: 0,
     meetingsTrend: "+0개",
     pendingReports: 0,
-    reportsTrend: "대기 중인 신고 없음"
+    reportsTrend: "처리 전인 신고 없음"
   });
 
   const [loading, setLoading] = useState(true);
@@ -83,7 +83,7 @@ function AdminPage() {
           totalMeetings: 0,
           meetingsTrend: "+0개",
           pendingReports: 0,
-          reportsTrend: "대기 중인 신고 없음"
+          reportsTrend: "처리 전인 신고 없음"
         };
 
         // 회원 수와 최근 가입 회원 목록을 구성합니다.
@@ -156,7 +156,7 @@ function AdminPage() {
           const apiReports = reportsRes.value.items;
           const pendingCount = apiReports.filter(r => r.status === "대기 중" || r.status === "pending").length;
           updatedStats.pendingReports = pendingCount;
-          updatedStats.reportsTrend = pendingCount > 0 ? "즉각 확인 요망" : "대기 중인 신고 없음";
+          updatedStats.reportsTrend = pendingCount > 0 ? "즉각 확인 요망" : "처리 전인 신고 없음";
           
 
 // 충돌 지점
@@ -168,7 +168,7 @@ function AdminPage() {
               target: r.target_name || r.target_type || `대상 #${r.target_id || ""}`,
               reporter: r.reporter_name || "신고자",
               date: r.created_at ? new Date(r.created_at).toLocaleDateString().replace(/\s/g, "").replace(/\.$/, "") : "2023.10.27",
-              status: r.status === "pending" || r.status === "대기 중" ? "대기 중" : "처리 완료"
+              status: r.status === "pending" || r.status === "대기 중" ? "처리 전" : "처리 완료"
             }));
             
             setReports(formatted);
@@ -270,10 +270,10 @@ function AdminPage() {
           </div>
         </div>
 
-        {/* 대기 중인 신고 카드입니다. */}
+        {/* 처리 전인 신고 카드입니다. */}
         <button type="button" className="admin-stat-card admin-stat-card--danger" onClick={() => navigate("/admin/reports")} style={{ textAlign: "left" }}>
           <div className="admin-stat-card__main">
-            <span className="admin-stat-card__title">대기 중인 신고</span>
+            <span className="admin-stat-card__title">처리 전인 신고</span>
             <div className="admin-stat-card__value">
               {stats.pendingReports}
               <span className="admin-stat-card__unit">건</span>
@@ -313,7 +313,7 @@ function AdminPage() {
                 </thead>
                 <tbody>
                   {reports.map((report) => {
-                    const isActionable = ["대기 중", "처리 중", "pending", "in_progress"].includes(report.status);
+                    const isActionable = ["처리 전", "처리 중", "pending", "in_progress"].includes(report.status);
                     const stateTone = reportStatusTone[report.status] || "resolved";
                     const badgeType = 
                       report.type === "욕설" 

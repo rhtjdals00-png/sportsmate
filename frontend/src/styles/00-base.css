@@ -457,6 +457,40 @@ button {
   line-height: 1.5;
 }
 
+.empty-state__title {
+  font-weight: 500;
+  color: #374151;
+  font-size: 15px;
+}
+
+.empty-state__action-container {
+  margin-top: 6px;
+}
+
+.empty-state__action {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 8px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 900;
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #fff;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.empty-state__action:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff;
+  text-decoration: none;
+}
+
+
 .meeting-card p {
   display: -webkit-box;
   margin: 6px 0 0;

@@ -5,7 +5,7 @@ import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
 import { adminApi } from "../../../api/adminApi";
 
 const statusLabel = {
-  pending: "대기 중",
+  pending: "처리 전",
   in_progress: "처리 중",
   resolved: "처리 완료",
   dismissed: "반려"
@@ -57,7 +57,7 @@ function UserRiskCard({ title, user, tone = "default" }) {
             </div>
             <div style={{ padding: "8px", backgroundColor: "#f8fafc", borderRadius: "8px" }}>
               <b style={{ display: "block", fontSize: "16px", color: tone === "danger" ? "#ef4444" : "#3b82f6" }}>{stats.received_pending || 0}</b>
-              <span style={{ fontSize: "11px", color: "#64748b" }}>대기 중 피신고</span>
+              <span style={{ fontSize: "11px", color: "#64748b" }}>처리 전 피신고</span>
             </div>
           </div>
         </>

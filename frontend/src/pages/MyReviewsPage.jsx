@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { X } from "lucide-react";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
 import EmptyState from "../components/common/EmptyState.jsx";
@@ -12,9 +12,11 @@ import { useAuth } from "../contexts/AuthContext.jsx";
 import { Star } from "lucide-react";
 
 function MyReviewsPage() {
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab") === "received" ? "received" : "written";
   const { isMobile, isDesktop } = useResponsive();
   const [refreshKey, setRefreshKey] = useState(0);
-  const [subTab, setSubTab] = useState("written"); // "written" | "received"
+  const [subTab, setSubTab] = useState(requestedTab); // "written" | "received"
   const [writingReview, setWritingReview] = useState(null); // { meetingId, peerId, peerNickname, meetingTitle }
   const [rating, setRating] = useState(5);
   const [reviewContent, setReviewContent] = useState("");
@@ -108,7 +110,7 @@ function MyReviewsPage() {
   }, [reviews.data, user]);
 
   // 탭 상태 ("written" (디폴트), "received") - 전체보기("all") 제거!
-  const [activeTab, setActiveTab] = useState("received");
+  const [activeTab, setActiveTab] = useState(requestedTab);
   
   // 수정 중인 후기 상태 관리
   const [editingId, setEditingId] = useState(null);

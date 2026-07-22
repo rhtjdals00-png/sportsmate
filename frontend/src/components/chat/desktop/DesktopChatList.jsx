@@ -6,6 +6,7 @@ import LoadingCards from "../../common/LoadingCards.jsx";
 import { chatApi } from "../../../api/chatApi";
 import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { useAsync } from "../../../hooks/useAsync";
+import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
 
 function formatChatTime(value) {
   if (!value) return "방금";
@@ -27,11 +28,10 @@ function meetingOperationEndTime(meeting) {
 }
 
 function isReadOnlyRoom(room) {
-  if (room?.is_read_only || room?.meeting?.is_chat_read_only) return true;
+  if (typeof room?.is_read_only === "boolean") return room.is_read_only;
+  if (typeof room?.meeting?.is_chat_read_only === "boolean") return room.meeting.is_chat_read_only;
   const meeting = room?.meeting || {};
-  if (["completed", "cancelled", "suspended"].includes(String(meeting.status || ""))) return true;
-  const endTime = meetingOperationEndTime(meeting);
-  return endTime !== null && endTime <= Date.now();
+  return isMeetingLifecycleEnded(meeting);
 }
 
 function DesktopChatList() {

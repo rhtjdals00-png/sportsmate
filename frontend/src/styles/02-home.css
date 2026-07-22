@@ -605,6 +605,8 @@
   scroll-snap-type: x proximity;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
 }
 
 .home-card-carousel.no-scroll {
@@ -736,30 +738,30 @@
 }
 
 .home-card-carousel::-webkit-scrollbar {
-  height: 10px;
+  height: 6px;
   cursor: default;
 }
 
 .home-card-carousel::-webkit-scrollbar-track {
   border-radius: 999px;
-  background: #e0f2fe;
+  background: #f1f5f9;
   cursor: default;
 }
 
 .home-card-carousel::-webkit-scrollbar-track:hover {
-  background: #bae6fd;
+  background: #e2e8f0;
   cursor: default;
 }
 
 .home-card-carousel::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: #38bdf8;
+  background: #cbd5e1;
   cursor: default;
   transition: background 0.2s ease;
 }
 
 .home-card-carousel::-webkit-scrollbar-thumb:hover {
-  background: #2563eb;
+  background: #94a3b8;
   cursor: default;
 }
 

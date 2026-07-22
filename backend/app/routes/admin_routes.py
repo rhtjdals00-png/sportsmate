@@ -579,7 +579,7 @@ def update_user(user_id):
             user.is_active = False
         elif new_role == "pending_withdrawal":
             # user.is_active = False # 탈퇴 대기 상태도 로그인 가능하도록
-            from app.utils.time_utils import kst_now
+            from app.utils.timezone import kst_now
             user.deleted_at = user.deleted_at or kst_now()
         else:
             if user.is_active == False:
@@ -613,7 +613,10 @@ def update_user(user_id):
             profile.preferred_sports = data["preferred_sports"]
             
     is_suspended = (user.role == "suspended" or not user.is_active)
+    host_transfers = []
     if is_suspended and not was_suspended:
+        from app.services.meeting_service import reassign_hosted_meetings_for_suspended_user
+        host_transfers = reassign_hosted_meetings_for_suspended_user(user.id)
         from app.services.notification_service import create_notification
         create_notification(
             user_id=user.id,
@@ -656,7 +659,7 @@ def update_user(user_id):
         target_id=user_id
     )
 
-    return jsonify({"user": user.to_dict()})
+    return jsonify({"user": user.to_dict(), "host_transfers": host_transfers})
 
 
 @admin_bp.get("/settings")
@@ -731,6 +734,23 @@ def update_settings():
 def get_settings_logs():
     from app.utils.settings import load_settings_logs
     return jsonify(load_settings_logs())
+
+
+@admin_bp.get("/settings/defaults")
+@jwt_required()
+def get_settings_defaults():
+    from app.utils.settings import load_system_defaults
+    return jsonify(load_system_defaults())
+
+
+@admin_bp.post("/settings/defaults")
+@jwt_required()
+def update_settings_defaults():
+    from app.utils.settings import save_system_defaults
+    data = request.get_json() or {}
+    if save_system_defaults(data):
+        return jsonify({"success": True})
+    return jsonify({"message": "기본값 저장 실패"}), 500
 
 
 @admin_bp.post("/users/<int:user_id>/message")

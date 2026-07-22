@@ -19,6 +19,20 @@ function MobileAdminSettingsPage() {
     kakaoApiKey: "5d3ec3100e15e07c16c5a3799a090f1c",
     googleClientId: "40413-t9tr8ha.apps.googleusercontent.com"
   });
+  const [defaultSettings, setDefaultSettings] = useState({
+    siteName: "SportsMate",
+    adminEmail: "admin@sportsmate.co.kr",
+    maintenanceMode: false,
+    suspensionGracePeriod: 30,
+    defaultMaxParticipants: 6,
+    mannerRatingDecrement: 1.5,
+    autoBanReportCount: 5,
+    sessionExpiryMinutes: 60,
+    termsVersion: "v1.4",
+    supabaseUrl: "https://ssuncptlzlmuulqmtnqf.supabase.co",
+    kakaoApiKey: "5d3ec3100e15e07c16c5a3799a090f1c",
+    googleClientId: "40413-t9tr8ha.apps.googleusercontent.com"
+  });
   const [lastSync, setLastSync] = useState(null);
   const [showLogs, setShowLogs] = useState(false);
   const [logs, setLogs] = useState([]);
@@ -38,8 +52,20 @@ function MobileAdminSettingsPage() {
     }
   };
 
+  const fetchDefaults = async () => {
+    try {
+      const res = await adminApi.getSettingsDefaults();
+      if (res) {
+        setDefaultSettings(res);
+      }
+    } catch (err) {
+      console.error("Failed to load settings defaults", err);
+    }
+  };
+
   useEffect(() => {
     fetchSettings();
+    fetchDefaults();
   }, []);
 
   const handleChange = (e) => {
@@ -81,21 +107,24 @@ function MobileAdminSettingsPage() {
   };
 
   const handleReset = () => {
-    if (window.confirm("설정 값을 기본값으로 초기화하시겠습니까?")) {
-      setSettings({
-        siteName: "SportsMate",
-        adminEmail: "admin@sportsmate.co.kr",
-        maintenanceMode: false,
-        suspensionGracePeriod: 30,
-        defaultMaxParticipants: 6,
-        mannerRatingDecrement: 1.5,
-        autoBanReportCount: 5,
-        sessionExpiryMinutes: 60,
-        termsVersion: "v1.4",
-        supabaseUrl: "https://rhtjdals00-png.supabase.co",
-        kakaoApiKey: "8f7b2a9d6e4c3f5b8a0d2f9e4c1b5a7d",
-        googleClientId: "40413-t9tr8ha.apps.googleusercontent.com"
-      });
+    if (window.confirm("설정 값을 관리자가 저장해 둔 '기본값'으로 초기화하시겠습니까?")) {
+      setSettings(defaultSettings);
+    }
+  };
+
+  const handleSaveAsDefault = async () => {
+    if (window.confirm("현재 설정값을 관리자 전용 '시스템 기본값'으로 새로 지정하시겠습니까?")) {
+      setLoading(true);
+      try {
+        await adminApi.updateSettingsDefaults(settings);
+        alert("현재 입력한 값이 시스템 기본값으로 성공적으로 지정되었습니다.");
+        await fetchDefaults();
+      } catch (err) {
+        console.error("Failed to save default settings", err);
+        alert("기본값 지정에 실패했습니다.");
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -149,6 +178,23 @@ function MobileAdminSettingsPage() {
             }}
           >
             기본값 초기화
+          </button>
+          
+          <button 
+            type="button" 
+            onClick={handleSaveAsDefault}
+            style={{
+              padding: '0 12px',
+              height: '38px',
+              borderRadius: '10px',
+              border: '1px solid #cbd5e1',
+              backgroundColor: '#f8fafc',
+              color: '#334155',
+              fontSize: '13px',
+              fontWeight: '800'
+            }}
+          >
+            기본값 지정
           </button>
         </div>
 

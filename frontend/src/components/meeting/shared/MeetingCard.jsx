@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import Badge from "../../common/Badge.jsx";
 import { formatDateTime, formatMeetingType } from "../../../utils/formatters";
 import { getMeetingCoverImage, isUsingSportThumbnail } from "../../../utils/sportThumbnails";
+import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
 
 const WEEKDAY_MAP = {
   MO: "월",
@@ -26,15 +27,8 @@ const parseRepeatDays = (rule) => {
 
 
 function MeetingCard({ meeting, compact = false }) {
-  let isPast = false;
-  if (meeting.meeting_type === "regular") {
-    if (meeting.end_at) {
-      isPast = new Date(meeting.end_at) < new Date();
-    }
-  } else {
-    isPast = new Date(meeting.start_at) < new Date();
-  }
-  const actualStatus = meeting.status === "cancelled" ? "cancelled" : (isPast ? "closed" : meeting.status);
+  const isEnded = isMeetingLifecycleEnded(meeting);
+  const actualStatus = meeting.status === "cancelled" ? "cancelled" : (isEnded ? "closed" : meeting.status);
   const statusLabel = getStatusLabel(actualStatus);
   const coverImage = getMeetingCoverImage(meeting);
   const isSportThumb = isUsingSportThumbnail(meeting);
@@ -43,7 +37,7 @@ function MeetingCard({ meeting, compact = false }) {
     <Link 
       to={`/meetings/${meeting.id}`} 
       className={`meeting-card ${compact ? "meeting-card--compact" : ""}`}
-      style={(actualStatus === "closed" || actualStatus === "cancelled") ? { opacity: 0.6, filter: 'grayscale(0.8)' } : undefined}
+      style={(isEnded || actualStatus === "cancelled") ? { opacity: 0.6, filter: 'grayscale(0.8)' } : undefined}
     >
       <div className="meeting-card__body">
         <div className={`meeting-card__thumb ${isSportThumb ? "is-sport-thumbnail" : ""}`} style={coverImage ? { backgroundImage: `url(${coverImage})` } : undefined}>

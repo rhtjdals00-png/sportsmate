@@ -7,8 +7,8 @@ import MobileAdminReportsPage from "../components/admin/mobile/MobileAdminReport
 
 // Mock reports database
 const mockReports = [
-  { id: 1, type: "욕설", target: "User_FC02", reporter: "킥마스터", reason: "대화방에서 지속적인 언어폭력 and 인격 모독을 자행함", date: "2023.10.27", status: "대기 중" },
-  { id: 2, type: "노쇼", target: "러닝초보", reporter: "야간러너", date: "2023.10.26", reason: "모임 시간 직전 무단 탈퇴 후 당일 연락 두절", status: "대기 중" },
+  { id: 1, type: "욕설", target: "User_FC02", reporter: "킥마스터", reason: "대화방에서 지속적인 언어폭력 and 인격 모독을 자행함", date: "2023.10.27", status: "처리 전" },
+  { id: 2, type: "노쇼", target: "러닝초보", reporter: "야간러너", date: "2023.10.26", reason: "모임 시간 직전 무단 탈퇴 후 당일 연락 두절", status: "처리 전" },
   { id: 3, type: "기타", target: "스팸계정99", reporter: "농구조아", date: "2023.10.25", reason: "프로필 소개란에 음란성 도배 광고 링크 게재", status: "처리 완료" },
   { id: 4, type: "욕설", target: "화난사람", reporter: "테니스킹", date: "2023.10.24", reason: "댓글란에 비속어 작성 및 시비조 댓글 반복 작성", status: "처리 완료" }
 ];
@@ -20,7 +20,7 @@ const reportTypeLabel = {
 };
 
 const statusLabel = {
-  pending: "대기 중",
+  pending: "처리 전",
   in_progress: "처리 중",
   resolved: "처리 완료",
   dismissed: "반려"
@@ -41,7 +41,7 @@ function formatReportRow(r, index = 0) {
     reporter: r.reporter_name || "신고자",
     reason: r.reason_detail || r.reason || "상세 사유가 제공되지 않았습니다.",
     date: r.created_at ? new Date(r.created_at).toLocaleDateString().replace(/\s/g, "").replace(/\.$/, "") : "2023.10.27",
-    status: statusLabel[r.status] || r.status || "대기 중",
+    status: statusLabel[r.status] || r.status || "처리 전",
     rawStatus: r.status || "pending",
     adminNote: r.admin_note || ""
   };
@@ -286,8 +286,8 @@ function AdminReportsPage() {
                 </tr>
               ) : (
                 paginatedReports.map((r) => {
-                  const isActionable = ["pending", "in_progress"].includes(r.rawStatus) || ["대기 중", "처리 중"].includes(r.status);
-                  const stateTone = statusTone[r.rawStatus] || (r.status === "대기 중" ? "pending" : r.status === "처리 중" ? "progress" : r.status === "반려" ? "dismissed" : "resolved");
+                  const isActionable = ["pending", "in_progress"].includes(r.rawStatus) || ["처리 전", "처리 중"].includes(r.status);
+                  const stateTone = statusTone[r.rawStatus] || (r.status === "처리 전" ? "pending" : r.status === "처리 중" ? "progress" : r.status === "반려" ? "dismissed" : "resolved");
                   const badgeType = 
                     r.type === "욕설" 
                       ? "red" 

@@ -813,7 +813,7 @@ function MobileProfileEdit() {
           <section className="profile-auth-modal password-change-modal">
             <button className="schedule-modal-close" type="button" onClick={() => setWithdrawModalOpen(false)}><X size={18} /></button>
             <h2>회원 탈퇴</h2>
-            <p>탈퇴 신청 후 30일 동안 유예 기간이 제공되며, 30일 이내 재로그인 시 계정을 직접 복구할 수 있습니다. 30일 경과 시 계정이 DB에서 영구 삭제됩니다.</p>
+            <p>회원 탈퇴 신청 시 30일의 유예 기간이 적용됩니다. 유예 기간 내에는 재로그인을 통해 계정을 복구할 수 있으나, 복구하지 않고 30일이 경과하면 계정이 완전히 삭제됩니다.</p>
             <label>
               확인 문구
               <input

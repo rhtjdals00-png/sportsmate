@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getMeetingCoverImage } from "../../../utils/sportThumbnails";
 import { formatKoreanTime, formatKoreanTimeRange, formatRegularMeetingSchedule } from "../../../utils/formatters";
 import DesktopScheduleCard, { formatScheduleTime, formatScheduleTimeLabel, getDesktopScheduleState, validScheduleDate } from "./DesktopScheduleCard.jsx";
+import { getMeetingOperationEndAt } from "../../../utils/meetingLifecycle.js";
+
 
 const FALLBACK_IMAGE = "/images/logo.png";
 const SCHEDULE_REASON_MAX_LENGTH = 255;
@@ -58,7 +60,7 @@ export function normalizeDesktopScheduleMeeting(meeting, participantStatus = "jo
   const fallbackNextSession = currentSession || scheduledSessions.find((session) => isUpcoming(session.start_at));
   const nextSession = isRegular ? meeting.next_session || fallbackNextSession || null : null;
   const lastSession = isRegular ? [...scheduledSessions].reverse().find((session) => validScheduleDate(session.start_at)) : null;
-  const operationEndAt = meeting.end_at || null;
+  const operationEndAt = getMeetingOperationEndAt(meeting);
   const useLastSession = isRegular && !nextSession && operationEndAt && validScheduleDate(operationEndAt) < now;
   const startAt = isRegular ? (nextSession?.start_at || (useLastSession ? lastSession?.start_at : null) || null) : meeting.start_at;
   const endAt = isRegular ? (nextSession?.end_at || (useLastSession ? lastSession?.end_at : null) || null) : meeting.end_at;

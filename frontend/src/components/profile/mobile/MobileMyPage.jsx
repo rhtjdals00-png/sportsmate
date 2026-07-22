@@ -43,6 +43,13 @@ function formatRating(value) {
   return rating > 0 ? rating.toFixed(1) : "신규";
 }
 
+function formatAttendanceDate(value) {
+  if (!value) return "일정 정보 없음";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
 function isAdminUser(user) {
   const role = String(user?.role || user?.profile?.role || "").toLowerCase();
   return Boolean(user?.is_admin || user?.isAdmin || role === "admin" || role === "superadmin" || role === "administrator");
@@ -53,11 +60,13 @@ function MobileMyPage() {
   const { user, logout, setCurrentUser } = useAuth();
   const meetings = useAsync(() => (user ? userApi.myMeetings() : Promise.resolve({ hosted: [], joined: [], pending: [] })), [user?.id]);
   const reviews = useAsync(() => (user ? userApi.myReviews() : Promise.resolve({ items: [] })), [user?.id]);
+  const attendance = useAsync(() => (user ? userApi.myAttendanceHistory() : Promise.resolve({ summary: {}, items: [] })), [user?.id]);
 
   const profile = user?.profile || {};
   const preferredSports = splitPreferredSports(profile.preferred_sports);
   const hostedCount = meetings.data?.hosted?.length || 0;
   const joinedCount = meetings.data?.joined?.length || 0;
+  const attendanceCount = Number(meetings.data?.attendance_count || 0);
   const pendingCount = meetings.data?.pending?.length || 0;
   const reviewCount = reviews.data?.items?.length || 0;
   const receivedReviewsCount = reviews.data?.received?.length || 0;
@@ -86,6 +95,7 @@ function MobileMyPage() {
   const [introMessage, setIntroMessage] = useState("");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [attendanceOpen, setAttendanceOpen] = useState(false);
 
   const promptLogout = () => {
     setLogoutConfirmOpen(true);
@@ -202,10 +212,30 @@ function MobileMyPage() {
         </div>
       </section>
       <div className="stats-grid">
-        <span><Trophy size={18} /><small>참여 모임</small><strong>{joinedCount}회</strong></span>
-        <span><CalendarCheck size={18} /><small>참여율</small><strong>{formatAttendanceRate(profile.attendance_rate)}</strong></span>
-        <span><Star size={18} /><small>평점</small><strong>{formatRating(profile.rating_average)}</strong></span>
+        <button type="button" onClick={() => setAttendanceOpen((open) => !open)}><Trophy size={18} /><small>누적 참여</small><strong>{attendanceCount}회</strong></button>
+        <button type="button" onClick={() => setAttendanceOpen((open) => !open)}><CalendarCheck size={18} /><small>참여율</small><strong>{formatAttendanceRate(profile.attendance_rate)}</strong></button>
+        <button type="button" onClick={() => navigate("/mypage/reviews?tab=received")}><Star size={18} /><small>평점</small><strong>{formatRating(profile.rating_average)}</strong></button>
       </div>
+      {attendanceOpen ? (
+        <section className="mobile-attendance-inline">
+          <header><strong>참여 기록</strong><button type="button" onClick={() => setAttendanceOpen(false)} aria-label="참여 기록 닫기"><X size={16} /></button></header>
+          <div className="mobile-attendance-inline__summary">
+            <span>참여 <b>{attendance.data?.summary?.present_count || 0}회</b></span>
+            <span>불참 <b>{attendance.data?.summary?.absent_count || 0}회</b></span>
+          </div>
+          {attendance.loading ? <p>참여 기록을 불러오는 중입니다.</p> : null}
+          {attendance.error ? <p className="is-error">참여 기록을 불러오지 못했습니다.</p> : null}
+          {!attendance.loading && !attendance.error && !(attendance.data?.items || []).length ? <p>아직 확정된 출석 기록이 없습니다.</p> : null}
+          <div className="mobile-attendance-inline__list">
+            {(attendance.data?.items || []).map((item) => (
+              <article key={item.id}>
+                <span className={item.status === "present" ? "is-present" : "is-absent"}>{item.status === "present" ? "참여" : "불참"}</span>
+                <div><strong>{item.meeting?.title || "모임 정보 없음"}</strong><small>{item.session?.session_number ? `${item.session.session_number}회차 · ` : ""}{formatAttendanceDate(item.session?.start_at)}</small></div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
       <section className="mobile-profile-summary" aria-label="활동 요약">
         <div>
           <MapPin size={18} />
@@ -247,9 +277,9 @@ function MobileMyPage() {
         ) : null}
         <Link to="/mypage/profile">프로필 수정</Link>
         <Link to="/mypage/meetings" style={{ fontWeight: 'bold', color: '#4f46e5' }}>📝 내 전체 모임 목록 보기</Link>
-        <Link to="/mypage/meetings?tab=hosted">내가 만든 모임 <span>{hostedCount}</span></Link>
+        <Link to="/mypage/meetings?tab=hosted">내가 관리하는 모임 <span>{hostedCount}</span></Link>
         <Link to="/mypage/meetings?tab=joined">참여 중인 모임 <span>{joinedCount}</span></Link>
-        <Link to="/meetings">관심 모임</Link>
+
         <Link to="/support" className="mobile-my-support-link" style={{ borderTop: '1px solid #f1f5f9', marginTop: '4px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Headphones size={18} style={{ color: '#64748b' }} />

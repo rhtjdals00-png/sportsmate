@@ -45,7 +45,7 @@ function MobileAdminReportsPage() {
           reporter: r.reporter_name || "신고자",
           reason: r.reason || "상세 사유가 제공되지 않았습니다.",
           date: r.created_at ? new Date(r.created_at).toLocaleDateString().replace(/\s/g, "").replace(/\.$/, "") : "2023.10.27",
-          status: r.status === "pending" || r.status === "대기 중" ? "대기 중" : "처리 완료"
+          status: r.status === "pending" || r.status === "대기 중" ? "처리 전" : "처리 완료"
         }));
         setReports(formatted);
       }
@@ -175,7 +175,7 @@ function MobileAdminReportsPage() {
         ) : (
           <div style={{ display: 'grid', gap: '10px' }}>
             {paginatedReports.map((r) => {
-              const isWaiting = r.status === "대기 중";
+              const isWaiting = r.status === "처리 전";
               return (
                 <article 
                   key={r.id}
