@@ -1,0 +1,26 @@
+name: SportsMate Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+
+jobs:
+  deploy:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Deploy Oracle
+        uses: appleboy/ssh-action@v1.0.3
+
+        with:
+          host: ${{ secrets.ORACLE_HOST }}
+          username: ${{ secrets.ORACLE_USER }}
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+
+          script: |
+            cd /var/www/sportsmate
+            ./deploy.sh
