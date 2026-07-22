@@ -10,6 +10,7 @@ import { useAsync } from "../../../hooks/useAsync";
 import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { getMeetingCoverImage, isUsingSportThumbnail, getSportIconUrl, getMeetingCustomCoverImage, getSportNameFromMeeting } from "../../../utils/sportThumbnails";
+import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
 
 function formatChatTime(value) {
   if (!value) return "방금";
@@ -159,13 +160,15 @@ function MobileChatList() {
     });
   }, [sortedMeetingItems, meetingFilter, user]);
 
-  const isMeetingClosed = (meeting) => {
-    if (!meeting) return true;
-    return meeting.status === "closed" || meeting.status === "cancelled" || new Date(meeting.start_at) < new Date();
+  const isMeetingClosed = (room) => {
+    if (!room?.meeting) return true;
+    if (typeof room.is_read_only === "boolean") return room.is_read_only;
+    if (typeof room.meeting.is_chat_read_only === "boolean") return room.meeting.is_chat_read_only;
+    return isMeetingLifecycleEnded(room.meeting);
   };
 
-  const activeMeetingItems = filteredMeetingItems.filter((room) => !isMeetingClosed(room.meeting));
-  const closedMeetingItems = filteredMeetingItems.filter((room) => isMeetingClosed(room.meeting));
+  const activeMeetingItems = filteredMeetingItems.filter((room) => !isMeetingClosed(room));
+  const closedMeetingItems = filteredMeetingItems.filter((room) => isMeetingClosed(room));
 
   // 폴링 (리얼타임 미연결 시)
   useEffect(() => {

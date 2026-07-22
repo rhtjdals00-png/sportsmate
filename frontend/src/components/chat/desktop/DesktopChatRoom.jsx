@@ -39,6 +39,7 @@ import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { voteApi } from "../../../api/voteApi";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { useAsync } from "../../../hooks/useAsync";
+import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
 
 const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
 let naverMapClientIdPromise;
@@ -139,15 +140,10 @@ function isSystemMessage(message) {
 }
 
 function isReadOnlyRoomItem(item) {
-  if (item?.is_read_only || item?.meeting?.is_chat_read_only) return true;
+  if (typeof item?.is_read_only === "boolean") return item.is_read_only;
+  if (typeof item?.meeting?.is_chat_read_only === "boolean") return item.meeting.is_chat_read_only;
   const meeting = item?.meeting || {};
-  if (["closed", "cancelled", "suspended"].includes(String(meeting.status || ""))) return true;
-  const labelText = `${item?.chat_status_label || ""} ${meeting.chat_status_label || ""} ${meeting.status_label || ""}`;
-  if (/마감|종료|취소|폐쇄/.test(labelText)) return true;
-  const endValue = meeting.end_at || meeting.start_at;
-  if (!endValue) return false;
-  const endTime = new Date(endValue).getTime();
-  return Number.isFinite(endTime) && endTime <= Date.now();
+  return isMeetingLifecycleEnded(meeting);
 }
 
 function mapUrl(message) {

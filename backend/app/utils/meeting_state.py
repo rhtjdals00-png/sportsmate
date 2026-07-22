@@ -1,3 +1,5 @@
+from datetime import datetime, time, timedelta
+
 from app.utils.timezone import kst_now
 
 
@@ -31,7 +33,7 @@ def meeting_operation_end_at(meeting):
         if not last_session_end:
             return meeting.end_at
         if meeting.end_at.date() >= last_session_end.date():
-            return last_session_end
+            return meeting.end_at
         return None
 
     return meeting.end_at or meeting.start_at
@@ -39,7 +41,10 @@ def meeting_operation_end_at(meeting):
 
 def is_meeting_operation_ended(meeting, now=None):
     operation_end_at = meeting_operation_end_at(meeting)
-    return bool(operation_end_at and (now or kst_now()) >= operation_end_at)
+    if not operation_end_at:
+        return False
+    ended_from = datetime.combine(operation_end_at.date() + timedelta(days=1), time.min)
+    return (now or kst_now()) >= ended_from
 
 
 def validate_meeting_can_reopen_recruitment(meeting, now=None):
@@ -56,7 +61,6 @@ def validate_meeting_can_reopen_recruitment(meeting, now=None):
 def meeting_chat_is_read_only(meeting):
     if not meeting:
         return False
-    if meeting.status in {"closed", "cancelled", "suspended"}:
+    if meeting.status in {"cancelled", "suspended"}:
         return True
-    end_at = meeting.end_at or meeting.start_at
-    return bool(end_at and end_at <= kst_now())
+    return is_meeting_operation_ended(meeting)

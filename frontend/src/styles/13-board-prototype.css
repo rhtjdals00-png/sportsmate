@@ -1817,6 +1817,101 @@
   color: #b91c1c;
 }
 
+.desktop-meeting-detail__report .desktop-section__head > div {
+  display: grid;
+  gap: 5px;
+}
+
+.desktop-meeting-detail__report .desktop-section__head p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.desktop-meeting-detail__report form {
+  display: grid;
+  gap: 10px;
+}
+
+.desktop-meeting-detail__report label {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.desktop-meeting-detail__report textarea {
+  width: 100%;
+  min-height: 126px;
+  resize: vertical;
+  border: 1px solid #dbe4f0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 14px;
+  font: inherit;
+  line-height: 1.6;
+  box-sizing: border-box;
+}
+
+.desktop-meeting-detail__report textarea:focus {
+  border-color: #4f46e5;
+  outline: 3px solid rgba(79, 70, 229, 0.1);
+}
+
+.desktop-meeting-detail__report-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.desktop-meeting-detail__report-meta small {
+  font-size: inherit;
+}
+
+.desktop-meeting-detail__report-feedback {
+  margin: 0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.desktop-meeting-detail__report-feedback.is-success {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.desktop-meeting-detail__report-feedback.is-error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.desktop-meeting-detail__report form > button {
+  min-height: 42px;
+  justify-self: end;
+  border: 1px solid #fecaca;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #dc2626;
+  padding: 0 20px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.desktop-meeting-detail__report form > button:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.desktop-meeting-detail__report form > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .desktop-meeting-detail .primary-btn[disabled] {
   cursor: not-allowed;
   background: #cbd5e1;

@@ -22,17 +22,15 @@ function getDisplayStartAt(meeting) {
   return meeting?.meeting_type === "regular" ? meeting?.next_session?.start_at || meeting?.start_at : meeting?.start_at;
 }
 
-function MobileMeetingDetail() {
+function MobileMeetingDetail({ recordedViewCount = null }) {
   const { meetingId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const [message, setMessage] = useState({ text: "", tone: "notice" });
-  const [review, setReview] = useState({ rating: 5, content: "" });
   const [reportReason, setReportReason] = useState("");
   const [joining, setJoining] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-  const [reviewing, setReviewing] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [checkingAttendance, setCheckingAttendance] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
@@ -46,10 +44,6 @@ function MobileMeetingDetail() {
   const detailIsHost = user?.id === detailMeeting?.host?.id;
   const detailViewerStatus = detailMeeting?.viewer_status || detailMeeting?.my_participant?.status || "";
   const detailCanViewMemberContent = Boolean(detailMeeting && (detailIsHost || detailViewerStatus === "approved"));
-  const reviews = useAsync(
-    () => detailCanViewMemberContent ? meetingApi.reviews(meetingId) : Promise.resolve({ items: [] }),
-    [meetingId, refreshKey, detailCanViewMemberContent]
-  );
   const notices = useAsync(
     () => detailCanViewMemberContent ? meetingApi.notices(meetingId) : Promise.resolve({ items: [] }),
     [meetingId, refreshKey, detailCanViewMemberContent]
@@ -169,32 +163,32 @@ function MobileMeetingDetail() {
     }
   };
 
-  const submitReview = async (event) => {
-    event.preventDefault();
-    setReviewing(true);
-    try {
-      await meetingApi.createReview(meeting.id, { rating: Number(review.rating), content: review.content });
-      setReview({ rating: 5, content: "" });
-      setRefreshKey((value) => value + 1);
-      setMessage({ text: "후기가 등록되었습니다.", tone: "notice" });
-    } catch (error) {
-      setMessage({ text: error.response?.data?.message || "후기를 등록하지 못했습니다.", tone: "error" });
-    } finally {
-      setReviewing(false);
-    }
-  };
-
   const submitReport = async (event) => {
     event.preventDefault();
     if (!isAuthenticated) {
       navigate("/login", { state: { from: `/meetings/${meeting.id}` } });
       return;
     }
+    const reasonDetail = reportReason.trim();
+    if (reasonDetail.length < 5) {
+      setMessage({ text: "신고 사유를 5자 이상 자세히 입력해 주세요.", tone: "error" });
+      return;
+    }
     setReporting(true);
     try {
-      await reportApi.create({ target_type: "meeting", target_id: meeting.id, reason: reportReason });
+      await reportApi.create({
+        target_type: "meeting",
+        target_id: meeting.id,
+        reason: "other",
+        reason_detail: reasonDetail,
+        context: JSON.stringify({
+          meeting_id: meeting.id,
+          meeting_title: meeting.title,
+          source: "mobile_meeting_detail"
+        })
+      });
       setReportReason("");
-      setMessage({ text: "신고가 접수되었습니다.", tone: "notice" });
+      setMessage({ text: "신고가 접수되었습니다. 관리자가 확인 후 처리합니다.", tone: "success" });
     } catch (error) {
       setMessage({ text: error.response?.data?.message || "신고를 접수하지 못했습니다.", tone: "error" });
     } finally {
@@ -316,7 +310,7 @@ function MobileMeetingDetail() {
             </div>
             <div>
               <Eye size={18} />
-              <span>조회 {meeting.view_count || 0}</span>
+              <span>조회 {Math.max(Number(meeting.view_count || 0), Number(recordedViewCount || 0))}</span>
             </div>
           </dl>
 
@@ -527,42 +521,12 @@ function MobileMeetingDetail() {
           </section>
         )}
         <section className="detail-card">
-          <h2>후기 요약</h2>
-          <div className="review-list">
-            {(reviews.data?.items || []).map((item) => (
-              <article key={item.id}>
-                <strong>{item.rating}점 · {item.reviewer.nickname}</strong>
-                <p>{item.content}</p>
-              </article>
-            ))}
-            {!reviews.loading && !reviews.data?.items?.length && <p>아직 작성된 후기가 없습니다.</p>}
-          </div>
-          {isAuthenticated && canViewMemberContent && (
-            <form className="review-form" onSubmit={submitReview}>
-              <label>
-                평점
-                <select value={review.rating} onChange={(event) => setReview({ ...review, rating: event.target.value })}>
-                  <option value="5">5점</option>
-                  <option value="4">4점</option>
-                  <option value="3">3점</option>
-                  <option value="2">2점</option>
-                  <option value="1">1점</option>
-                </select>
-              </label>
-              <label>
-                후기
-                <textarea required value={review.content} onChange={(event) => setReview({ ...review, content: event.target.value })} placeholder="모임 후기를 작성하세요" />
-              </label>
-              <Button type="submit" variant="secondary" disabled={reviewing}>{reviewing ? "등록 중..." : "후기 등록"}</Button>
-            </form>
-          )}
-        </section>
-        <section className="detail-card">
           <h2>신고</h2>
           <form className="review-form" onSubmit={submitReport}>
             <label>
               신고 사유
-              <textarea required value={reportReason} onChange={(event) => setReportReason(event.target.value)} placeholder="신고 사유를 입력하세요" />
+              <textarea required minLength={5} value={reportReason} onChange={(event) => setReportReason(event.target.value)} placeholder="신고 사유를 자세히 입력해 주세요. (최소 5자)" />
+              <small className="mobile-meeting-report-hint">입력한 내용은 모임 운영 확인을 위해 관리자에게 전달됩니다.</small>
             </label>
             <Button type="submit" variant="secondary" disabled={reporting}>{reporting ? "접수 중..." : "신고 접수"}</Button>
           </form>
@@ -571,7 +535,13 @@ function MobileMeetingDetail() {
 
       <div className="sticky-cta">
         {message.text && (
-          <div className={`toast toast--${message.tone}`}>{message.text}</div>
+          <p
+            className={`sticky-cta__message sticky-cta__message--${["error", "danger"].includes(message.tone) ? "error" : message.tone === "success" ? "success" : "notice"}`}
+            role="status"
+            aria-live="polite"
+          >
+            {message.text}
+          </p>
         )}
         {isHost ? (
           <div className="sticky-cta__split">

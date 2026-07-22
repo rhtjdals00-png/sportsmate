@@ -142,6 +142,29 @@
   padding: 16px;
 }
 
+.desktop-prototype .proto-schedule-item--profile.is-ended {
+  border-color: #d8dee8;
+  background: #eef1f5;
+  box-shadow: none;
+}
+
+.desktop-prototype .proto-schedule-item--profile.is-ended > img {
+  filter: grayscale(1);
+  opacity: 0.58;
+}
+
+.desktop-prototype .proto-schedule-item--profile.is-ended h3,
+.desktop-prototype .proto-schedule-item--profile.is-ended p,
+.desktop-prototype .proto-schedule-item--profile.is-ended .schedule-date {
+  color: #7b8798;
+}
+
+.desktop-prototype .proto-schedule-item--profile.is-ended .profile-schedule-tags,
+.desktop-prototype .proto-schedule-item--profile.is-ended footer,
+.desktop-prototype .proto-schedule-item--profile.is-ended .schedule-manage-btn {
+  opacity: 0.68;
+}
+
 .desktop-prototype .proto-schedule-item--profile > div {
   padding-right: 104px;
 }

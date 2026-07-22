@@ -1,4 +1,4 @@
-import { Camera, MapPin, Plus, Send, UsersRound, Vote, Reply, MoreVertical, X, Pin, Menu, Bell, BellOff, LogOut, Trash2 } from "lucide-react";
+import { Camera, MapPin, Plus, Send, UsersRound, Vote, Reply, MoreVertical, X, Pin, Menu, Bell, BellOff, LogOut, Trash2, Megaphone } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
@@ -81,15 +81,6 @@ function messagePreview(message) {
   if (message.message_type === "image") return message.attachment_name || "사진";
   if (message.message_type === "location") return message.location_label || "공유한 위치";
   return message.content || "";
-}
-
-function readImageAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
 }
 
 function mapUrl(message) {
@@ -281,10 +272,11 @@ function MobileChatRoom() {
   const { user } = useAuth();
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [showLatestJump, setShowLatestJump] = useState(false);
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [directRefreshKey, setDirectRefreshKey] = useState(0);
-  const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("sportsmate_blocked_users") || "[]");
@@ -293,6 +285,7 @@ function MobileChatRoom() {
     }
   });
   const [noticeOpen, setNoticeOpen] = useState(false);
+  const [noticeListOpen, setNoticeListOpen] = useState(false);
   const [voteOpen, setVoteOpen] = useState(false);
   const [voteMode, setVoteMode] = useState("list");
   const [voteRefreshKey, setVoteRefreshKey] = useState(0);
@@ -352,31 +345,107 @@ function MobileChatRoom() {
   const fileInputRef = useRef(null);
   const messageInputRef = useRef(null);
   const messageRefs = useRef({});
+  const loadingOlderRef = useRef(false);
+  const latestMeetingMessageIdRef = useRef(0);
+  const latestDirectMessageIdRef = useRef(0);
 
   // 모임 채팅 메시지
   const messages = useAsync(
-    () => chatRoomId ? chatApi.messages(chatRoomId) : Promise.resolve(null),
-    [chatRoomId, refreshKey, roomRefreshKey]
+    () => chatRoomId ? chatApi.messages(chatRoomId, { limit: 50 }) : Promise.resolve(null),
+    [chatRoomId, refreshKey]
   );
   // 1:1 채팅 메시지
   const directMessages = useAsync(
-    () => directRoomId ? chatApi.directMessages(directRoomId) : Promise.resolve(null),
-    [directRoomId, directRefreshKey, directRoomRefreshKey]
+    () => directRoomId ? chatApi.directMessages(directRoomId, { limit: 50 }) : Promise.resolve(null),
+    [directRoomId, directRefreshKey]
   );
 
   const activeMessages = isDirectChat ? directMessages : messages;
+  const mergeMessagePage = (resource, page, { prepend = false } = {}) => {
+    if (!page?.items?.length) return;
+    resource.setData((current) => {
+      if (!current) return page;
+      const itemsById = new Map();
+      [...(current.items || []), ...page.items].forEach((item) => itemsById.set(String(item.id), item));
+      const items = [...itemsById.values()].sort((first, second) => Number(first.id) - Number(second.id));
+      return {
+        ...current,
+        ...(page.room ? { room: page.room } : {}),
+        items,
+        has_more: prepend ? page.has_more : current.has_more,
+        next_before_id: prepend ? page.next_before_id : current.next_before_id,
+        latest_id: items.length ? items[items.length - 1].id : current.latest_id
+      };
+    });
+  };
+
+  useEffect(() => {
+    const items = messages.data?.items || [];
+    latestMeetingMessageIdRef.current = items.length ? Number(items[items.length - 1].id) : 0;
+  }, [messages.data?.items]);
+
+  useEffect(() => {
+    const items = directMessages.data?.items || [];
+    latestDirectMessageIdRef.current = items.length ? Number(items[items.length - 1].id) : 0;
+  }, [directMessages.data?.items]);
+
+  const fetchMeetingDelta = async () => {
+    const afterId = latestMeetingMessageIdRef.current;
+    if (!chatRoomId || !afterId) return;
+    const page = await chatApi.messages(chatRoomId, { after_id: afterId, limit: 200 });
+    mergeMessagePage(messages, page);
+  };
+
+  const fetchDirectDelta = async () => {
+    const afterId = latestDirectMessageIdRef.current;
+    if (!directRoomId || !afterId) return;
+    const page = await chatApi.directMessages(directRoomId, { after_id: afterId, limit: 200 });
+    mergeMessagePage(directMessages, page);
+  };
+
+  const loadOlderMessages = async () => {
+    const items = activeMessages.data?.items || [];
+    const beforeId = items[0]?.id;
+    if (!beforeId || loadingOlder) return;
+    const previousHeight = document.documentElement.scrollHeight;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    try {
+      const page = isDirectChat
+        ? await chatApi.directMessages(directRoomId, { before_id: beforeId, limit: 50 })
+        : await chatApi.messages(chatRoomId, { before_id: beforeId, limit: 50 });
+      mergeMessagePage(activeMessages, page, { prepend: true });
+      window.requestAnimationFrame(() => {
+        window.scrollBy({ top: document.documentElement.scrollHeight - previousHeight, behavior: "auto" });
+        loadingOlderRef.current = false;
+        setLoadingOlder(false);
+      });
+    } catch (loadError) {
+      setError(loadError.response?.data?.message || "이전 메시지를 불러오지 못했습니다.");
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  };
+
   const room = activeMessages.data?.room;
   const meeting = room?.meeting;
+  const chatReadOnly = !isDirectChat && Boolean(room?.is_read_only);
   const isRoomHost = String(meeting?.host?.id ?? "") === String(user?.id ?? "");
   const myRole = isRoomHost ? "host" : (meeting?.my_participant?.role || "member");
   const canCreateVote = ["host", "cohost", "subhost", "assistant"].includes(String(myRole).toLowerCase());
   const canManageRoom = Boolean(room?.can_manage || meeting?.can_manage || ["host", "cohost", "subhost", "assistant"].includes(String(myRole).toLowerCase()));
   const votes = useAsync(() => meeting?.id ? meetingApi.votes(meeting.id) : Promise.resolve({ items: [] }), [meeting?.id, voteRefreshKey]);
   const notices = useAsync(() => meeting?.id ? meetingApi.notices(meeting.id) : Promise.resolve({ items: [] }), [meeting?.id, noticeRefreshKey]);
-  const pinnedNotice = (() => {
-    const items = notices.data?.items || [];
-    return items.find((item) => item.is_pinned) || items[0] || null;
-  })();
+  const noticeItems = useMemo(() => {
+    const items = [...(notices.data?.items || [])].sort((first, second) => {
+      const firstTime = new Date(first.created_at || 0).getTime();
+      const secondTime = new Date(second.created_at || 0).getTime();
+      if (secondTime !== firstTime) return secondTime - firstTime;
+      return Number(second.id || 0) - Number(first.id || 0);
+    });
+    return items;
+  }, [notices.data?.items]);
+  const pinnedNotice = noticeItems.find((item) => item.is_pinned) || noticeItems[0] || null;
   const rawMessages = activeMessages.data?.items || [];
   const renderedMessages = useMemo(() => {
     return rawMessages.filter(msg => {
@@ -400,6 +469,7 @@ function MobileChatRoom() {
 
   useLayoutEffect(() => {
     if (!activeMessages.data?.items) return undefined;
+    if (loadingOlderRef.current) return undefined;
     const frame = window.requestAnimationFrame(() => {
       window.scrollTo({
         top: document.documentElement.scrollHeight,
@@ -411,23 +481,38 @@ function MobileChatRoom() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      if (document.hidden || sending || realtimeConnected) return;
-      if (isDirectChat) {
-        setDirectRefreshKey((value) => value + 1);
-      } else {
-        setRefreshKey((value) => value + 1);
-      }
-    }, 1500);
+      if (document.hidden || sending) return;
+      const fetchDelta = isDirectChat ? fetchDirectDelta : fetchMeetingDelta;
+      fetchDelta().catch((pollError) => console.warn("Chat delta poll failed", pollError));
+    }, 30000);
     return () => window.clearInterval(timer);
-  }, [realtimeConnected, sending, isDirectChat]);
+  }, [sending, isDirectChat, chatRoomId, directRoomId]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const root = document.documentElement;
+      const distanceFromBottom = root.scrollHeight - window.scrollY - window.innerHeight;
+      setShowLatestJump(distanceFromBottom > 180);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToLatestMessage = () => {
+    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" });
+    setShowLatestJump(false);
+  };
 
   // Supabase realtime - 모임 채팅
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !chatRoomId) {
-      if (!isDirectChat) setRealtimeConnected(false);
       return undefined;
     }
 
+    const refreshChat = () => {
+      fetchMeetingDelta().catch((realtimeError) => console.warn("Chat realtime refresh failed", realtimeError));
+      setRoomRefreshKey((value) => value + 1);
+    };
     const channel = supabase
       .channel(`mobile-chat-room-${chatRoomId}`)
       .on(
@@ -438,34 +523,25 @@ function MobileChatRoom() {
           table: "chat_messages",
           filter: `chat_room_id=eq.${chatRoomId}`
         },
-        () => setRefreshKey((value) => value + 1)
+        refreshChat
       )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "chat_message_reads"
-        },
-        () => setRefreshKey((value) => value + 1)
-      )
-      .subscribe((status) => {
-        if (!isDirectChat) setRealtimeConnected(status === "SUBSCRIBED");
-      });
+      .subscribe();
 
     return () => {
-      if (!isDirectChat) setRealtimeConnected(false);
       supabase.removeChannel(channel);
     };
-  }, [chatRoomId, isDirectChat]);
+  }, [chatRoomId]);
 
   // Supabase realtime - 1:1 채팅
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !directRoomId) {
-      if (isDirectChat) setRealtimeConnected(false);
       return undefined;
     }
 
+    const refreshDirectChat = () => {
+      fetchDirectDelta().catch((realtimeError) => console.warn("Direct chat realtime refresh failed", realtimeError));
+      setDirectRoomRefreshKey((value) => value + 1);
+    };
     const channel = supabase
       .channel(`mobile-direct-chat-${directRoomId}`)
       .on(
@@ -476,17 +552,22 @@ function MobileChatRoom() {
           table: "direct_chat_messages",
           filter: `direct_chat_room_id=eq.${directRoomId}`
         },
-        () => setDirectRefreshKey((value) => value + 1)
+        refreshDirectChat
       )
-      .subscribe((status) => {
-        if (isDirectChat) setRealtimeConnected(status === "SUBSCRIBED");
-      });
+      .subscribe();
 
     return () => {
-      if (isDirectChat) setRealtimeConnected(false);
       supabase.removeChannel(channel);
     };
-  }, [directRoomId, isDirectChat]);
+  }, [directRoomId]);
+
+  useEffect(() => {
+    if (!chatReadOnly) return;
+    setReplyTarget(null);
+    setActionMenuOpen(false);
+    if (voteMode === "create") setVoteMode("list");
+    if (noticeFormOpen) setNoticeFormOpen(false);
+  }, [chatReadOnly, noticeFormOpen, voteMode]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !meeting?.id) return undefined;
@@ -536,6 +617,10 @@ function MobileChatRoom() {
   const send = async (event) => {
     event.preventDefault();
     if (!content.trim()) return;
+    if (chatReadOnly) {
+      setError("종료된 모임의 채팅방에는 메시지를 보낼 수 없습니다.");
+      return;
+    }
     setError("");
     setSending(true);
     try {
@@ -585,6 +670,11 @@ function MobileChatRoom() {
     const resetInput = () => {
       event.target.value = "";
     };
+    if (chatReadOnly) {
+      setActionNotice("마감된 모임에서는 사진을 보낼 수 없습니다.");
+      resetInput();
+      return;
+    }
     if (!file.type.startsWith("image/")) {
       setActionNotice("이미지 파일만 전송할 수 있습니다.");
       resetInput();
@@ -599,19 +689,24 @@ function MobileChatRoom() {
     setSending(true);
     setActionNotice("");
     setError("");
-    readImageAsDataUrl(file)
-      .then((dataUrl) => {
+    chatApi.uploadImage(file, {
+      roomId: isDirectChat ? directRoomId : chatRoomId,
+      roomType: isDirectChat ? "direct" : "meeting"
+    })
+      .then((upload) => {
         const payload = {
           content: file.name || "사진",
           message_type: "image",
-          attachment_url: dataUrl,
-          attachment_name: file.name,
-          reply_to_message_id: replyTarget?.id || null
+          attachment_url: upload.attachment_url,
+          attachment_name: upload.attachment_name || file.name
         };
         if (isDirectChat) {
           return chatApi.sendDirect(directRoomId, payload);
         } else {
-          return chatApi.send(chatRoomId, payload);
+          return chatApi.send(chatRoomId, {
+            ...payload,
+            reply_to_message_id: replyTarget?.id || null
+          });
         }
       })
       .then(() => {
@@ -1194,9 +1289,9 @@ function MobileChatRoom() {
           </div>
         }
       />
-      {messages.loading && !messages.data ? (
+      {activeMessages.loading && !activeMessages.data ? (
         <LoadingCards count={3} />
-      ) : messages.error ? (
+      ) : activeMessages.error ? (
         <EmptyState title="채팅방을 불러오지 못했습니다." description="참여 승인 상태를 확인하거나 잠시 후 다시 시도해주세요." actionLabel="채팅 목록" actionTo="/chats" />
       ) : (
         <>
@@ -1220,6 +1315,16 @@ function MobileChatRoom() {
           ) : null}
 
           <div className="message-list">
+            {activeMessages.data?.has_more ? (
+              <button
+                className="mobile-chat-load-older"
+                type="button"
+                onClick={loadOlderMessages}
+                disabled={loadingOlder}
+              >
+                {loadingOlder ? "불러오는 중..." : "이전 메시지 불러오기"}
+              </button>
+            ) : null}
             {renderedMessages.length ? (
               renderedMessages.map((message, index) => {
                 const mine = (message.user_id ?? message.sender_id) === user?.id;
@@ -1372,7 +1477,14 @@ function MobileChatRoom() {
           </div>
         </>
       )}
-      <form className="chat-input" onSubmit={send}>
+      {showLatestJump ? (
+        <button className="mobile-chat-latest-jump" type="button" onClick={scrollToLatestMessage}>
+          최신 대화로
+        </button>
+      ) : null}
+      {chatReadOnly ? (
+        <div className="chat-input mobile-chat-read-only">종료된 모임의 채팅 기록입니다.</div>
+      ) : <form className="chat-input" onSubmit={send}>
         {error ? <p className="chat-input__error">{error}</p> : null}
         {actionNotice ? <p className="chat-input__notice">{actionNotice}</p> : null}
         {/* Reply preview bar */}
@@ -1403,7 +1515,7 @@ function MobileChatRoom() {
         <button type="submit" aria-label="메시지 전송" disabled={sending || !content.trim()}>
           <Send size={20} />
         </button>
-      </form>
+      </form>}
       {/* Notice form modal */}
       {noticeFormOpen ? (
         <div className="mobile-notice-modal" role="dialog" aria-modal="true" aria-label="공지 등록">
@@ -1419,6 +1531,41 @@ function MobileChatRoom() {
               <label>공지 내용<textarea value={noticeForm.content} onChange={(e) => setNoticeForm({ ...noticeForm, content: e.target.value })} placeholder="공지 내용을 입력하세요" rows={4} /></label>
               <button type="submit" disabled={noticeSubmitting}>{noticeSubmitting ? "등록 중..." : "공지 등록"}</button>
             </form>
+          </section>
+        </div>
+      ) : null}
+      {noticeListOpen ? (
+        <div className="mobile-notice-modal mobile-chat-notice-modal" role="dialog" aria-modal="true" aria-label="공지함">
+          <button className="mobile-notice-modal__backdrop" type="button" onClick={() => setNoticeListOpen(false)} aria-label="닫기" />
+          <section>
+            <div className="mobile-notice-modal__header">
+              <span>공지함</span>
+              <button type="button" onClick={() => setNoticeListOpen(false)}>닫기</button>
+            </div>
+            <p className="mobile-chat-notice-modal__summary">
+              모임에서 등록한 공지를 최신순으로 확인할 수 있습니다.
+            </p>
+            {notices.loading ? <p className="mobile-chat-notice-modal__empty">공지를 불러오는 중...</p> : null}
+            {notices.error ? (
+              <p className="mobile-chat-notice-modal__error">
+                {notices.error?.response?.data?.message || "공지를 불러오지 못했습니다."}
+              </p>
+            ) : null}
+            {!notices.loading && !notices.error ? (
+              <div className="mobile-chat-notice-list">
+                {noticeItems.map((item) => (
+                  <article key={item.id} className={item.is_pinned ? "is-pinned" : ""}>
+                    <div>
+                      {item.is_pinned ? <span><Pin size={11} />고정 공지</span> : null}
+                      <time>{formatMessageDate(item.created_at)} {formatMessageTime(item.created_at)}</time>
+                    </div>
+                    <strong>{item.title || "공지"}</strong>
+                    <p>{item.content}</p>
+                  </article>
+                ))}
+                {!noticeItems.length ? <p className="mobile-chat-notice-modal__empty">등록된 공지가 없습니다.</p> : null}
+              </div>
+            ) : null}
           </section>
         </div>
       ) : null}
@@ -1971,6 +2118,24 @@ function MobileChatRoom() {
                       <Vote size={15} />
                       투표함
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => { setDrawerOpen(false); setNoticeListOpen(true); }}
+                      style={{
+                        minHeight: '40px',
+                        borderRadius: '10px',
+                        border: '1px solid #e2e8f0',
+                        background: '#fff',
+                        color: '#334155',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <Megaphone size={15} />
+                      공지함
+                    </button>
                     {canManageRoom && (
                       <button 
                         type="button" 
@@ -1986,7 +2151,8 @@ function MobileChatRoom() {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '6px'
+                          gap: '6px',
+                          gridColumn: '1 / -1'
                         }}
                       >
                         <Pin size={15} />

@@ -10,6 +10,7 @@ import { useAsync } from "../hooks/useAsync";
 import { useResponsive } from "../hooks/useResponsive";
 import { userApi } from "../api/userApi";
 import { useSearchParams } from "react-router-dom";
+import { isMeetingLifecycleEnded } from "../utils/meetingLifecycle.js";
 
 function MyMeetingsPage() {
   const { isMobile } = useResponsive();
@@ -20,7 +21,7 @@ function MyMeetingsPage() {
   const activeTab = params.get("tab") || "all";
   const tabs = [
     { id: "all", label: "전체" },
-    { id: "hosted", label: "내가 만든 모임" },
+    { id: "hosted", label: "내가 관리하는 모임" },
     { id: "joined", label: "참여 중" },
     { id: "pending", label: "승인 대기" },
     { id: "closed", label: "모집 종료" }
@@ -35,9 +36,7 @@ function MyMeetingsPage() {
 
   if (!isMobile) return <DesktopMyMeetings />;
 
-  const now = new Date();
-  const isMeetingClosed = (meeting) =>
-    meeting.status === "closed" || meeting.status === "cancelled" || new Date(meeting.start_at) < now;
+  const isMeetingClosed = (meeting) => isMeetingLifecycleEnded(meeting);
 
   const allHosted = meetings.data?.hosted || [];
   const allJoined = meetings.data?.joined || [];
@@ -70,10 +69,10 @@ function MyMeetingsPage() {
           </div>
           {(activeTab === "all" || activeTab === "hosted") && <section className="section">
             <div className="section-title">
-              <h2>내가 만든 모임</h2>
+              <h2>내가 관리하는 모임</h2>
             </div>
             {hosted.length === 0 && (
-              <EmptyState title="진행 중인 만든 모임이 없습니다." actionLabel="모임 만들기" actionTo="/meetings/create" />
+              <EmptyState title="현재 관리 중인 모임이 없습니다." actionLabel="모임 만들기" actionTo="/meetings/create" />
             )}
             {hosted.length > 0 && (
               <div className="card-list">

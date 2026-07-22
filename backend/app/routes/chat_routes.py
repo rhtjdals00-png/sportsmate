@@ -85,6 +85,17 @@ def participant_item(participant):
     }
 
 
+def approved_chat_participants(meeting_id):
+    participants = (
+        Participant.query
+        .options(joinedload(Participant.user).joinedload(User.profile))
+        .filter_by(meeting_id=meeting_id, status="approved")
+        .order_by(Participant.role.desc(), Participant.approved_at.asc(), Participant.requested_at.asc())
+        .all()
+    )
+    return [participant_item(participant) for participant in participants]
+
+
 def user_display_name(user):
     return (user.nickname or user.name) if user else "참여자"
 
@@ -244,6 +255,7 @@ def messages(room_id):
         room = ensure_chat_access(room_id, user_id, include_messages=page is None)
         if page is None:
             room_data = room.to_dict(current_user_id=user_id)
+            room_data["participants"] = approved_chat_participants(room.meeting_id)
             ordered_messages = sorted(room.messages, key=lambda message: (message.created_at, message.id))
             read_ids = {
                 row.chat_message_id
@@ -322,14 +334,7 @@ def messages(room_id):
         }
         if room_data.get("meeting"):
             room_data["meeting"]["can_manage"] = can_manage
-        approved_participants = (
-            Participant.query
-            .options(joinedload(Participant.user).joinedload(User.profile))
-            .filter_by(meeting_id=room.meeting_id, status="approved")
-            .order_by(Participant.role.desc(), Participant.approved_at.asc(), Participant.requested_at.asc())
-            .all()
-        )
-        room_data["participants"] = [participant_item(item) for item in approved_participants]
+        room_data["participants"] = approved_chat_participants(room.meeting_id)
         room_data["first_unread_message_id"] = first_unread.id if first_unread else None
         response["room"] = room_data
         return jsonify(response)
