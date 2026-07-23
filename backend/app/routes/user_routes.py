@@ -280,11 +280,18 @@ def attach_schedule_sessions(meetings, include_cancelled=False):
 @jwt_required()
 def my_meetings():
     user_id = int(get_jwt_identity())
-    attendance_count = Attendance.query.filter(
-        Attendance.user_id == user_id,
-        Attendance.meeting_session_id.isnot(None),
-        Attendance.status == "present",
-    ).count()
+    attendance_count = (
+        Attendance.query
+        .join(MeetingSession, Attendance.meeting_session_id == MeetingSession.id)
+        .filter(
+            Attendance.user_id == user_id,
+            Attendance.meeting_session_id.isnot(None),
+            Attendance.status == "present",
+            MeetingSession.status != "cancelled",
+            MeetingSession.start_at <= kst_now(),
+        )
+        .count()
+    )
     hosted_items = meetings_for_user(user_id, hosted=True)
     joined_items = meetings_for_user(user_id, status="approved")
     pending_items = meetings_for_user(user_id, status="pending")
@@ -312,6 +319,8 @@ def my_attendance_history():
         .filter(
             Attendance.user_id == user_id,
             Attendance.status.in_(["present", "absent"]),
+            MeetingSession.status != "cancelled",
+            MeetingSession.start_at <= kst_now(),
         )
         .order_by(MeetingSession.start_at.desc())
         .all()
@@ -466,41 +475,6 @@ def update_review(review_id):
     return jsonify({"review": review.to_dict()})
 
 
-@user_bp.delete("/me/reviews/<int:review_id>")
-@jwt_required()
-def delete_review(review_id):
-    user_id = int(get_jwt_identity())
-    review = Review.query.get_or_404(review_id)
-    
-    # 본인 확인
-    if review.reviewer_id != user_id:
-        return jsonify({"message": "삭제 권한이 없습니다."}), 403
-        
-    meeting = review.meeting
-    db.session.delete(review)
-    db.session.commit()
-    
-    # 삭제 후 평점 평균 갱신
-    reviewee = review.reviewee
-    if reviewee and reviewee.profile:
-        all_reviews = (
-            Review.query
-            .filter(Review.reviewee_id == reviewee.id)
-            .filter(Review.reviewer_id != reviewee.id)
-            .all()
-        )
-        
-        if all_reviews:
-            avg_rating = sum(r.rating for r in all_reviews) / len(all_reviews)
-            reviewee.profile.rating_average = round(avg_rating, 2)
-        else:
-            reviewee.profile.rating_average = 0.0
-            
-        db.session.commit()
-            
-    return jsonify({"message": "후기가 삭제되었습니다."})
-
-
 @user_bp.get("/me/reviews/written")
 @jwt_required()
 def my_written_reviews():
@@ -544,12 +518,18 @@ def update_my_review(review_id):
 @jwt_required()
 def delete_my_review(review_id):
     user_id = int(get_jwt_identity())
-    from app.services.meeting_service import delete_review
+    from app.services.meeting_service import ReviewNotFoundError, delete_review
     try:
         delete_review(review_id, user_id)
         return jsonify({"message": "후기가 삭제되었습니다."})
-    except (ValueError, PermissionError) as e:
+    except ReviewNotFoundError as e:
+        return jsonify({"message": str(e)}), 404
+    except PermissionError as e:
+        return jsonify({"message": str(e)}), 403
+    except ValueError as e:
         return jsonify({"message": str(e)}), 400
+    except Exception:
+        return jsonify({"message": "후기 삭제 중 오류가 발생했습니다."}), 500
 
 
 @user_bp.get("/<int:user_id>")

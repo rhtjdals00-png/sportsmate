@@ -112,50 +112,6 @@ function tagLabel(user) {
   return normalized ? `#${normalized}` : "";
 }
 
-function normalizeMeeting(meeting, state) {
-  const isRegular = meeting.meeting_type === "regular";
-  const allSessions = sortSessionsByStart(meeting.sessions || []);
-  const scheduledSessions = allSessions.filter((session) => session.status === "scheduled");
-  const now = new Date();
-  const currentSession = scheduledSessions.find((session) => {
-    const start = validDate(session.start_at);
-    const end = validDate(session.end_at);
-    return start && end && start <= now && now < end;
-  });
-  const fallbackNextSession = currentSession || scheduledSessions.find((session) => isUpcomingSchedule(session.start_at));
-  const nextSession = isRegular ? meeting.next_session || fallbackNextSession || null : null;
-  const lastSession = isRegular ? [...scheduledSessions].reverse().find((session) => validDate(session.start_at)) : null;
-  // 2026-07-13: 정기모임은 Meeting.start_at만으로 종료 판단하지 않고 실제 회차 데이터를 우선한다.
-  const operationEndAt = meeting.end_at || null;
-  const shouldUseLastSession = isRegular && !nextSession && operationEndAt && isPastDateTime(operationEndAt);
-  const scheduleStart = isRegular ? (nextSession?.start_at || (shouldUseLastSession ? lastSession?.start_at : null) || null) : meeting.start_at;
-  const scheduleEnd = isRegular ? (nextSession?.end_at || (shouldUseLastSession ? lastSession?.end_at : null) || null) : meeting.end_at;
-  return {
-    id: meeting.id,
-    title: meeting.title || "제목 없는 모임",
-    place: meeting.location_name || meeting.address || "장소 미정",
-    address: meeting.address || meeting.location_name || "",
-    latitude: meeting.latitude,
-    longitude: meeting.longitude,
-    meetingType: meeting.meeting_type || "one_time",
-    meetingTypeLabel: meetingTypeLabel(meeting.meeting_type),
-    status: meeting.status || "",
-    sportName: sportNameOf(meeting),
-    nextSession,
-    repeatRule: meeting.repeat_rule || "",
-    repeatLabel: isRegular ? formatRegularMeetingSchedule({ ...meeting, next_session: nextSession, sessions: scheduledSessions }, "") : "",
-    time: formatDateTime(scheduleStart),
-    rawTime: scheduleStart || null,
-    endTime: scheduleEnd || null,
-    operationEndAt,
-    sessions: allSessions,
-    member: meetingMemberText(meeting),
-    state,
-    chatRoomId: meeting.chat_room_id,
-    img: meetingImage(meeting)
-  };
-}
-
 function uniqueMeetingsById(items) {
   const byId = new Map();
   items.forEach((item) => {

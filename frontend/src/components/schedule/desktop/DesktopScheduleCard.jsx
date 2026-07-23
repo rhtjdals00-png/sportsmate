@@ -55,7 +55,11 @@ export function getDesktopScheduleState(item) {
   const start = validScheduleDate(item.startAt ?? item.rawTime);
   const explicitEnd = validScheduleDate(item.endAt ?? item.endTime);
   const end = explicitEnd || (item.meetingType === "one_time" ? endOfScheduleDay(start) : null);
-  const operationEnd = validScheduleDate(item.operationEndAt);
+  const isRegular = (item.meetingType ?? item.meeting_type) === "regular";
+
+  if (isMeetingLifecycleEnded(item, now)) {
+    return { label: "종료됨", isEnded: true, state: "ended" };
+  }
 
   if (!start) {
     return { label: isRegular ? "다음 일정 준비" : "예정 없음", isEnded: false, state: "unscheduled" };
