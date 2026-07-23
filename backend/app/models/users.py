@@ -50,15 +50,11 @@ class User(db.Model, TimestampMixin):
         remaining = 30 - diff.days
         return max(0, remaining)
 
-    def to_dict(self):
+    def to_dict(self, include_private=False):
         profile = self.profile
         provider_values = {item.strip() for item in (self.provider or "").split(",") if item.strip()}
-        return {
+        data = {
             "id": self.id,
-            "auth_user_id": self.auth_user_id,
-            "email": self.email,
-            "name": self.name,
-            "phone_number": self.phone_number,
             "nickname": self.nickname,
             "user_tag": self.user_tag,
             "user_tag_display": f"[{self.user_tag}]" if self.user_tag else "",
@@ -67,14 +63,9 @@ class User(db.Model, TimestampMixin):
             "role": self.role,
             "is_active": self.is_active,
             "status": self.status,
-            "withdrawn_at": self.withdrawn_at.isoformat() if self.withdrawn_at else None,
-            "remaining_withdraw_days": self.remaining_withdraw_days() if self.status == "withdrawn_pending" else None,
             "profile_intro_dismissed": self.profile_intro_dismissed,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
-            "provider": self.provider,
-            # 2026-07-02: 소셜 계정의 이메일 연동 여부를 프론트 분기용으로 제공.
-            "has_password": "email" in provider_values,
             "profile": {
                 "region": profile.region if profile else "",
                 "region_latitude": profile.region_latitude if profile else None,
@@ -90,6 +81,18 @@ class User(db.Model, TimestampMixin):
                 "attendance_rate": profile.attendance_rate if profile else 0
             }
         }
+        if include_private:
+            data.update({
+                "auth_user_id": self.auth_user_id,
+                "email": self.email,
+                "name": self.name,
+                "phone_number": self.phone_number,
+                "withdrawn_at": self.withdrawn_at.isoformat() if self.withdrawn_at else None,
+                "remaining_withdraw_days": self.remaining_withdraw_days() if self.status == "withdrawn_pending" else None,
+                "provider": self.provider,
+                "has_password": "email" in provider_values,
+            })
+        return data
 
 
 class UserProfile(db.Model):

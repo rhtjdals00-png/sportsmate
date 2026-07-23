@@ -368,7 +368,14 @@ def reject(meeting_id, user_id):
 
 
 @meeting_bp.get("/<int:meeting_id>/reviews")
+@jwt_required()
 def reviews(meeting_id):
+    meeting = Meeting.query.get_or_404(meeting_id)
+    current_user_id = int(get_jwt_identity())
+    if meeting.host_id != current_user_id:
+        is_member = Participant.query.filter_by(meeting_id=meeting_id, user_id=current_user_id, status="approved").first()
+        if not is_member:
+            return jsonify({"message": "모임 멤버만 조회할 수 있습니다."}), 403
     items = Review.query.options(joinedload(Review.reviewer).joinedload(User.profile)).filter_by(meeting_id=meeting_id).order_by(Review.created_at.desc()).all()
     return jsonify({"items": [item.to_dict() for item in items]})
 
@@ -384,8 +391,14 @@ def post_review(meeting_id):
 
 
 @meeting_bp.get("/<int:meeting_id>/notices")
+@jwt_required()
 def notices(meeting_id):
-    Meeting.query.get_or_404(meeting_id)
+    meeting = Meeting.query.get_or_404(meeting_id)
+    current_user_id = int(get_jwt_identity())
+    if meeting.host_id != current_user_id:
+        is_member = Participant.query.filter_by(meeting_id=meeting_id, user_id=current_user_id, status="approved").first()
+        if not is_member:
+            return jsonify({"message": "모임 멤버만 조회할 수 있습니다."}), 403
     items = Notice.query.filter_by(meeting_id=meeting_id).order_by(Notice.is_pinned.desc(), Notice.created_at.desc()).all()
     return jsonify({"items": [item.to_dict() for item in items]})
 
@@ -487,9 +500,14 @@ def transfer_host(meeting_id):
 
 
 @meeting_bp.get("/<int:meeting_id>/votes")
+@jwt_required()
 def votes(meeting_id):
-    Meeting.query.get_or_404(meeting_id)
-    current_user_id = current_user_id_optional()
+    meeting = Meeting.query.get_or_404(meeting_id)
+    current_user_id = int(get_jwt_identity())
+    if meeting.host_id != current_user_id:
+        is_member = Participant.query.filter_by(meeting_id=meeting_id, user_id=current_user_id, status="approved").first()
+        if not is_member:
+            return jsonify({"message": "모임 멤버만 조회할 수 있습니다."}), 403
     items = Vote.query.options(joinedload(Vote.options)).filter_by(meeting_id=meeting_id).order_by(Vote.created_at.desc()).all()
     option_ids = [option.id for item in items for option in item.options]
     response_counts = {}
@@ -521,8 +539,8 @@ def votes(meeting_id):
         for vote_id, option_id, user_id, name, nickname, user_tag in voter_rows:
             voter_map.setdefault(vote_id, {}).setdefault(option_id, []).append({
                 "id": user_id,
-                "name": name,
-                "nickname": nickname,
+                "name": None,  # S5: 실명 노출 차단
+                "nickname": nickname or "참여자",
                 "user_tag": user_tag,
             })
     result = []

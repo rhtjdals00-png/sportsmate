@@ -16,7 +16,7 @@ function MobileAdminSettingsPage() {
     sessionExpiryMinutes: 60,
     termsVersion: "v1.4",
     supabaseUrl: "https://ssuncptlzlmuulqmtnqf.supabase.co",
-    kakaoApiKey: "5d3ec3100e15e07c16c5a3799a090f1c",
+    kakaoApiKey: "",
     googleClientId: "40413-t9tr8ha.apps.googleusercontent.com"
   });
   const [defaultSettings, setDefaultSettings] = useState({
@@ -30,7 +30,7 @@ function MobileAdminSettingsPage() {
     sessionExpiryMinutes: 60,
     termsVersion: "v1.4",
     supabaseUrl: "https://ssuncptlzlmuulqmtnqf.supabase.co",
-    kakaoApiKey: "5d3ec3100e15e07c16c5a3799a090f1c",
+    kakaoApiKey: "",
     googleClientId: "40413-t9tr8ha.apps.googleusercontent.com"
   });
   const [lastSync, setLastSync] = useState(null);
