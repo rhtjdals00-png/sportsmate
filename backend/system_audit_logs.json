@@ -89,5 +89,12 @@
     "action_type": "신고 처리",
     "description": "신고 #6 (asdfasdfasdf) 상태를 dismissed(으)로 저장했습니다.",
     "target_id": 6
+  },
+  {
+    "timestamp": "2026-07-23 16:38:10",
+    "admin": "ms",
+    "action_type": "개별 알림 발송",
+    "description": "회원 고성민(ID 22)에게 개별 알림을 전송했습니다. 내용: '알림확인...'",
+    "target_id": 22
   }
 ]

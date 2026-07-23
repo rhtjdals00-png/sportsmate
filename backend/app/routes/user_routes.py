@@ -1,4 +1,6 @@
 import json
+import time
+from collections import defaultdict
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy.orm import joinedload
@@ -67,7 +69,7 @@ def user_query():
 @jwt_required()
 def get_me():
     user = user_query().get_or_404(int(get_jwt_identity()))
-    return jsonify({"user": user.to_dict()})
+    return jsonify({"user": user.to_dict(include_private=True)})
 
 
 @user_bp.patch("/me")
@@ -126,7 +128,7 @@ def update_me():
             user.profile.preferred_sport_levels = json.dumps(data["preferred_sport_levels"] or {}, ensure_ascii=False)
 
     db.session.commit()
-    return jsonify({"user": user.to_dict()})
+    return jsonify({"user": user.to_dict(include_private=True)})
 
 
 @user_bp.patch("/me/profile-intro-preference")
@@ -143,7 +145,7 @@ def update_profile_intro_preference():
         return jsonify({"message": "알 수 없는 요청입니다."}), 400
 
     db.session.commit()
-    return jsonify({"user": user.to_dict()})
+    return jsonify({"user": user.to_dict(include_private=True)})
 
 @user_bp.delete("/me")
 @jwt_required()
@@ -183,7 +185,7 @@ def cancel_account_deletion():
         user.deleted_at = None
         user.withdrawn_at = None
         db.session.commit()
-        return jsonify({"message": "탈퇴가 성공적으로 철회되었습니다.", "user": user.to_dict()})
+        return jsonify({"message": "탈퇴가 성공적으로 철회되었습니다.", "user": user.to_dict(include_private=True)})
     except Exception as e:
         db.session.rollback()
         from flask import current_app
@@ -192,10 +194,26 @@ def cancel_account_deletion():
 
 
 
+_verify_attempts = defaultdict(list)
+
+def check_verify_rate_limit(user_id, max_attempts=5, period=60):
+    now = time.time()
+    attempts = [t for t in _verify_attempts[user_id] if now - t < period]
+    _verify_attempts[user_id] = attempts
+    if len(attempts) >= max_attempts:
+        return False
+    _verify_attempts[user_id].append(now)
+    return True
+
+
 @user_bp.post("/me/verify-password")
 @jwt_required()
 def verify_password():
-    user = user_query().get_or_404(int(get_jwt_identity()))
+    user_id = int(get_jwt_identity())
+    if not check_verify_rate_limit(user_id):
+        return jsonify({"message": "너무 많은 비밀번호 확인 시도가 있었습니다. 잠시 후 다시 시도해주세요."}), 429
+
+    user = user_query().get_or_404(user_id)
     password = (request.get_json() or {}).get("password") or ""
 
     if not password:
@@ -203,7 +221,9 @@ def verify_password():
     if "email" not in {item.strip() for item in (user.provider or "").split(",") if item.strip()}:
         return jsonify({"message": "이메일 로그인을 먼저 연동해주세요."}), 400
 
-    # 2026-07-02: Supabase Auth 중심 계정은 provider 연동 상태로 프로필 수정 전 비밀번호 확인 흐름을 통과시킴.
+    if not user.password_hash or not user.check_password(password):
+        return jsonify({"verified": False, "message": "비밀번호가 일치하지 않습니다."}), 400
+
     return jsonify({"verified": True})
 
 
