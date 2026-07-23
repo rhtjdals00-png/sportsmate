@@ -24,7 +24,7 @@ def load_system_settings():
         "sessionExpiryMinutes": 60,
         "termsVersion": "v1.4",
         "supabaseUrl": os.getenv("SUPABASE_URL", "https://ssuncptlzlmuulqmtnqf.supabase.co"),
-        "kakaoApiKey": os.getenv("KAKAO_REST_API_KEY", "5d3ec3100e15e07c16c5a3799a090f1c"),
+        "kakaoApiKey": os.getenv("KAKAO_REST_API_KEY", ""),
         "googleClientId": "40413-t9tr8ha.apps.googleusercontent.com"
     }
 
@@ -88,7 +88,7 @@ def load_system_defaults():
         "sessionExpiryMinutes": 60,
         "termsVersion": "v1.4",
         "supabaseUrl": os.getenv("SUPABASE_URL", "https://ssuncptlzlmuulqmtnqf.supabase.co"),
-        "kakaoApiKey": os.getenv("KAKAO_REST_API_KEY", "5d3ec3100e15e07c16c5a3799a090f1c"),
+        "kakaoApiKey": os.getenv("KAKAO_REST_API_KEY", ""),
         "googleClientId": "40413-t9tr8ha.apps.googleusercontent.com"
     }
 

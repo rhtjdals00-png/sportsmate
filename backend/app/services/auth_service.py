@@ -434,7 +434,7 @@ def build_auth_response(user):
     token = create_access_token(identity=str(user.id))
     return {
         "access_token": token,
-        "user": user.to_dict(),
+        "user": user.to_dict(include_private=True),
         "profile_complete": is_profile_complete(user),
         "profile_intro_required": should_prompt_profile_intro(user)
     }

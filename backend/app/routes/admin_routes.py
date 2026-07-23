@@ -1,5 +1,6 @@
 import os
 import json
+from functools import wraps
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.orm import joinedload
@@ -26,6 +27,16 @@ def admin_limit(default=200, maximum=500):
         return default
 
 
+def admin_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        admin_user = _require_admin_user()
+        if not admin_user:
+            return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+        return fn(*args, **kwargs)
+    return wrapper
+
+
 ADMIN_MEETING_OPTIONS = (
     joinedload(Meeting.host).joinedload(User.profile),
     joinedload(Meeting.sport).joinedload(Sport.category),
@@ -34,6 +45,8 @@ ADMIN_MEETING_OPTIONS = (
 
 
 @admin_bp.get("/users")
+@jwt_required()
+@admin_required
 def users():
     items = (
         User.query
@@ -42,10 +55,12 @@ def users():
         .limit(admin_limit())
         .all()
     )
-    return jsonify({"items": [user.to_dict() for user in items]})
+    return jsonify({"items": [user.to_dict(include_private=True) for user in items]})
 
 
 @admin_bp.get("/users/<int:user_id>")
+@jwt_required()
+@admin_required
 def user_detail(user_id):
     user = User.query.options(joinedload(User.profile)).get_or_404(user_id)
     
@@ -92,7 +107,7 @@ def user_detail(user_id):
         for r in Report.query.filter_by(target_type="user", target_id=user.id).order_by(Report.created_at.desc()).limit(50).all()
     ]
     
-    res_data = user.to_dict()
+    res_data = user.to_dict(include_private=True)
     res_data["stats"] = {
         "meetingsCount": total_meetings,
         "attendanceRate": int(user.profile.attendance_rate) if user.profile else 0,
@@ -105,6 +120,8 @@ def user_detail(user_id):
 
 
 @admin_bp.get("/meetings")
+@jwt_required()
+@admin_required
 def meetings():
     items = (
         Meeting.query
@@ -117,6 +134,8 @@ def meetings():
 
 
 @admin_bp.get("/meetings/<int:meeting_id>")
+@jwt_required()
+@admin_required
 def meeting_detail(meeting_id):
     meeting = Meeting.query.options(*ADMIN_MEETING_OPTIONS).get_or_404(meeting_id)
     from app.models import Participant, Report
@@ -182,7 +201,7 @@ def _report_user_summary(user):
     made_dismissed = Report.query.filter_by(reporter_id=user.id, status="dismissed").count()
     hosted_count = Meeting.query.filter_by(host_id=user.id).count()
     joined_count = Participant.query.filter_by(user_id=user.id, status="approved").count()
-    data = user.to_dict()
+    data = user.to_dict(include_private=True)
     data["report_stats"] = {
         "received_total": received_total,
         "received_pending": received_pending,
@@ -212,8 +231,8 @@ def _direct_message_log_item(message):
     if message.room:
         data["direct_room"] = {
             "id": message.room.id,
-            "user_a": message.room.user_a.to_dict() if message.room.user_a else None,
-            "user_b": message.room.user_b.to_dict() if message.room.user_b else None,
+            "user_a": message.room.user_a.to_dict(include_private=True) if message.room.user_a else None,
+            "user_b": message.room.user_b.to_dict(include_private=True) if message.room.user_b else None,
         }
     return data
 
@@ -659,11 +678,12 @@ def update_user(user_id):
         target_id=user_id
     )
 
-    return jsonify({"user": user.to_dict(), "host_transfers": host_transfers})
+    return jsonify({"user": user.to_dict(include_private=True), "host_transfers": host_transfers})
 
 
 @admin_bp.get("/settings")
 @jwt_required()
+@admin_required
 def get_settings():
     from app.utils.settings import load_system_settings, load_settings_logs
     settings = load_system_settings()
@@ -677,6 +697,7 @@ def get_settings():
 
 @admin_bp.post("/settings")
 @jwt_required()
+@admin_required
 def update_settings():
     from app.utils.settings import load_system_settings, save_system_settings, add_settings_log
     from flask_jwt_extended import get_jwt_identity
@@ -731,6 +752,7 @@ def update_settings():
 
 @admin_bp.get("/settings/logs")
 @jwt_required()
+@admin_required
 def get_settings_logs():
     from app.utils.settings import load_settings_logs
     return jsonify(load_settings_logs())
@@ -738,6 +760,7 @@ def get_settings_logs():
 
 @admin_bp.get("/settings/defaults")
 @jwt_required()
+@admin_required
 def get_settings_defaults():
     from app.utils.settings import load_system_defaults
     return jsonify(load_system_defaults())
@@ -745,6 +768,7 @@ def get_settings_defaults():
 
 @admin_bp.post("/settings/defaults")
 @jwt_required()
+@admin_required
 def update_settings_defaults():
     from app.utils.settings import save_system_defaults
     data = request.get_json() or {}

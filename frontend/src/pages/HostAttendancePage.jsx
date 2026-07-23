@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { QrCode } from "lucide-react";
 import Button from "../components/common/Button.jsx";
@@ -8,6 +8,10 @@ import LoadingCards from "../components/common/LoadingCards.jsx";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
 import { meetingApi } from "../api/meetingApi";
 import { useAsync } from "../hooks/useAsync";
+import {
+  attendanceSessionSignature,
+  evaluateHostManualAttendance,
+} from "../utils/attendancePolicy.js";
 
 function formatAttendanceSession(session) {
   if (!session?.start_at) return `${session?.session_number || "-"}회차`;
@@ -21,6 +25,7 @@ function HostAttendancePage() {
   const { meetingId } = useParams();
   const [refreshKey, setRefreshKey] = useState(0);
   const [checkingId, setCheckingId] = useState(null);
+  const [attendanceActionError, setAttendanceActionError] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const attendance = useAsync(
     () => meetingApi.attendance(meetingId, selectedSessionId ? { session_id: selectedSessionId } : {}),
@@ -30,17 +35,41 @@ function HostAttendancePage() {
     (attendance.data?.items || []).map((item) => [item.user.id, item.status]),
   );
   const activeSessionId = selectedSessionId || attendance.data?.selected_session?.id || "";
+  const manualAttendancePolicy = evaluateHostManualAttendance(attendance.data?.selected_session);
+
+  useEffect(() => {
+    const refreshAttendance = () => {
+      if (document.visibilityState === "visible") {
+        attendance.execute().catch(() => {});
+      }
+    };
+    window.addEventListener("focus", refreshAttendance);
+    document.addEventListener("visibilitychange", refreshAttendance);
+    return () => {
+      window.removeEventListener("focus", refreshAttendance);
+      document.removeEventListener("visibilitychange", refreshAttendance);
+    };
+  }, [meetingId, selectedSessionId]);
 
   const checkParticipant = async (userId, status) => {
     if (!activeSessionId) return;
+    setAttendanceActionError("");
     setCheckingId(userId);
     try {
+      const latestAttendance = await attendance.execute();
+      const latestPolicy = evaluateHostManualAttendance(latestAttendance?.selected_session);
+      if (!latestPolicy.allowed) {
+        setAttendanceActionError(latestPolicy.message);
+        return;
+      }
       await meetingApi.checkAttendance(meetingId, {
         user_id: userId,
         status,
         session_id: Number(activeSessionId),
       });
       setRefreshKey((value) => value + 1);
+    } catch (error) {
+      setAttendanceActionError(error.response?.data?.message || "출석 상태를 변경하지 못했습니다.");
     } finally {
       setCheckingId(null);
     }
@@ -78,10 +107,17 @@ function HostAttendancePage() {
       ) : attendance.data?.approved_participants?.length ? (
         <>
           <AttendanceQrPanel
-            key={attendance.data.selected_session.id}
+            key={attendanceSessionSignature(attendance.data.selected_session)}
             meetingId={meetingId}
             session={attendance.data.selected_session}
+            onRefreshSession={attendance.execute}
           />
+          {!manualAttendancePolicy.allowed ? (
+            <p className="attendance-qr-panel__error">{manualAttendancePolicy.message}</p>
+          ) : null}
+          {attendanceActionError ? (
+            <p className="attendance-qr-panel__error">{attendanceActionError}</p>
+          ) : null}
           <div className="attendance-list">
             {(attendance.data?.approved_participants || []).map((participant) => {
             const isPresent = attendanceStatusByUser.get(participant.user.id) === "present";
@@ -97,7 +133,7 @@ function HostAttendancePage() {
                 <Button
                   type="button"
                   onClick={() => checkParticipant(participant.user.id, isPresent ? "absent" : "present")}
-                  disabled={!activeSessionId || isUpdating}
+                  disabled={!activeSessionId || !manualAttendancePolicy.allowed || isUpdating}
                 >
                   {isUpdating ? "처리 중" : isPresent ? "미출석으로 변경" : "출석 체크"}
                 </Button>

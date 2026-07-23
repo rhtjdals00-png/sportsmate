@@ -38,6 +38,10 @@ import { sportApi } from "../api/sportApi";
 import { userApi } from "../api/userApi";
 import { useAsync } from "../hooks/useAsync";
 import { useResponsive } from "../hooks/useResponsive";
+import {
+  attendanceSessionSignature,
+  evaluateHostManualAttendance,
+} from "../utils/attendancePolicy.js";
 
 function parseMeetingDate(value) {
   if (!value) return null;
@@ -490,7 +494,7 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
       onMeetingUpdated?.();
       loadUserCalendar({ force: true });
       setScheduleAction(null);
-      alert("일정이 변경되었습니다.");
+      alert("일정이 변경되었습니다. 기존 출석 QR은 만료되었으므로 새 QR을 발급해 주세요.");
     } catch (error) {
       setScheduleActionError(error.response?.data?.message || "일정 변경 중 오류가 발생했습니다.");
     } finally {
@@ -748,15 +752,25 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
     [meeting.id, activeTab, refreshKey, selectedAttendanceSessionId]
   );
   const [attendanceUpdatingId, setAttendanceUpdatingId] = useState(null);
+  const [attendanceActionError, setAttendanceActionError] = useState("");
   const attendanceStatusByUser = new Map((attendance.data?.items || []).map((item) => [item.user.id, item.status]));
   const activeAttendanceSessionId = selectedAttendanceSessionId || attendance.data?.selected_session?.id || "";
+  const manualAttendancePolicy = evaluateHostManualAttendance(attendance.data?.selected_session);
   const checkParticipant = async (userId, status) => {
     if (!activeAttendanceSessionId) {
       alert("출석을 기록할 회차를 선택해 주세요.");
       return;
     }
+    setAttendanceActionError("");
     setAttendanceUpdatingId(userId);
     try {
+      const latestAttendance = await attendance.execute();
+      const latestSession = latestAttendance?.selected_session;
+      const latestPolicy = evaluateHostManualAttendance(latestSession);
+      if (!latestPolicy.allowed) {
+        setAttendanceActionError(latestPolicy.message);
+        return;
+      }
       await meetingApi.checkAttendance(meeting.id, {
         user_id: userId,
         status,
@@ -764,6 +778,8 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
       });
       setRefreshKey((value) => value + 1);
       alert(status === "present" ? "출석으로 변경되었습니다." : "미출석으로 변경되었습니다.");
+    } catch (error) {
+      setAttendanceActionError(error.response?.data?.message || "출석 상태를 변경하지 못했습니다.");
     } finally {
       setAttendanceUpdatingId(null);
     }
@@ -1109,10 +1125,17 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
             ) : attendance.data?.approved_participants?.length ? (
               <>
                 <AttendanceQrPanel
-                  key={attendance.data.selected_session.id}
+                  key={attendanceSessionSignature(attendance.data.selected_session)}
                   meetingId={meeting.id}
                   session={attendance.data.selected_session}
+                  onRefreshSession={attendance.execute}
                 />
+                {!manualAttendancePolicy.allowed ? (
+                  <p className="attendance-qr-panel__error">{manualAttendancePolicy.message}</p>
+                ) : null}
+                {attendanceActionError ? (
+                  <p className="attendance-qr-panel__error">{attendanceActionError}</p>
+                ) : null}
                 <div className="attendance-list">
                   {(attendance.data?.approved_participants || []).map((participant) => (
                   <article key={participant.id} className="desktop-attendance-item">
@@ -1130,7 +1153,7 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
                           participant.user.id,
                           attendanceStatusByUser.get(participant.user.id) === "present" ? "absent" : "present"
                         )}
-                        disabled={!activeAttendanceSessionId || attendanceUpdatingId === participant.user.id}
+                        disabled={!activeAttendanceSessionId || !manualAttendancePolicy.allowed || attendanceUpdatingId === participant.user.id}
                       >
                         {attendanceUpdatingId === participant.user.id
                           ? "처리 중"

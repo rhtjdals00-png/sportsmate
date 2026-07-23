@@ -207,7 +207,7 @@ def logout():
 @jwt_required()
 def me():
     user = User.query.get_or_404(int(get_jwt_identity()))
-    return jsonify({"user": user.to_dict()})
+    return jsonify({"user": user.to_dict(include_private=True)})
 
 
 @auth_bp.post("/restore")

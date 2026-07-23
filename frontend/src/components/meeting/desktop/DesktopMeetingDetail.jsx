@@ -352,12 +352,16 @@ function DesktopMeetingDetail({ recordedViewCount = null }) {
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinMessage, setJoinMessage] = useState("");
   const [joinError, setJoinError] = useState("");
+  const [participationConfirm, setParticipationConfirm] = useState(null);
+  const [participationError, setParticipationError] = useState("");
   const [reportReason, setReportReason] = useState("");
   const [reporting, setReporting] = useState(false);
   const [reportFeedback, setReportFeedback] = useState({ text: "", tone: "notice" });
   const joinTextareaRef = useRef(null);
   const participationCancelButtonRef = useRef(null);
   const [weather, setWeather] = useState({ loading: true, forecast: null });
+  const [participationConfirm, setParticipationConfirm] = useState(null);
+  const [participationError, setParticipationError] = useState("");
   const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId, refreshKey]);
 
   useEffect(() => {

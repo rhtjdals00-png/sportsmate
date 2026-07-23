@@ -1,6 +1,7 @@
 from functools import lru_cache
 
 from flask import Blueprint, current_app, jsonify, request
+from flask_jwt_extended import jwt_required
 
 from app.services.location_service import list_regions, reverse_geocode, search_places, sync_regions_from_configured_api
 
@@ -26,7 +27,16 @@ def regions():
 
 
 @location_bp.post("/regions/sync")
+@jwt_required()
 def sync_regions():
+    from flask_jwt_extended import get_jwt_identity
+    from app.models.users import User
+
+    current_user_id = int(get_jwt_identity())
+    user = User.query.get(current_user_id)
+    if not user or user.role not in ["superadmin", "admin"]:
+        return jsonify({"message": "관리자 권한이 필요합니다."}), 403
+
     result = sync_regions_from_configured_api()
     _cached_regions.cache_clear()
     return jsonify(result)
