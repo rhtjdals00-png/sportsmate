@@ -43,7 +43,7 @@ function getDday(value) {
 }
 
 export function getDesktopScheduleState(item) {
-  const isRegular = item.meetingType === "regular";
+  //const isRegular = item.meetingType === "regular";
   const meetingStatus = String(item.meetingStatus ?? item.status ?? "");
   if (meetingStatus === "cancelled" || item.sessionStatus === "cancelled") {
     return { label: "취소됨", isEnded: true, state: "cancelled" };
