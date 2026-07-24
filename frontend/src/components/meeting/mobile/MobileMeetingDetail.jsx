@@ -9,9 +9,15 @@ import LoadingCards from "../../common/LoadingCards.jsx";
 import MobileMeetingLocationMap from "./MobileMeetingLocationMap.jsx";
 import { meetingApi } from "../../../api/meetingApi";
 import { useAsync } from "../../../hooks/useAsync";
-import { formatDateTime, formatMeetingType } from "../../../utils/formatters";
+import { formatDateTime, formatMeetingType, formatRegularMeetingSchedule } from "../../../utils/formatters";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { getMeetingCoverImage, isUsingSportThumbnail } from "../../../utils/sportThumbnails";
+import {
+  canRequestMeetingParticipation,
+  getMeetingLifecycleState,
+  getMeetingRepresentativeStartAt,
+  getMeetingStatusPresentation
+} from "../../../utils/meetingLifecycle";
 import { reportApi } from "../../../api/reportApi";
 import { voteApi } from "../../../api/voteApi";
 import { chatApi } from "../../../api/chatApi";
@@ -20,7 +26,7 @@ import MobileWeatherCard from "./MobileWeatherCard.jsx";
 import MobileQrScanner from "../../attendance/MobileQrScanner.jsx";
 
 function getDisplayStartAt(meeting) {
-  return meeting?.meeting_type === "regular" ? meeting?.next_session?.start_at || meeting?.start_at : meeting?.start_at;
+  return getMeetingRepresentativeStartAt(meeting) || meeting?.start_at || null;
 }
 
 function MobileMeetingDetail({ recordedViewCount = null }) {
@@ -102,14 +108,32 @@ function MobileMeetingDetail({ recordedViewCount = null }) {
   const meeting = detail.data?.meeting;
   if (!meeting) return <p className="page-message">모임 정보를 찾을 수 없습니다.</p>;
   const isHost = user?.id === meeting.host?.id;
-  const isClosed = meeting.status !== "open";
-  const isFull = Number(meeting.current_participants || 0) >= Number(meeting.max_participants || 0);
   const viewerStatus = meeting.viewer_status || meeting.my_participant?.status || "";
   const isApprovedParticipant = viewerStatus === "approved";
   const isPendingParticipant = viewerStatus === "pending";
-  const canJoin = !isHost && !isApprovedParticipant && !isPendingParticipant && !isClosed && !isFull && !joining;
+  const lifecycleNow = new Date();
+  const lifecycleState = getMeetingLifecycleState(meeting, lifecycleNow);
+  const statusPresentation = getMeetingStatusPresentation(meeting, lifecycleNow);
+  const representativeStartAt = getMeetingRepresentativeStartAt(meeting);
+  const canJoin = canRequestMeetingParticipation({
+    meeting,
+    isHost,
+    isApprovedParticipant,
+    isPendingParticipant,
+    isJoining: joining,
+    now: lifecycleNow
+  });
   const chatRoomId = meeting.chat_room_id || location.state?.chatRoomId;
   const canViewMemberContent = isHost || viewerStatus === "approved";
+  const scheduleLabel = (() => {
+    if (lifecycleState === "cancelled") return "취소된 모임입니다.";
+    if (lifecycleState === "suspended") return "운영이 중지된 모임입니다.";
+    if (lifecycleState === "ended") return "운영이 종료된 모임입니다.";
+    if (meeting.meeting_type === "regular") {
+      return representativeStartAt ? `다음 일정 ${formatDateTime(representativeStartAt)}` : "예정된 회차 없음";
+    }
+    return formatDateTime(representativeStartAt);
+  })();
 
   const partBadge = (() => {
     const myParticipant = meeting?.my_participant;
@@ -142,6 +166,7 @@ function MobileMeetingDetail({ recordedViewCount = null }) {
   })();
 
   const joinMeeting = async () => {
+    if (!canJoin) return;
     if (!isAuthenticated) {
       setMessage({ text: "로그인이 필요합니다.", tone: "danger" });
       navigate("/login", { state: { from: location.pathname } });
@@ -290,7 +315,7 @@ function MobileMeetingDetail({ recordedViewCount = null }) {
         </div>
         <div className="detail-card">
           <div className="meeting-card__top">
-            <Badge tone={meeting.status === "open" ? "success" : "slate"}>{meeting.status === "open" ? "모집중" : "모집마감"}</Badge>
+            <Badge tone={statusPresentation.tone}>{statusPresentation.label}</Badge>
             <Badge tone="sky">{meeting.is_lesson ? "강습형 모임" : formatMeetingType(meeting.meeting_type)}</Badge>
             {partBadge && <Badge tone={partBadge.tone}>{partBadge.text}</Badge>}
           </div>
@@ -312,8 +337,14 @@ function MobileMeetingDetail({ recordedViewCount = null }) {
           <dl className="info-list">
             <div>
               <CalendarClock size={18} />
-              <span>{formatDateTime(meeting.start_at)}</span>
+              <span>{scheduleLabel}</span>
             </div>
+            {meeting.meeting_type === "regular" && (
+              <div>
+                <CalendarClock size={18} />
+                <span>{formatRegularMeetingSchedule(meeting, "반복 일정 미정")}</span>
+              </div>
+            )}
             <div>
               <Users size={18} />
               <span>
@@ -589,7 +620,7 @@ function MobileMeetingDetail({ recordedViewCount = null }) {
           </Button>
         ) : (
           <Button onClick={joinMeeting} disabled={!canJoin}>
-            {joining ? "신청 중..." : isClosed ? "모집 마감" : isFull ? "정원 마감" : "참여 신청"}
+            {joining ? "신청 중..." : statusPresentation.state === "open" ? "참여 신청" : statusPresentation.label}
           </Button>
         )}
       </div>

@@ -14,6 +14,13 @@ import { userApi } from "../../../api/userApi";
 import { locationApi } from "../../../api/locationApi";
 import { reportApi } from "../../../api/reportApi";
 import MobilePushPermissionModal from "../../notification/mobile/MobilePushPermissionModal";
+import {
+  addHiddenChatUserId,
+  buildHiddenChatUsersStorageKey,
+  parseHiddenChatUserIds,
+  removeHiddenChatUserId,
+  shouldHideChatMessage
+} from "../../../utils/chatMessageVisibility.js";
 
 let naverMapClientIdPromise = null;
 const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
@@ -270,6 +277,12 @@ function MobileChatRoom() {
   const { chatRoomId, directRoomId } = useParams();
   const isDirectChat = Boolean(directRoomId);
   const { user } = useAuth();
+  const activeChatRoomId = isDirectChat ? directRoomId : chatRoomId;
+  const activeChatRoomType = isDirectChat ? "direct" : "meeting";
+  const hiddenChatStorageKey = useMemo(
+    () => buildHiddenChatUsersStorageKey(user?.id, activeChatRoomId, activeChatRoomType),
+    [user?.id, activeChatRoomId, activeChatRoomType]
+  );
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -277,13 +290,7 @@ function MobileChatRoom() {
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [directRefreshKey, setDirectRefreshKey] = useState(0);
-  const [blockedUsers, setBlockedUsers] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("sportsmate_blocked_users") || "[]");
-    } catch {
-      return [];
-    }
-  });
+  const [hiddenChatUserIds, setHiddenChatUserIds] = useState([]);
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [noticeListOpen, setNoticeListOpen] = useState(false);
   const [voteOpen, setVoteOpen] = useState(false);
@@ -329,6 +336,7 @@ function MobileChatRoom() {
   const [noticeFormOpen, setNoticeFormOpen] = useState(false);
   const [noticeForm, setNoticeForm] = useState({ title: "", content: "", is_pinned: true });
   const [noticeSubmitting, setNoticeSubmitting] = useState(false);
+
   const [noticeError, setNoticeError] = useState("");
   const [noticeRefreshKey, setNoticeRefreshKey] = useState(0);
 
@@ -348,6 +356,19 @@ function MobileChatRoom() {
   const loadingOlderRef = useRef(false);
   const latestMeetingMessageIdRef = useRef(0);
   const latestDirectMessageIdRef = useRef(0);
+
+  useLayoutEffect(() => {
+    if (!hiddenChatStorageKey) {
+      setHiddenChatUserIds([]);
+      return;
+    }
+    try {
+      setHiddenChatUserIds(parseHiddenChatUserIds(localStorage.getItem(hiddenChatStorageKey)));
+    } catch (storageError) {
+      console.warn("Failed to load hidden chat users:", storageError);
+      setHiddenChatUserIds([]);
+    }
+  }, [hiddenChatStorageKey]);
 
   // 모임 채팅 메시지
   const messages = useAsync(
@@ -448,12 +469,10 @@ function MobileChatRoom() {
   const pinnedNotice = noticeItems.find((item) => item.is_pinned) || noticeItems[0] || null;
   const rawMessages = activeMessages.data?.items || [];
   const renderedMessages = useMemo(() => {
-    return rawMessages.filter(msg => {
-      const isSystem = msg.message_type === "system";
-      if (isSystem) return true;
-      return !blockedUsers.includes(String(msg.sender_id || msg.user_id));
-    });
-  }, [rawMessages, blockedUsers]);
+    return rawMessages.filter(
+      (message) => !shouldHideChatMessage(message, hiddenChatUserIds, user?.id)
+    );
+  }, [rawMessages, hiddenChatUserIds, user?.id]);
 
   const isSystemMessage = (msg) => {
     return ["notice", "system"].includes(msg?.message_type);
@@ -1056,23 +1075,28 @@ function MobileChatRoom() {
     setProfilePreviewUser(null);
   };
 
-  const blockUser = (targetUser) => {
-    if (!targetUser?.id) return;
-    if (!window.confirm(`${senderLabel(targetUser)}님의 메시지를 차단하시겠습니까? (내 화면에서만 보이지 않습니다)`)) return;
-    const nextBlocked = [...blockedUsers, String(targetUser.id)];
-    setBlockedUsers(nextBlocked);
-    localStorage.setItem("sportsmate_blocked_users", JSON.stringify(nextBlocked));
-    setProfilePreviewUser(null);
-    alert("차단되었습니다.");
-  };
+  const updateHiddenChatUser = (targetUser, shouldHide) => {
+    if (!hiddenChatStorageKey || !targetUser?.id || String(targetUser.id) === String(user?.id)) return;
+    const confirmed = window.confirm(
+      shouldHide
+        ? "이 사용자의 채팅을 숨길까요?\n이 채팅방에서 해당 사용자의 일반 메시지가 보이지 않습니다."
+        : "이 사용자의 채팅을 다시 표시할까요?"
+    );
+    if (!confirmed) return;
 
-  const unblockUser = (targetUser) => {
-    if (!targetUser?.id) return;
-    const nextBlocked = blockedUsers.filter(id => id !== String(targetUser.id));
-    setBlockedUsers(nextBlocked);
-    localStorage.setItem("sportsmate_blocked_users", JSON.stringify(nextBlocked));
-    setProfilePreviewUser(null);
-    alert("차단이 해제되었습니다.");
+    const nextHiddenIds = shouldHide
+      ? addHiddenChatUserId(hiddenChatUserIds, targetUser.id)
+      : removeHiddenChatUserId(hiddenChatUserIds, targetUser.id);
+    try {
+      localStorage.setItem(hiddenChatStorageKey, JSON.stringify(nextHiddenIds));
+      setHiddenChatUserIds(nextHiddenIds);
+      setProfilePreviewUser(null);
+      setProfileNotice("");
+      window.alert(shouldHide ? "이 사용자의 채팅을 숨겼습니다." : "이 사용자의 채팅을 다시 표시합니다.");
+    } catch (storageError) {
+      console.error("Failed to save hidden chat users:", storageError);
+      setProfileNotice("채팅 숨김 설정을 저장하지 못했습니다.");
+    }
   };
 
   const submitReport = async (event) => {
@@ -1615,10 +1639,10 @@ function MobileChatRoom() {
               )}
               {String(profilePreviewUser.id) !== String(user?.id) && (
                 <>
-                  {blockedUsers.includes(String(profilePreviewUser.id)) ? (
+                  {hiddenChatStorageKey && hiddenChatUserIds.includes(String(profilePreviewUser.id)) ? (
                     <button
                       type="button"
-                      onClick={() => unblockUser(profilePreviewUser)}
+                      onClick={() => updateHiddenChatUser(profilePreviewUser, false)}
                       style={{
                         flex: 1,
                         maxWidth: '140px',
@@ -1632,12 +1656,12 @@ function MobileChatRoom() {
                         cursor: 'pointer'
                       }}
                     >
-                      차단 해제
+                      채팅 다시 보기
                     </button>
-                  ) : (
+                  ) : hiddenChatStorageKey ? (
                     <button
                       type="button"
-                      onClick={() => blockUser(profilePreviewUser)}
+                      onClick={() => updateHiddenChatUser(profilePreviewUser, true)}
                       style={{
                         flex: 1,
                         maxWidth: '140px',
@@ -1651,9 +1675,9 @@ function MobileChatRoom() {
                         cursor: 'pointer'
                       }}
                     >
-                      차단
+                      채팅 숨기기
                     </button>
-                  )}
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => openUserReport(profilePreviewUser)}

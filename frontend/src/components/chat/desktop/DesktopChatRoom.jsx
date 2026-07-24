@@ -39,6 +39,13 @@ import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { voteApi } from "../../../api/voteApi";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { useAsync } from "../../../hooks/useAsync";
+import {
+  addHiddenChatUserId,
+  buildHiddenChatUsersStorageKey,
+  parseHiddenChatUserIds,
+  removeHiddenChatUserId,
+  shouldHideChatMessage
+} from "../../../utils/chatMessageVisibility.js";
 import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
 
 const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
@@ -466,6 +473,7 @@ function DesktopChatRoom() {
   const [leaveTargetRoom, setLeaveTargetRoom] = useState(null);
   const [privateChatNotice, setPrivateChatNotice] = useState("");
   const [profilePreviewUser, setProfilePreviewUser] = useState(null);
+  const [hiddenChatUserIds, setHiddenChatUserIds] = useState([]);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [photoZoom, setPhotoZoom] = useState(1);
   const [photoPan, setPhotoPan] = useState({ x: 0, y: 0 });
@@ -518,6 +526,12 @@ function DesktopChatRoom() {
   const loadingOlderRef = useRef(false);
   const latestMeetingMessageIdRef = useRef(0);
   const latestDirectMessageIdRef = useRef(0);
+  const activeChatRoomId = isDirectChat ? directRoomId : chatRoomId;
+  const activeChatRoomType = isDirectChat ? "direct" : "meeting";
+  const hiddenChatStorageKey = useMemo(
+    () => buildHiddenChatUsersStorageKey(user?.id, activeChatRoomId, activeChatRoomType),
+    [user?.id, activeChatRoomId, activeChatRoomType]
+  );
 
   const messages = useAsync(() => chatRoomId ? chatApi.messages(chatRoomId, { limit: 50 }) : Promise.resolve(null), [chatRoomId, refreshKey]);
   const directMessages = useAsync(() => directRoomId ? chatApi.directMessages(directRoomId, { limit: 50 }) : Promise.resolve(null), [directRoomId, directRefreshKey]);
@@ -529,6 +543,19 @@ function DesktopChatRoom() {
       .then((res) => setMutedRooms(res.muted_rooms || []))
       .catch((err) => console.error("Failed to load muted rooms", err));
   }, []);
+
+  useLayoutEffect(() => {
+    if (!hiddenChatStorageKey) {
+      setHiddenChatUserIds([]);
+      return;
+    }
+    try {
+      setHiddenChatUserIds(parseHiddenChatUserIds(localStorage.getItem(hiddenChatStorageKey)));
+    } catch (storageError) {
+      console.warn("Failed to load hidden chat users:", storageError);
+      setHiddenChatUserIds([]);
+    }
+  }, [hiddenChatStorageKey]);
 
   const toggleMute = async (roomId, roomType) => {
     const isCurrentlyMuted = mutedRooms.some(r => String(r.room_id) === String(roomId) && r.room_type === roomType);
@@ -663,12 +690,15 @@ function DesktopChatRoom() {
   };
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const displayableMessages = renderedMessages.filter(
+    (message) => !shouldHideChatMessage(message, hiddenChatUserIds, user?.id)
+  );
   const visibleMessages = normalizedSearchQuery
-    ? renderedMessages.filter((message) => {
+    ? displayableMessages.filter((message) => {
         const senderName = message.sender?.nickname || message.sender?.name || "";
         return `${senderName} ${message.content || ""}`.toLowerCase().includes(normalizedSearchQuery);
       })
-    : renderedMessages;
+    : displayableMessages;
 
   useEffect(() => {
     setChatListMode(isDirectChat ? "direct" : "meeting");
@@ -1474,6 +1504,30 @@ function DesktopChatRoom() {
     }
   };
 
+  const updateHiddenChatUser = (targetUser, shouldHide) => {
+    if (!hiddenChatStorageKey || !targetUser?.id || String(targetUser.id) === String(user?.id)) return;
+    const confirmed = window.confirm(
+      shouldHide
+        ? "이 사용자의 채팅을 숨길까요?\n이 채팅방에서 해당 사용자의 일반 메시지가 보이지 않습니다."
+        : "이 사용자의 채팅을 다시 표시할까요?"
+    );
+    if (!confirmed) return;
+
+    const nextHiddenIds = shouldHide
+      ? addHiddenChatUserId(hiddenChatUserIds, targetUser.id)
+      : removeHiddenChatUserId(hiddenChatUserIds, targetUser.id);
+    try {
+      localStorage.setItem(hiddenChatStorageKey, JSON.stringify(nextHiddenIds));
+      setHiddenChatUserIds(nextHiddenIds);
+      setProfilePreviewUser(null);
+      setPrivateChatNotice("");
+      window.alert(shouldHide ? "이 사용자의 채팅을 숨겼습니다." : "이 사용자의 채팅을 다시 표시합니다.");
+    } catch (storageError) {
+      console.error("Failed to save hidden chat users:", storageError);
+      setPrivateChatNotice("채팅 숨김 설정을 저장하지 못했습니다.");
+    }
+  };
+
   const leaveRoom = async () => {
     const targetRoomId = leaveTargetRoom?.id || chatRoomId;
     if (!targetRoomId || leavingRoom) return;
@@ -2055,7 +2109,13 @@ function DesktopChatRoom() {
                   <Flag size={14} />
                   신고
                 </button>
-                <button type="button">차단</button>
+                {hiddenChatStorageKey ? (
+                  hiddenChatUserIds.includes(String(profilePreviewUser.id)) ? (
+                    <button type="button" onClick={() => updateHiddenChatUser(profilePreviewUser, false)}>채팅 다시 보기</button>
+                  ) : (
+                    <button type="button" onClick={() => updateHiddenChatUser(profilePreviewUser, true)}>채팅 숨기기</button>
+                  )
+                ) : null}
               </div>
             ) : null}
           </section>

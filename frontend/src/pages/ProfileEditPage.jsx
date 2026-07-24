@@ -1,6 +1,6 @@
 import { Camera, CheckCircle2, KeyRound, MapPin, Search, X, CircleAlert, LockKeyhole, XCircle } from "lucide-react";
 import StatusMessages from "../constants/statusMessages";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Button from "../components/common/Button.jsx";
 import BouncySelect from "../components/common/BouncySelect";
@@ -131,7 +131,7 @@ function isEmailOnlyProvider(user) {
 function MobileProfileEditPage() {
   const { isMobile } = useResponsive();
   const navigate = useNavigate();
-  const { user, setCurrentUser } = useAuth();
+  const { user, setCurrentUser, logout } = useAuth();
   const initialSports = useMemo(() => splitSports(user?.profile?.preferred_sports), [user?.profile?.preferred_sports]);
   const initialLevels = useMemo(() => parsePreferredLevels(user?.profile?.preferred_sport_levels), [user?.profile?.preferred_sport_levels]);
 
@@ -181,29 +181,44 @@ function MobileProfileEditPage() {
   const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
   const [withdrawText, setWithdrawText] = useState("");
   const [withdrawStatus, setWithdrawStatus] = useState("idle");
+  const [withdrawing, setWithdrawing] = useState(false);
+  const withdrawRequestRef = useRef(false);
 
   const submitWithdraw = async () => {
+    if (withdrawRequestRef.current) return;
+
     if (withdrawText.trim().normalize('NFC') !== "탈퇴합니다".normalize('NFC')) {
       setWithdrawStatus("mismatch");
       return;
     }
-    
+
+    withdrawRequestRef.current = true;
+    setWithdrawing(true);
+
     try {
       await userApi.deleteMe();
-      setWithdrawStatus("success");
-      // Short delay so they see the success text
-      setTimeout(async () => {
-        try {
-          await logout();
-          sessionStorage.setItem("sportsmate_flash", "회원 탈퇴가 완료되었습니다.");
-          navigate("/login", { replace: true });
-        } catch (e) {
-          console.error("Failed to logout after withdraw:", e);
-        }
-      }, 1500);
     } catch (e) {
       console.error("Withdraw failed:", e);
-      setWithdrawStatus("mismatch"); // fallback error
+      setWithdrawStatus("error");
+      withdrawRequestRef.current = false;
+      setWithdrawing(false);
+      return;
+    }
+
+    setWithdrawStatus("success");
+    await new Promise((resolve) => window.setTimeout(resolve, 1500));
+
+    try {
+      await logout();
+    } catch (e) {
+      console.error("Failed to complete local logout after withdraw:", e);
+    } finally {
+      try {
+        sessionStorage.setItem("sportsmate_flash", "회원 탈퇴가 완료되었습니다.");
+        navigate("/login", { replace: true });
+      } catch (e) {
+        console.error("Failed to navigate after withdraw:", e);
+      }
     }
   };
 
@@ -968,9 +983,9 @@ function MobileProfileEditPage() {
       )}
 
       {withdrawModalOpen && (
-        <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setWithdrawModalOpen(false)}>
+        <div className="profile-auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !withdrawing && setWithdrawModalOpen(false)}>
           <section className="profile-auth-modal" style={{ width: '95%', maxWidth: '360px', padding: '24px 20px', borderRadius: '16px', boxSizing: 'border-box' }}>
-            <button className="schedule-modal-close" type="button" onClick={() => setWithdrawModalOpen(false)}><X size={18} /></button>
+            <button className="schedule-modal-close" type="button" onClick={() => setWithdrawModalOpen(false)} disabled={withdrawing}><X size={18} /></button>
             <h2>회원 탈퇴</h2>
             <p>회원 탈퇴 신청 시 30일의 유예 기간이 적용됩니다. 유예 기간 내에는 재로그인을 통해 계정을 복구할 수 있으나, 복구하지 않고 30일이 경과하면 계정이 완전히 삭제됩니다.</p>
             <div className="profile-auth-form" style={{ marginTop: '20px' }}>
@@ -980,6 +995,7 @@ function MobileProfileEditPage() {
                   type="text"
                   value={withdrawText}
                   placeholder="탈퇴합니다"
+                  disabled={withdrawing}
                   onChange={(event) => {
                     setWithdrawText(event.target.value);
                     setWithdrawStatus("idle");
@@ -987,10 +1003,13 @@ function MobileProfileEditPage() {
                 />
               </label>
               {withdrawStatus === "mismatch" && <em className="nickname-check warn">확인 문구를 정확히 입력해주세요.</em>}
+              {withdrawStatus === "error" && <em className="nickname-check warn">회원 탈퇴 요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.</em>}
               {withdrawStatus === "success" && <em className="nickname-check ok">회원 탈퇴 확인 흐름이 완료되었습니다.</em>}
               <div className="profile-auth-actions" style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
-                <button className="ghost-btn" type="button" onClick={() => setWithdrawModalOpen(false)}>취소</button>
-                <button className="primary-small danger-small" type="button" onClick={submitWithdraw} style={{ background: '#ef4444', color: 'white', border: 'none' }}>탈퇴 확인</button>
+                <button className="ghost-btn" type="button" onClick={() => setWithdrawModalOpen(false)} disabled={withdrawing}>취소</button>
+                <button className="primary-small danger-small" type="button" onClick={submitWithdraw} disabled={withdrawing} style={{ background: '#ef4444', color: 'white', border: 'none' }}>
+                  {withdrawing ? "처리 중..." : "탈퇴 확인"}
+                </button>
               </div>
             </div>
           </section>

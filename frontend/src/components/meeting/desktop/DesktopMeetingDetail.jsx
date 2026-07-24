@@ -360,8 +360,6 @@ function DesktopMeetingDetail({ recordedViewCount = null }) {
   const joinTextareaRef = useRef(null);
   const participationCancelButtonRef = useRef(null);
   const [weather, setWeather] = useState({ loading: true, forecast: null });
-  const [participationConfirm, setParticipationConfirm] = useState(null);
-  const [participationError, setParticipationError] = useState("");
   const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId, refreshKey]);
 
   useEffect(() => {

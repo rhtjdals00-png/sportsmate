@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import { authApi } from "../api/authApi";
 import { isSupabaseConfigured, supabase } from "../api/supabaseClient";
 import AccountRestorationModal from "../components/auth/AccountRestorationModal.jsx";
+import { completeLogout } from "../utils/authLogout.js";
 
 const AuthContext = createContext(null);
 
@@ -613,19 +614,29 @@ export function AuthProvider({ children }) {
         return data;
       },
       async logout() {
-        authBoundaryErrorRef.current = null;
-        clearPendingLoginProvider();
-        currentSyncTokenRef.current = "";
-        clearSyncCache();
-        if (isSupabaseConfigured && supabase) {
-          await supabase.auth.signOut();
-        }
-        localStorage.removeItem("sportsmate_token");
-        setBackendTokenReady(false);
-        setAuthError("");
-        sessionStorage.removeItem("sportsmate_auth_error");
-        setUser(null);
-        setSession(null);
+        return completeLogout({
+          beforeTasks: [
+            () => {
+              authBoundaryErrorRef.current = null;
+            },
+            clearPendingLoginProvider,
+            () => {
+              currentSyncTokenRef.current = "";
+            },
+            clearSyncCache,
+          ],
+          signOut: isSupabaseConfigured && supabase
+            ? () => supabase.auth.signOut()
+            : null,
+          cleanupTasks: [
+            () => localStorage.removeItem("sportsmate_token"),
+            () => setBackendTokenReady(false),
+            () => setAuthError(""),
+            () => sessionStorage.removeItem("sportsmate_auth_error"),
+            () => setUser(null),
+            () => setSession(null),
+          ],
+        });
       },
       setCurrentUser(nextUser) {
         setUser(nextUser);
