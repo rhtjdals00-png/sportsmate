@@ -558,10 +558,16 @@ def list_meetings(params, current_user_id=None):
         candidates.sort(key=get_recommend_key)
         return candidates[:limit]
 
-    latitude = _float_param(params, "lat") or _float_param(params, "latitude")
-    longitude = _float_param(params, "lng") or _float_param(params, "longitude")
+    latitude = _float_param(params, "lat")
+    if latitude is None:
+        latitude = _float_param(params, "latitude")
+    longitude = _float_param(params, "lng")
+    if longitude is None:
+        longitude = _float_param(params, "longitude")
     if latitude is not None and longitude is not None:
-        radius_km = _float_param(params, "radius_km") or _float_param(params, "radius")
+        radius_km = _float_param(params, "radius_km")
+        if radius_km is None:
+            radius_km = _float_param(params, "radius")
         has_keyword_filter = bool(params.get("keyword"))
         candidates = query.order_by(Meeting.start_at.is_(None), Meeting.start_at.asc()).limit(80).all()
         for meeting in candidates:
