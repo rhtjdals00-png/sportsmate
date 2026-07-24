@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models import Attendance, Meeting, MeetingSession, Participant, Review, Sport, User, UserProfile
-from app.services.meeting_service import ensure_regular_meeting_sessions
+from app.services.meeting_service import ensure_regular_meeting_sessions, select_current_or_next_session
 from app.utils.timezone import kst_now
 
 user_bp = Blueprint("users", __name__)
@@ -77,6 +77,12 @@ def get_me():
 def update_me():
     user = user_query().get_or_404(int(get_jwt_identity()))
     data = request.get_json() or {}
+
+    if "direct_message_policy" in data:
+        policy = str(data["direct_message_policy"] or "").strip()
+        if policy not in {"everyone", "same_meeting", "none"}:
+            return jsonify({"message": "1:1 채팅 수신 설정이 올바르지 않습니다."}), 400
+        user.direct_message_policy = policy
 
     if "preferred_sports" in data:
         try:
@@ -247,7 +253,7 @@ def attach_schedule_sessions(meetings, include_cancelled=False):
         data = meeting.to_dict()
         sessions = sessions_by_meeting.get(meeting.id, [])
         session_dicts = [session.to_dict() for session in sessions]
-        next_session = next((session for session in sessions if session.start_at >= now), None)
+        next_session = select_current_or_next_session(sessions, now)
         data["repeat_rule"] = meeting.repeat_rule
         data["sessions"] = session_dicts
         data["next_session"] = next_session.to_dict() if next_session else None

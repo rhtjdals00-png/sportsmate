@@ -128,7 +128,7 @@ function getDateLabel(value) {
     month: "2-digit",
     day: "2-digit",
     weekday: "short",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
   }).format(date);
 }
@@ -178,11 +178,6 @@ function DesktopMeetingList() {
   const [placeLoading, setPlaceLoading] = useState(false);
   const [placeError, setPlaceError] = useState("");
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
-  const [isRadiusModalOpen, setIsRadiusModalOpen] = useState(false);
-  const [inputRadius, setInputRadius] = useState(6);
-  const [isCancelHovered, setIsCancelHovered] = useState(false);
-  const [isConfirmHovered, setIsConfirmHovered] = useState(false);
-  const [isCloseHovered, setIsCloseHovered] = useState(false);
   const autoMapLocationTriedRef = useRef(false);
   const [advancedOpen, setAdvancedOpen] = useState(() => Boolean(params.get("category") || params.get("sport") || params.get("sido") || params.get("sigungu") || params.get("status")));
   const queryKey = params.toString();
@@ -272,7 +267,7 @@ function DesktopMeetingList() {
   const applyPlaceSearch = async () => {
     const keyword = searchText.trim();
     if (!keyword) {
-      setPlaceError("장소를 입력하면 반경 6km 안의 모임을 찾을 수 있어요.");
+      setPlaceError(`장소를 입력하면 반경 ${radiusLabel}km 안의 모임을 찾을 수 있어요.`);
       return;
     }
     setPlaceLoading(true);
@@ -300,7 +295,7 @@ function DesktopMeetingList() {
     }
   };
 
-  const applyNearbyLocation = (location) => {
+  const applyNearbyLocation = (location, radiusKm) => {
     const point = toMapPoint(location);
     if (!point) {
       setPlaceError("선택한 위치의 좌표를 확인할 수 없습니다.");
@@ -309,7 +304,7 @@ function DesktopMeetingList() {
     const next = clearRadiusSearch(new URLSearchParams(params));
     next.set("lat", String(point.latitude));
     next.set("lng", String(point.longitude));
-    next.set("radius_km", String(DEFAULT_RADIUS_KM));
+    next.set("radius_km", String(radiusKm || DEFAULT_RADIUS_KM));
     next.set("near", location.name || "선택 위치");
     next.delete("keyword");
     next.delete("sido");
@@ -351,24 +346,6 @@ function DesktopMeetingList() {
     );
   };
 
-  const handleNearMeClick = () => {
-    const currentRadius = Number(params.get("radius_km") || DEFAULT_RADIUS_KM);
-    setInputRadius(currentRadius);
-    setIsRadiusModalOpen(true);
-  };
-
-  const handleConfirmRadius = () => {
-    setIsRadiusModalOpen(false);
-    const currentLat = params.get("lat");
-    const currentLng = params.get("lng");
-    if (currentLat && currentLng) {
-      const next = new URLSearchParams(params);
-      next.set("radius_km", String(inputRadius));
-      setParams(next);
-    } else {
-      applyCurrentLocation({ radius: inputRadius });
-    }
-  };
 
   useEffect(() => {
     if (viewMode !== "map") {
@@ -414,7 +391,7 @@ function DesktopMeetingList() {
       <div className="screen-title desktop-meeting-board__title">
         <div>
           <h1>모임 게시판</h1>
-          <span>키워드로 찾거나 장소 주변 6km 안의 모임을 확인하세요.</span>
+          <span>키워드로 찾거나 장소 주변 {radiusLabel}km 안의 모임을 확인하세요.</span>
         </div>
         <div className="desktop-meeting-board__title-actions">
           <Link className="desktop-meeting-board__create-link" to="/meetings/create">
@@ -443,15 +420,12 @@ function DesktopMeetingList() {
             <MapPin size={15} />
             위치 검색
           </button>
-          <button type="button" className="is-ghost" onClick={handleNearMeClick} disabled={placeLoading}>
-            <LocateFixed size={15} />
-            내 주변
-          </button>
+
         </form>
 
         <div className="desktop-meeting-board__filter-help">
           <span>검색: 제목·종목·장소 포함</span>
-          <span>위치 검색: 지도에서 선택한 위치 반경 6km</span>
+          <span>위치 검색: 지도에서 선택한 위치 반경 {radiusLabel}km</span>
         </div>
 
         {placeError ? <p className="desktop-meeting-board__radius-error">{placeError}</p> : null}
@@ -462,7 +436,7 @@ function DesktopMeetingList() {
               {nearLabel} 반경 {Number.isFinite(radiusLabel) ? radiusLabel : DEFAULT_RADIUS_KM}km
             </span>
             <div style={{ display: "flex", gap: "6px" }}>
-              <button type="button" onClick={handleNearMeClick}>수정</button>
+              <button type="button" onClick={() => setLocationPickerOpen(true)}>수정</button>
               <button type="button" onClick={removeRadiusSearch}>해제</button>
             </div>
           </div>
@@ -581,108 +555,17 @@ function DesktopMeetingList() {
       {locationPickerOpen ? (
         <NearbyLocationPicker
           initialLocation={hasRadiusSearch ? { name: nearLabel, latitude: params.get("lat"), longitude: params.get("lng") } : null}
+          initialRadius={Number(params.get("radius_km") || DEFAULT_RADIUS_KM)}
           onClose={() => setLocationPickerOpen(false)}
           onApply={applyNearbyLocation}
         />
-      ) : null}
-
-      {isRadiusModalOpen ? (
-        <div className="desktop-meeting-location-modal" role="dialog" aria-modal="true" aria-label="반경 설정">
-          <div className="desktop-meeting-location-modal__backdrop" onClick={() => setIsRadiusModalOpen(false)} />
-          <section className="desktop-meeting-location-modal__panel" style={{ position: "relative", maxWidth: "520px", borderRadius: "12px", overflow: "hidden", background: "#ffffff", boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)" }}>
-            <div className="desktop-meeting-location-modal__head" style={{ borderBottom: "1px solid #f1f5f9", padding: "20px 24px", paddingRight: "54px" }}>
-              <div style={{ display: "grid", gap: "4px" }}>
-                <h2 style={{ fontSize: "18px", color: "#0f172a", margin: 0, fontWeight: 800 }}>내 주변 검색 반경 설정</h2>
-                <span style={{ fontSize: "13px", color: "#64748b" }}>내 위치를 기준으로 모임을 탐색할 반경을 입력하세요.</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsRadiusModalOpen(false)}
-                onMouseEnter={() => setIsCloseHovered(true)}
-                onMouseLeave={() => setIsCloseHovered(false)}
-                style={{ position: "absolute", top: "18px", right: "20px", background: "none", border: "none", cursor: "pointer", color: isCloseHovered ? "#334155" : "#94a3b8", padding: "4px", transition: "color 0.2s" }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="desktop-meeting-location-modal__body" style={{ display: "block", padding: "24px", minHeight: "auto" }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", padding: "12px 16px", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: "8px", color: "#0369a1", fontSize: "13px", fontWeight: "700", lineHeight: "1.45", marginBottom: "20px" }}>
-                <Info size={16} style={{ flexShrink: 0, marginTop: "2px", color: "#0284c7" }} />
-                <span>검색 반경은 지도상의 직선거리 기준입니다. 실제 이동 경로(도보, 자차, 대중교통 등)의 주행 거리와는 차이가 있을 수 있습니다.</span>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                <label style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px", fontWeight: "800", color: "#64748b" }}>
-                  반경 설정 (단위: km)
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={inputRadius}
-                    onChange={(e) => setInputRadius(Math.max(1, parseInt(e.target.value) || 1))}
-                    style={{
-                      padding: "10px 14px",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      fontSize: "15px",
-                      fontWeight: "700",
-                      color: "#0f172a",
-                      outline: "none",
-                      width: "100%",
-                      boxSizing: "border-box"
-                    }}
-                  />
-                </label>
-              </div>
-            </div>
-            <div className="desktop-meeting-location-modal__actions" style={{ display: "flex", justifyContent: "flex-end", gap: "10px", padding: "16px 24px", borderTop: "1px solid #f1f5f9", background: "transparent" }}>
-              <button
-                type="button"
-                className="is-muted"
-                onClick={() => setIsRadiusModalOpen(false)}
-                onMouseEnter={() => setIsCancelHovered(true)}
-                onMouseLeave={() => setIsCancelHovered(false)}
-                style={{
-                  padding: "9px 17px",
-                  borderRadius: "8px",
-                  border: isCancelHovered ? "1px solid #94a3b8" : "1px solid #cbd5e1",
-                  background: isCancelHovered ? "#f8fafc" : "#ffffff",
-                  color: isCancelHovered ? "#0f172a" : "#475569",
-                  fontSize: "13px",
-                  fontWeight: "800",
-                  cursor: "pointer",
-                  transition: "background-color 0.2s, border-color 0.2s, color 0.2s"
-                }}
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmRadius}
-                onMouseEnter={() => setIsConfirmHovered(true)}
-                onMouseLeave={() => setIsConfirmHovered(false)}
-                style={{
-                  padding: "10px 18px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: isConfirmHovered ? "#1d4ed8" : "#2563eb",
-                  color: "#ffffff",
-                  fontSize: "13px",
-                  fontWeight: "800",
-                  cursor: "pointer",
-                  transition: "background-color 0.2s"
-                }}
-              >
-                확인
-              </button>
-            </div>
-          </section>
-        </div>
       ) : null}
     </div>
   );
 }
 
-function NearbyLocationPicker({ initialLocation, onClose, onApply }) {
+
+function NearbyLocationPicker({ initialLocation, initialRadius, onClose, onApply }) {
   const mapElementRef = useRef(null);
   const mapRef = useRef(null);
   const selectedMarkerRef = useRef(null);
@@ -692,6 +575,7 @@ function NearbyLocationPicker({ initialLocation, onClose, onApply }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState(() => (initialLocation ? normalizeLocationCandidate(initialLocation) : null));
+  const [radiusKm, setRadiusKm] = useState(() => initialRadius || DEFAULT_RADIUS_KM);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -749,9 +633,12 @@ function NearbyLocationPicker({ initialLocation, onClose, onApply }) {
             })
             .catch(() => {});
         });
-        setMapStatus("ready");
+        setMapStatus("success");
       })
-      .catch(() => setMapStatus("error"));
+      .catch(() => {
+        if (disposed) return;
+        setMapStatus("error");
+      });
 
     return () => {
       disposed = true;
@@ -759,26 +646,28 @@ function NearbyLocationPicker({ initialLocation, onClose, onApply }) {
   }, [mapClientId, selectLocation]);
 
   useEffect(() => {
-    const maps = window.naver?.maps;
+    if (mapStatus !== "success" || !mapRef.current) return;
+    const maps = window.naver.maps;
     const map = mapRef.current;
     const point = toMapPoint(selectedLocation);
-    if (!maps || !map || !point) return;
-
-    const position = new maps.LatLng(point.latitude, point.longitude);
-    if (!selectedMarkerRef.current) {
-      selectedMarkerRef.current = new maps.Marker({ map, position });
-    } else {
-      selectedMarkerRef.current.setPosition(position);
-      selectedMarkerRef.current.setMap(map);
+    if (point) {
+      const position = new maps.LatLng(point.latitude, point.longitude);
+      map.setCenter(position);
+      if (selectedMarkerRef.current) {
+        selectedMarkerRef.current.setPosition(position);
+        selectedMarkerRef.current.setMap(map);
+      } else {
+        selectedMarkerRef.current = new maps.Marker({ map, position });
+      }
+    } else if (selectedMarkerRef.current) {
+      selectedMarkerRef.current.setMap(null);
     }
-    map.setCenter(position);
-    if (map.getZoom() < 14) map.setZoom(15);
-  }, [selectedLocation?.latitude, selectedLocation?.longitude]);
+  }, [mapStatus, selectedLocation?.latitude, selectedLocation?.longitude]);
 
   useEffect(() => {
-    const maps = window.naver?.maps;
+    if (mapStatus !== "success" || !mapRef.current) return;
+    const maps = window.naver.maps;
     const map = mapRef.current;
-    if (!maps || !map) return;
 
     resultMarkersRef.current.forEach((marker) => marker.setMap(null));
     resultMarkersRef.current = [];
@@ -862,7 +751,7 @@ function NearbyLocationPicker({ initialLocation, onClose, onApply }) {
         <div className="desktop-meeting-location-modal__head">
           <div>
             <h2>검색 위치 선택</h2>
-            <span>선택한 위치 반경 {DEFAULT_RADIUS_KM}km 안의 모임을 조회합니다.</span>
+            <span>선택한 위치 반경 {radiusKm}km 안의 모임을 조회합니다.</span>
           </div>
           <button type="button" onClick={onClose} aria-label="닫기">
             <X size={18} />
@@ -903,9 +792,37 @@ function NearbyLocationPicker({ initialLocation, onClose, onApply }) {
               )}
             </div>
 
-            {message ? <p className="desktop-meeting-location-modal__message">{message}</p> : null}
+            <div className="desktop-meeting-location-modal__selected" style={{ marginTop: "16px", borderTop: "1px solid #e2e8f0", paddingTop: "16px" }}>
+              <strong style={{ display: "block", marginBottom: "8px" }}>검색 반경 설정</strong>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={radiusKm}
+                  onChange={(e) => setRadiusKm(Math.max(0, parseInt(e.target.value) || 0))}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "14px",
+                    fontWeight: "700",
+                    color: "#0f172a",
+                    outline: "none",
+                    width: "80px",
+                    textAlign: "right"
+                  }}
+                />
+                <span style={{ fontSize: "14px", color: "#475569", fontWeight: 600 }}>km 반경 안의 모임</span>
+              </div>
+              <p style={{ fontSize: "12px", color: "#64748b", marginTop: "8px", lineHeight: "1.4" }}>
+                * 검색 반경은 지도상의 직선거리 기준입니다.
+              </p>
+            </div>
 
-            <div className="desktop-meeting-location-modal__results">
+            {message ? <p className="desktop-meeting-location-modal__message" style={{ marginTop: "12px" }}>{message}</p> : null}
+
+            <div className="desktop-meeting-location-modal__results" style={{ marginTop: "16px" }}>
               {results.map((place) => (
                 <button
                   type="button"
@@ -923,7 +840,7 @@ function NearbyLocationPicker({ initialLocation, onClose, onApply }) {
 
         <div className="desktop-meeting-location-modal__actions">
           <button type="button" className="is-muted" onClick={onClose}>취소</button>
-          <button type="button" onClick={() => onApply(selectedLocation)} disabled={!canApply}>
+          <button type="button" onClick={() => onApply(selectedLocation, radiusKm)} disabled={!canApply}>
             이 위치로 검색
           </button>
         </div>

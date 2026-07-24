@@ -24,7 +24,7 @@ function formatRemaining(milliseconds) {
 function formatPolicyTime(value) {
   if (!value) return "";
   return value.toLocaleTimeString("ko-KR", {
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
     timeZone: "Asia/Seoul",
   });

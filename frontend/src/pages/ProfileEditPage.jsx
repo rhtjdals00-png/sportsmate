@@ -1,4 +1,4 @@
-import { Camera, CheckCircle2, KeyRound, MapPin, Search, X, CircleAlert, LockKeyhole, XCircle } from "lucide-react";
+import { Camera, CheckCircle2, KeyRound, MapPin, MessageCircle, Search, X, CircleAlert, LockKeyhole, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Button from "../components/common/Button.jsx";
@@ -147,7 +147,8 @@ function MobileProfileEditPage() {
     region_area: "",
     exercise_level: user?.profile?.exercise_level || initialLevels.all || "beginner",
     preferred_sports: initialSports,
-    preferred_sport_levels: initialLevels
+    preferred_sport_levels: initialLevels,
+    direct_message_policy: user?.direct_message_policy || "same_meeting"
   });
   const [categories, setCategories] = useState([]);
   const [sports, setSports] = useState([]);
@@ -529,14 +530,13 @@ function MobileProfileEditPage() {
     setSaving(true);
     try {
       const data = await userApi.updateMe({
-        name: form.name.trim(),
-        phone_number: form.phone_number.trim(),
         nickname: form.nickname.trim(),
         profile_image_url: form.profile_image_url,
         bio: form.bio.trim(),
         region: form.region || "",
         exercise_level: form.exercise_level,
         preferred_sports: form.preferred_sports.join(", "),
+        direct_message_policy: form.direct_message_policy,
         preferred_sport_levels: useSportLevels
           ? { ...form.preferred_sport_levels, all: form.exercise_level }
           : { all: form.exercise_level }
@@ -585,7 +585,7 @@ function MobileProfileEditPage() {
             <div className="profile-setup__fields">
               <label>
                 <span>{T.name}</span>
-                <input value={form.name} onChange={(event) => updateField("name", event.target.value)} placeholder={T.namePlaceholder} />
+                <span className="profile-setup__readonly-field">{form.name || "미입력"}</span>
               </label>
               <label className="profile-setup__nickname-label">
                 <span>{T.nickname}</span>
@@ -596,7 +596,7 @@ function MobileProfileEditPage() {
               </label>
               <label>
                 <span>{T.phone}</span>
-                <input value={form.phone_number} onChange={(event) => updateField("phone_number", event.target.value)} placeholder={T.optional} />
+                <span className="profile-setup__readonly-field">{form.phone_number || "미입력"}</span>
               </label>
             </div>
           </section>
@@ -781,6 +781,27 @@ function MobileProfileEditPage() {
                 })}
               </div>
             )}
+          </section>
+
+          <section className="profile-setup__panel profile-setup__communication">
+            <div className="profile-setup__communication-head">
+              <MessageCircle size={18} />
+              <div>
+                <h2>소통 및 개인정보</h2>
+                <p>태그 검색으로 누가 나에게 1:1 대화를 요청할 수 있는지 설정합니다.</p>
+              </div>
+            </div>
+            <label className="profile-setup__communication-field">
+              <span>1:1 채팅 수신 범위</span>
+              <select
+                value={form.direct_message_policy}
+                onChange={(event) => updateField("direct_message_policy", event.target.value)}
+              >
+                <option value="everyone">누구나 · 모임 밖 사용자는 요청 후 대화</option>
+                <option value="same_meeting">같은 모임 회원만</option>
+                <option value="none">1:1 채팅 받지 않음</option>
+              </select>
+            </label>
           </section>
 
           {canChangePassword && (

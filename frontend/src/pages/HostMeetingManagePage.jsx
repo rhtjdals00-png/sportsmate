@@ -58,7 +58,7 @@ function formatAttendanceSession(session) {
     day: "numeric",
     weekday: "short",
   });
-  const timeLabel = date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+  const timeLabel = date.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
   return `${session.session_number}회차 · ${dateLabel} ${timeLabel}${session.status === "cancelled" ? " · 취소" : ""}`;
 }
 
@@ -384,7 +384,7 @@ function formatMeetingDate(dateStr) {
       month: "long",
       day: "numeric",
       weekday: "short",
-      hour: "2-digit",
+      hour: "numeric",
       minute: "2-digit",
       hour12: true
     }).format(d);

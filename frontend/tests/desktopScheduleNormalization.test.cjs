@@ -59,6 +59,35 @@ test("desktop schedule normalization keeps missing coordinates undefined", async
   assert.equal(normalized.longitude, undefined);
 });
 
+test("desktop schedule normalization prefers an ongoing session over the API next session", async () => {
+  const { normalizeDesktopScheduleMeeting } = await loadScheduleModule();
+  const now = Date.now();
+  const ongoing = {
+    id: 10,
+    start_at: new Date(now - 15 * 60 * 1000).toISOString(),
+    end_at: new Date(now + 60 * 60 * 1000).toISOString(),
+    status: "scheduled",
+  };
+  const future = {
+    id: 11,
+    start_at: new Date(now + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    end_at: new Date(now + 14 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
+    status: "scheduled",
+  };
+
+  const normalized = normalizeDesktopScheduleMeeting({
+    id: 3,
+    title: "Regular meeting",
+    meeting_type: "regular",
+    sessions: [ongoing, future],
+    next_session: future,
+  });
+
+  assert.equal(normalized.nextSession.id, ongoing.id);
+  assert.equal(normalized.startAt, ongoing.start_at);
+  assert.equal(normalized.endAt, ongoing.end_at);
+});
+
 test("desktop schedule state remains unchanged for a future one-time meeting", async () => {
   const { getDesktopScheduleState } = await loadScheduleModule("src/components/schedule/desktop/DesktopScheduleCard.jsx");
   const tomorrow = new Date();

@@ -8,14 +8,14 @@ import { notificationApi } from "../../../api/notificationApi";
 import { apiClient } from "../../../api/client";
 import { useAsync } from "../../../hooks/useAsync";
 import { enablePushNotifications, getPushSupportState } from "../../../utils/pushNotifications";
-import { visibleNotifications } from "../../../utils/notificationDisplay";
+import { notificationLinkUrl, visibleNotifications } from "../../../utils/notificationDisplay";
 
 function formatNotificationTime(value) {
   if (!value) return "";
   return new Intl.DateTimeFormat("ko-KR", {
     month: "long",
     day: "numeric",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
     timeZone: "Asia/Seoul"
   }).format(new Date(value));
@@ -98,8 +98,9 @@ function MobileNotifications() {
     if (!item.is_read) {
       await markRead(item.id);
     }
-    if (item.link_url) {
-      navigate(item.link_url);
+    const targetUrl = notificationLinkUrl(item);
+    if (targetUrl) {
+      navigate(targetUrl);
     } else {
       const isNotice = [
         "notice",

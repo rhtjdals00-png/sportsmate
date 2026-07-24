@@ -3,7 +3,7 @@ import { ChevronDown, Cloud, CloudRain, CloudSun, Droplets, LocateFixed, MapPin,
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { locationApi } from "../api/locationApi";
 import { weatherApi } from "../api/weatherApi";
-import { getSavedWeatherLocation, requestCurrentPosition, saveWeatherLocation } from "../utils/weatherLocation";
+import { getWeatherFallbackLocation, requestCurrentPosition, saveWeatherLocation } from "../utils/weatherLocation";
 
 function WeatherIcon({ condition, size = 30 }) {
   if (["rain", "rain_snow", "shower"].includes(condition)) return <CloudRain size={size} />;
@@ -27,7 +27,7 @@ function displayDate(value, index) {
 
 export default function WeatherPage() {
   const { user } = useAuth();
-  const [location, setLocation] = useState(() => getSavedWeatherLocation(user));
+  const [location, setLocation] = useState(() => getWeatherFallbackLocation(user));
   const [weather, setWeather] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -64,8 +64,11 @@ export default function WeatherPage() {
 
   useEffect(() => {
     let active = true;
-    const fallback = getSavedWeatherLocation(user);
+    const fallback = getWeatherFallbackLocation(user);
     loadWeather(fallback, false);
+    if (fallback.source === "profile") {
+      return () => { active = false; };
+    }
     requestCurrentPosition()
       .then(async (current) => {
         if (!active) return;
@@ -82,7 +85,15 @@ export default function WeatherPage() {
       })
       .catch(() => {});
     return () => { active = false; };
-  }, [user?.id]);
+  }, [
+    user?.id,
+    user?.profile?.region,
+    user?.profile?.region_latitude,
+    user?.profile?.region_longitude,
+    user?.profile?.region_2,
+    user?.profile?.region_2_latitude,
+    user?.profile?.region_2_longitude,
+  ]);
 
   useEffect(() => {
     const value = keyword.trim();

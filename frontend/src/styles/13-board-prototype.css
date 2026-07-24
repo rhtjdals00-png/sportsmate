@@ -256,7 +256,7 @@
 
 .desktop-meeting-board__smart-search {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 76px 112px 104px;
+  grid-template-columns: minmax(0, 1fr) 76px 112px;
   gap: 10px;
 }
 
@@ -643,6 +643,7 @@
   gap: 8px;
   border-radius: 8px;
   font-weight: 900;
+  white-space: nowrap;
 }
 
 .desktop-meeting-location-modal__head button {
@@ -655,7 +656,7 @@
 
 .desktop-meeting-location-modal__search {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 76px 128px;
+  grid-template-columns: minmax(0, 1fr) 76px 165px;
   gap: 10px;
 }
 
@@ -1264,6 +1265,16 @@
 
 .desktop-meeting-detail__title {
   align-items: end;
+}
+
+.desktop-meeting-detail__title-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.desktop-meeting-detail__title-actions .ghost-btn {
+  min-height: 38px;
 }
 
 .desktop-meeting-detail__title p {

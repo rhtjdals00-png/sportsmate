@@ -1,11 +1,11 @@
 from datetime import datetime
 
 from flask import current_app
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import ChatMessage, ChatMessageRead, ChatRoom, DirectChatMessage, DirectChatRoom, Meeting, Participant, Sport, User
+from app.models import ChatMessage, ChatMessageRead, ChatRoom, DirectChatMessage, DirectChatRoom, Meeting, Participant, Sport, User, UserBlock
 from app.services.notification_service import create_notification, send_web_push
 from app.utils.meeting_state import meeting_chat_is_read_only
 from app.utils.timezone import kst_now
@@ -194,6 +194,82 @@ def attach_read_counts(messages):
         message._read_count = counts.get(message.id, 0)
 
 
+def direct_contact_is_blocked(first_user_id, second_user_id):
+    return UserBlock.query.filter(or_(
+        and_(
+            UserBlock.blocker_id == first_user_id,
+            UserBlock.blocked_id == second_user_id,
+        ),
+        and_(
+            UserBlock.blocker_id == second_user_id,
+            UserBlock.blocked_id == first_user_id,
+        ),
+    )).first() is not None
+
+
+def users_share_meeting(first_user_id, second_user_id):
+    first_ids = {
+        row[0] for row in db.session.query(Meeting.id)
+        .outerjoin(Participant, Participant.meeting_id == Meeting.id)
+        .filter(or_(
+            Meeting.host_id == first_user_id,
+            and_(
+                Participant.user_id == first_user_id,
+                Participant.status == "approved",
+            ),
+        ))
+        .all()
+    }
+
+    if not first_ids:
+        return False
+
+    return db.session.query(Meeting.id).outerjoin(
+        Participant,
+        Participant.meeting_id == Meeting.id,
+    ).filter(
+        Meeting.id.in_(first_ids),
+        or_(
+            Meeting.host_id == second_user_id,
+            and_(
+                Participant.user_id == second_user_id,
+                Participant.status == "approved",
+            ),
+        ),
+    ).first() is not None
+
+
+def direct_contact_action(current_user_id, target_user):
+    if current_user_id == target_user.id:
+        return "self"
+
+    if direct_contact_is_blocked(current_user_id, target_user.id):
+        return "blocked"
+
+    user_a_id, user_b_id = sorted([current_user_id, target_user.id])
+    active_room = DirectChatRoom.query.filter_by(
+        user_a_id=user_a_id,
+        user_b_id=user_b_id,
+        is_active=True,
+    ).first()
+
+    if active_room:
+        return "room"
+
+    policy = target_user.direct_message_policy or "same_meeting"
+
+    if policy == "none":
+        return "denied"
+
+    if users_share_meeting(current_user_id, target_user.id):
+        return "room"
+
+    if policy == "everyone":
+        return "request"
+
+    return "denied"
+
+
 def _direct_chat_user_available(user):
     return bool(
         user
@@ -203,16 +279,40 @@ def _direct_chat_user_available(user):
     )
 
 
-def get_or_create_direct_room(current_user_id, target_user_id):
+def get_or_create_direct_room(
+    current_user_id,
+    target_user_id,
+    skip_policy=False,
+):
     if current_user_id == target_user_id:
         raise ValueError("자기 자신과는 1:1 톡을 만들 수 없습니다.")
     target_user = User.query.get(target_user_id)
     if not target_user:
         raise ValueError("상대 사용자를 찾지 못했습니다.")
     if not _direct_chat_user_available(target_user):
-        raise ValueError("탈퇴하거나 이용할 수 없는 사용자에게는 새 1:1 대화를 시작할 수 없습니다.")
+        raise ValueError(
+            "탈퇴하거나 이용할 수 없는 사용자에게는 새 1:1 대화를 시작할 수 없습니다."
+        )
+
+    if not skip_policy:
+        action = direct_contact_action(current_user_id, target_user)
+
+        if action == "blocked":
+            raise PermissionError(
+                "차단된 사용자와는 1:1 채팅을 시작할 수 없습니다."
+            )
+
+        if action == "denied":
+            raise PermissionError(
+                "상대방의 1:1 채팅 수신 설정으로 대화를 시작할 수 없습니다."
+            )
+
+        if action == "request":
+            raise PermissionError(
+                "먼저 1:1 대화 요청을 보내주세요."
+            )
     user_a_id, user_b_id = sorted([current_user_id, target_user_id])
-    room = DirectChatRoom.query.filter_by(user_a_id=user_a_id, user_b_id=user_b_id).first()
+    room = DirectChatRoom.query.filter_by(user_a_id=user_a_id, user_b_id=user_b_id, is_active=True).first()
     if not room:
         room = DirectChatRoom(user_a_id=user_a_id, user_b_id=user_b_id)
         db.session.add(room)
@@ -224,13 +324,25 @@ def ensure_direct_room_access(room_id, user_id):
     room = DirectChatRoom.query.get_or_404(room_id)
     if user_id not in {room.user_a_id, room.user_b_id}:
         raise PermissionError("1:1 톡방에 접근할 수 없습니다.")
+    if room.has_left(user_id):
+        raise PermissionError("나간 1:1 채팅방에는 다시 접근할 수 없습니다.")
     return room
 
 
 def send_direct_message(room_id, user_id, data):
     room = ensure_direct_room_access(room_id, user_id)
+    if not room.is_active:
+        raise PermissionError("종료된 1:1 채팅방은 읽기만 가능합니다.")
+
+    recipient_id = room.user_b_id if room.user_a_id == user_id else room.user_a_id
+
     if not _direct_chat_user_available(room.other_user(user_id)):
         raise ValueError("탈퇴한 사용자에게는 새 메시지를 보낼 수 없습니다.")
+
+    if direct_contact_is_blocked(user_id, recipient_id):
+        raise PermissionError("차단된 사용자와는 메시지를 주고받을 수 없습니다.")
+
+    sender = User.query.options(joinedload(User.profile)).get(user_id)
     if not isinstance(data, dict):
         data = {"content": str(data or "")}
     message_type = data.get("message_type") or "text"
@@ -266,5 +378,26 @@ def send_direct_message(room_id, user_id, data):
     )
     room.updated_at = kst_now()
     db.session.add(message)
+    sender_name = sender.nickname or sender.name if sender else "참여자"
+    preview = _notification_preview(message_type, message.content)
+    create_notification(
+        recipient_id,
+        "direct_chat",
+        f"{sender_name}님의 1:1 채팅",
+        f"{sender_name}님이 메시지를 보냈습니다. {preview}",
+        f"/chats/direct/{room.id}",
+        send_push=False,
+    )
     db.session.commit()
+    from app.utils.mute_store import is_muted
+    if not is_muted(recipient_id, "direct", room.id):
+        try:
+            send_web_push(
+                recipient_id,
+                f"{sender_name}님의 1:1 채팅",
+                f"{sender_name}: {preview}",
+                f"/chats/direct/{room.id}",
+            )
+        except Exception as error:
+            current_app.logger.warning("Direct chat push notification failed: %s", error)
     return message

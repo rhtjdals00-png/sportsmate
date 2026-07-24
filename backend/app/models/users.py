@@ -23,6 +23,7 @@ class User(db.Model, TimestampMixin):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     profile_intro_dismissed = db.Column(db.Boolean, default=False, nullable=False)
     status = db.Column(db.String(30), default="active", nullable=False)
+    direct_message_policy = db.Column(db.String(30), default="same_meeting", nullable=False)
     withdrawn_at = db.Column(db.DateTime, nullable=True)
     deleted_at = db.Column(db.DateTime, nullable=True)
 
@@ -64,6 +65,7 @@ class User(db.Model, TimestampMixin):
             "user_tag": "" if is_anonymized else self.user_tag,
             "user_tag_display": "" if is_anonymized else (f"[{self.user_tag}]" if self.user_tag else ""),
             "nickname_with_tag": self.display_nickname if is_anonymized else (f"{self.nickname} [{self.user_tag}]" if self.user_tag else self.nickname),
+            "direct_message_policy": self.direct_message_policy if include_private else None,
             "profile_image_url": None if is_anonymized else self.profile_image_url,
             "role": self.role,
             "is_active": self.is_active,

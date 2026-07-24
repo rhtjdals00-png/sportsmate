@@ -11,7 +11,7 @@ import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { getSportIcon } from "../../../utils/sportIcons.jsx";
 import { sportApi } from "../../../api/sportApi.js";
 import { weatherApi } from "../../../api/weatherApi";
-import { getSavedWeatherLocation, requestCurrentPosition, sameWeatherArea, saveWeatherLocation } from "../../../utils/weatherLocation";
+import { getWeatherFallbackLocation, requestCurrentPosition, sameWeatherArea, saveWeatherLocation } from "../../../utils/weatherLocation";
 import { CloudRain, Snowflake, Sun, CloudSun, Cloud, Wind, Droplets } from "lucide-react";
 
 function WeatherIcon({ condition, size = 40 }) {
@@ -61,13 +61,13 @@ function MobileHome() {
   const showAdminEntry = isAdminUser(user);
   const navigate = useNavigate();
 
-  const [location, setLocation] = useState(() => getSavedWeatherLocation(user));
+  const [location, setLocation] = useState(() => getWeatherFallbackLocation(user));
   const [weatherState, setWeatherState] = useState({ loading: true, weather: null });
   const swiperRef = useRef(null);
 
   useEffect(() => {
     let active = true;
-    const initial = getSavedWeatherLocation(user);
+    const initial = getWeatherFallbackLocation(user);
     setLocation(initial);
     
     const load = (nextLocation) => {
@@ -78,6 +78,9 @@ function MobileHome() {
     };
 
     load(initial);
+    if (initial.source === "profile") {
+      return () => { active = false; };
+    }
     requestCurrentPosition()
       .then((current) => {
         if (!active || sameWeatherArea(initial, current)) return;
@@ -87,7 +90,15 @@ function MobileHome() {
       })
       .catch(() => {});
     return () => { active = false; };
-  }, [user?.id, user?.profile?.region_latitude, user?.profile?.region_longitude]);
+  }, [
+    user?.id,
+    user?.profile?.region,
+    user?.profile?.region_latitude,
+    user?.profile?.region_longitude,
+    user?.profile?.region_2,
+    user?.profile?.region_2_latitude,
+    user?.profile?.region_2_longitude,
+  ]);
 
   useEffect(() => {
     const swiper = swiperRef.current;

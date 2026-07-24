@@ -7,8 +7,16 @@ export const chatApi = {
   leave: (roomId) => apiClient.post(`/chatrooms/${roomId}/leave`).then((res) => res.data),
   directRooms: () => apiClient.get("/chatrooms/direct").then((res) => res.data),
   createDirectRoom: (userId) => apiClient.post("/chatrooms/direct", { user_id: userId }).then((res) => res.data),
+  findDirectUserByTag: (tag) => apiClient.get("/chatrooms/direct/by-tag", { params: { tag } }).then((res) => res.data),
+  contactDirectUserByTag: (payload) => apiClient.post("/chatrooms/direct/by-tag", payload).then((res) => res.data),
+  directRequests: () => apiClient.get("/chatrooms/direct/requests").then((res) => res.data),
+  respondDirectRequest: (requestId, action) => apiClient.post(`/chatrooms/direct/requests/${requestId}/respond`, { action }).then((res) => res.data),
+  blockDirectUser: (userId) => apiClient.post(`/chatrooms/direct/blocks/${userId}`).then((res) => res.data),
+  blockedDirectUsers: () => apiClient.get("/chatrooms/direct/blocks").then((res) => res.data),
+  unblockDirectUser: (userId) => apiClient.delete(`/chatrooms/direct/blocks/${userId}`).then((res) => res.data),
   directMessages: (roomId, params = {}) => apiClient.get(`/chatrooms/direct/${roomId}/messages`, { params }).then((res) => res.data),
   sendDirect: (roomId, payload) => apiClient.post(`/chatrooms/direct/${roomId}/messages`, payload).then((res) => res.data),
+  leaveDirect: (roomId) => apiClient.post(`/chatrooms/direct/${roomId}/leave`).then((res) => res.data),
   uploadImage: (file, { roomId, roomType }) => {
     const formData = new FormData();
     formData.append("file", file);

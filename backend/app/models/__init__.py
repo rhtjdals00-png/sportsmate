@@ -2,7 +2,7 @@
 from .users import User, UserProfile
 from .taxonomy import SportCategory, Sport, Region
 from .meetings import Meeting, MeetingSession, MeetingView, Participant
-from .chat import ChatRoom, ChatMessage, ChatMessageRead, DirectChatRoom, DirectChatMessage
+from .chat import ChatRoom, ChatMessage, ChatMessageRead, DirectChatRoom, DirectChatMessage, DirectChatRequest, UserBlock
 from .notifications import Notification, PushSubscription
 from .engagement import Review, Notice, Vote, VoteOption, VoteResponse, Attendance, AttendanceCheckinWindow
 from .moderation import Report
@@ -25,6 +25,8 @@ __all__ = [
     "ChatMessageRead",
     "DirectChatRoom",
     "DirectChatMessage",
+    "DirectChatRequest",
+    "UserBlock",
     "Notification",
     "PushSubscription",
     "Review",

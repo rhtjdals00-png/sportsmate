@@ -24,7 +24,9 @@ function dateKey(value) {
 function shortTime(value) {
   const date = validDate(value);
   if (!date) return "시간 미정";
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const ampm = date.getHours() >= 12 ? "오후" : "오전";
+  const hour = date.getHours() % 12 || 12;
+  return `${ampm} ${hour}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function buildMonthCells(baseDate, items) {

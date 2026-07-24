@@ -18,9 +18,15 @@ AUTOMATIC_SCHEDULE_NOTICE_TYPES = {"schedule_changed", "schedule_cancelled"}
 def _display_name(user):
     if not user:
         return "알 수 없는 사용자"
-    if user.display_nickname:
-        return user.display_nickname
-    return user.name or user.email or "알 수 없는 사용자"
+    try:
+        if user.display_nickname:
+            return user.display_nickname
+    except AttributeError:
+        pass
+    try:
+        return user.name or user.email or "알 수 없는 사용자"
+    except AttributeError:
+        return "알 수 없는 사용자"
 
 
 def _enrich_notification(item, user_id):
@@ -31,6 +37,7 @@ def _enrich_notification(item, user_id):
             room_id = int(match.group(1))
             message = (
                 ChatMessage.query
+                .options(joinedload(ChatMessage.sender))
                 .filter(ChatMessage.chat_room_id == room_id, ChatMessage.user_id != user_id)
                 .filter(ChatMessage.created_at <= item.created_at + timedelta(seconds=10))
                 .order_by(ChatMessage.created_at.desc())

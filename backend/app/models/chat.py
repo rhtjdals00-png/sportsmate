@@ -128,15 +128,51 @@ class DirectChatRoom(db.Model, TimestampMixin):
     user_a_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     user_b_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    user_a_left_at = db.Column(db.DateTime)
+    user_b_left_at = db.Column(db.DateTime)
+    ended_at = db.Column(db.DateTime)
+    ended_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
 
     user_a = db.relationship("User", foreign_keys=[user_a_id])
     user_b = db.relationship("User", foreign_keys=[user_b_id])
     messages = db.relationship("DirectChatMessage", back_populates="room", cascade="all, delete-orphan", order_by="(DirectChatMessage.created_at, DirectChatMessage.id)")
 
-    __table_args__ = (db.UniqueConstraint("user_a_id", "user_b_id", name="uq_direct_chat_pair"),)
+    __table_args__ = (
+        db.Index(
+            "uq_direct_chat_pair_active",
+            "user_a_id",
+            "user_b_id",
+            unique=True,
+            postgresql_where=db.text("is_active = true"),
+            sqlite_where=db.text("is_active = 1"),
+        ),
+    )
 
     def other_user(self, user_id):
         return self.user_b if self.user_a_id == user_id else self.user_a
+
+    def end(self, user_id, ended_at=None):
+        if user_id not in {self.user_a_id, self.user_b_id}:
+            return
+        left_at = ended_at or kst_now()
+        self.is_active = False
+        self.ended_at = left_at
+        self.ended_by_user_id = user_id
+        self.mark_left(user_id, left_at)
+
+    def mark_left(self, user_id, left_at=None):
+        left_at = left_at or kst_now()
+        if user_id == self.user_a_id:
+            self.user_a_left_at = left_at
+        elif user_id == self.user_b_id:
+            self.user_b_left_at = left_at
+
+    def has_left(self, user_id):
+        if user_id == self.user_a_id:
+            return self.user_a_left_at is not None
+        if user_id == self.user_b_id:
+            return self.user_b_left_at is not None
+        return True
 
     def to_dict(self, current_user_id=None):
         last_message = self.messages[-1].to_dict() if self.messages else None
@@ -144,6 +180,9 @@ class DirectChatRoom(db.Model, TimestampMixin):
             "id": self.id,
             "other_user": self.other_user(current_user_id).to_dict() if current_user_id else None,
             "last_message": last_message,
+            "is_active": self.is_active,
+            "ended_at": self.ended_at.isoformat() if self.ended_at else None,
+            "ended_by_user_id": self.ended_by_user_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -182,3 +221,58 @@ class DirectChatMessage(db.Model):
             "location_label": self.location_label,
             "created_at": to_kst_iso(self.created_at),
         }
+
+
+class DirectChatRequest(db.Model, TimestampMixin):
+    __tablename__ = "direct_chat_requests"
+
+    id = db.Column(db.Integer, primary_key=True)
+    sender_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    recipient_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    message = db.Column(db.String(500), default="", nullable=False)
+    status = db.Column(db.String(30), default="pending", nullable=False, index=True)
+    responded_at = db.Column(db.DateTime)
+
+    sender = db.relationship("User", foreign_keys=[sender_id])
+    recipient = db.relationship("User", foreign_keys=[recipient_id])
+
+    __table_args__ = (
+        db.Index(
+            "uq_direct_chat_request_pending",
+            "sender_id",
+            "recipient_id",
+            unique=True,
+            postgresql_where=db.text("status = 'pending'"),
+            sqlite_where=db.text("status = 'pending'"),
+        ),
+    )
+
+    def to_dict(self, current_user_id=None):
+        counterpart = self.recipient if current_user_id == self.sender_id else self.sender
+        return {
+            "id": self.id,
+            "sender_id": self.sender_id,
+            "recipient_id": self.recipient_id,
+            "counterpart": counterpart.to_dict() if counterpart else None,
+            "message": self.message,
+            "status": self.status,
+            "direction": "outgoing" if current_user_id == self.sender_id else "incoming",
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "responded_at": self.responded_at.isoformat() if self.responded_at else None,
+        }
+
+
+class UserBlock(db.Model):
+    __tablename__ = "user_blocks"
+
+    id = db.Column(db.Integer, primary_key=True)
+    blocker_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    blocked_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=kst_now, nullable=False)
+
+    blocker = db.relationship("User", foreign_keys=[blocker_id])
+    blocked = db.relationship("User", foreign_keys=[blocked_id])
+
+    __table_args__ = (
+        db.UniqueConstraint("blocker_id", "blocked_id", name="uq_user_block_pair"),
+    )

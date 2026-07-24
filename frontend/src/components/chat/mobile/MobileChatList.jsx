@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { MapPin, UsersRound, MessageCircle, Users, Pin, ChevronUp, ChevronDown, LogOut, Bell, BellOff } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import MobileHeader from "../../layout/mobile/MobileHeader.jsx";
@@ -11,6 +11,7 @@ import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { getMeetingCoverImage, isUsingSportThumbnail, getSportIconUrl, getMeetingCustomCoverImage, getSportNameFromMeeting } from "../../../utils/sportThumbnails";
 import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
+import DirectChatTagLauncher from "../DirectChatTagLauncher.jsx";
 
 function formatChatTime(value) {
   if (!value) return "방금";
@@ -21,7 +22,7 @@ function formatChatTime(value) {
 
   if (diffDays === 0) {
     return new Intl.DateTimeFormat("ko-KR", {
-      hour: "2-digit",
+      hour: "numeric",
       minute: "2-digit",
       timeZone: "Asia/Seoul"
     }).format(date);
@@ -39,10 +40,14 @@ function formatChatTime(value) {
 }
 
 function MobileChatList() {
+  const [searchParams] = useSearchParams();
+  const openDirectRequests = searchParams.get("panel") === "requests";
   const { user } = useAuth();
   const [refreshKey, setRefreshKey] = useState(0);
   const [directRefreshKey, setDirectRefreshKey] = useState(0);
-  const [chatTab, setChatTab] = useState("meeting");
+  const [chatTab, setChatTab] = useState(() => (
+    searchParams.get("tab") === "direct" || openDirectRequests ? "direct" : "meeting"
+  ));
   const [meetingFilter, setMeetingFilter] = useState("all");
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [imgErrors, setImgErrors] = useState({});
@@ -59,6 +64,7 @@ function MobileChatList() {
   const [mutedRooms, setMutedRooms] = useState([]);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [leaveTargetRoom, setLeaveTargetRoom] = useState(null);
+  const [leaveTargetType, setLeaveTargetType] = useState("meeting");
   const [leavingRoom, setLeavingRoom] = useState(false);
 
   useEffect(() => {
@@ -105,10 +111,18 @@ function MobileChatList() {
     if (!targetRoomId || leavingRoom) return;
     setLeavingRoom(true);
     try {
-      await chatApi.leave(targetRoomId);
+      if (leaveTargetType === "direct") {
+        await chatApi.leaveDirect(targetRoomId);
+      } else {
+        await chatApi.leave(targetRoomId);
+      }
       setLeaveConfirmOpen(false);
       setLeaveTargetRoom(null);
-      setRefreshKey((value) => value + 1);
+      if (leaveTargetType === "direct") {
+        setDirectRefreshKey((value) => value + 1);
+      } else {
+        setRefreshKey((value) => value + 1);
+      }
     } catch (leaveError) {
       window.alert(leaveError.response?.data?.message || "채팅방 나가기에 실패했습니다.");
       setLeaveConfirmOpen(false);
@@ -272,6 +286,11 @@ function MobileChatList() {
           )}
         </button>
       </div>
+      {chatTab === "direct" ? (
+        <div style={{ padding: "0 16px 12px" }}>
+          <DirectChatTagLauncher openRequests={openDirectRequests} onChanged={() => setDirectRefreshKey((value) => value + 1)} />
+        </div>
+      ) : null}
 
       {/* 모임 채팅 탭일 때의 서브 필터 */}
       {chatTab === "meeting" && sortedMeetingItems.length > 0 && (
@@ -405,6 +424,7 @@ function MobileChatList() {
                             e.preventDefault();
                             e.stopPropagation();
                             setLeaveTargetRoom(room);
+                            setLeaveTargetType("meeting");
                             setLeaveConfirmOpen(true);
                           }}
                           style={{
@@ -592,6 +612,7 @@ function MobileChatList() {
                                 e.preventDefault();
                                 e.stopPropagation();
                                 setLeaveTargetRoom(room);
+                                setLeaveTargetType("meeting");
                                 setLeaveConfirmOpen(true);
                               }}
                               style={{
@@ -666,12 +687,16 @@ function MobileChatList() {
             const other = room.other_user || {};
             const isPinned = pinnedRooms.includes(`direct-${room.id}`);
             const isMuted = mutedRooms.some(r => String(r.room_id) === String(room.id) && r.room_type === "direct");
+            const isEnded = room.is_active === false;
             return (
               <Link
                 key={room.id}
                 to={`/chats/direct/${room.id}`}
                 className="chat-room-card chat-room-card--direct"
-                style={isPinned ? { backgroundColor: 'rgba(79, 70, 229, 0.04)' } : undefined}
+                style={{
+                  ...(isPinned ? { backgroundColor: 'rgba(79, 70, 229, 0.04)' } : {}),
+                  ...(isEnded ? { opacity: 0.72, backgroundColor: '#f1f5f9' } : {})
+                }}
               >
                 <div className="chat-room-card__thumb chat-room-card__thumb--avatar">
                   {other.profile_image_url && !imgErrors[room.id] ? (
@@ -688,7 +713,10 @@ function MobileChatList() {
                 </div>
                 <div className="chat-room-card__content">
                   <div className="chat-room-card__topline" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                    <strong>{other.nickname || other.name || "참여자"}</strong>
+                    <strong>
+                      {other.nickname || other.name || "참여자"}
+                      {isEnded ? <span style={{ marginLeft: '6px', color: '#64748b', fontSize: '10px' }}>종료</span> : null}
+                    </strong>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                       <button
                         type="button"
@@ -729,28 +757,29 @@ function MobileChatList() {
                         {isMuted ? <BellOff size={13} /> : <Bell size={13} />}
                       </button>
                       <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setLeaveTargetRoom(room);
-                          setLeaveConfirmOpen(true);
-                        }}
-                        style={{
-                          background: 'none',
-                          border: 0,
-                          padding: '2px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#cbd5e1',
-                          transition: 'all 0.2s',
-                          zIndex: 2
-                        }}
-                        aria-label="채팅방 나가기"
-                      >
-                        <LogOut size={13} />
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setLeaveTargetRoom(room);
+                            setLeaveTargetType("direct");
+                            setLeaveConfirmOpen(true);
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 0,
+                            padding: '2px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#cbd5e1',
+                            transition: 'all 0.2s',
+                            zIndex: 2
+                          }}
+                          aria-label={isEnded ? "종료된 채팅방 목록에서 삭제" : "채팅방 나가기"}
+                        >
+                          <LogOut size={13} />
                       </button>
                       <time>
                         {formatChatTime(
@@ -783,9 +812,19 @@ function MobileChatList() {
           <section style={{
             position: 'relative', background: '#fff', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '320px', zIndex: 10
           }}>
-            <strong style={{ display: 'block', fontSize: '18px', fontWeight: 'bold', marginBottom: '8px', color: '#0f172a' }}>채팅방을 나갈까요?</strong>
+            <strong style={{ display: 'block', fontSize: '18px', fontWeight: 'bold', marginBottom: '8px', color: '#0f172a' }}>{leaveTargetType === "direct" ? "1:1 채팅방을 나갈까요?" : "채팅방을 나갈까요?"}</strong>
             <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.5, marginBottom: '24px' }}>
-              <strong style={{ color: '#0f172a' }}>{leaveTargetRoom?.meeting?.title || "이 채팅방"}</strong>에서 나가면 모임 참여도 함께 취소됩니다.
+              {leaveTargetType === "direct" ? (
+                <>
+                  {leaveTargetRoom?.is_active === false
+                    ? "종료된 대화가 내 채팅 목록에서 삭제됩니다."
+                    : "나가면 이 대화는 종료되고 내 채팅 목록에서 사라집니다. 상대방은 이전 대화만 볼 수 있습니다."}
+                </>
+              ) : (
+                <>
+                  <strong style={{ color: '#0f172a' }}>{leaveTargetRoom?.meeting?.title || "이 채팅방"}</strong>에서 나가면 모임 참여도 함께 취소됩니다.
+                </>
+              )}
             </p>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button type="button" onClick={() => setLeaveConfirmOpen(false)} style={{

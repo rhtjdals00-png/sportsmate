@@ -108,7 +108,7 @@ function AppRouter() {
         <Route path="/notifications" element={protect(<NotificationsPage />)} />
         <Route path="/support" element={protect(<SupportPage />)} />
         <Route path="/settings" element={protect(<AppSettingsPage />)} />
-        <Route path="/weather" element={protect(<WeatherPage />)} />
+        <Route path="/weather" element={<WeatherPage />} />
         <Route path="/mypage" element={protect(<MyPage />)} />
         <Route path="/mypage/profile" element={protect(<ProfileEditPage />)} />
         <Route path="/profile/intro" element={protect(<ProfileIntroPage />)} />

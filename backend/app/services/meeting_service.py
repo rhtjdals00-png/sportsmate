@@ -558,10 +558,16 @@ def list_meetings(params, current_user_id=None):
         candidates.sort(key=get_recommend_key)
         return candidates[:limit]
 
-    latitude = _float_param(params, "lat") or _float_param(params, "latitude")
-    longitude = _float_param(params, "lng") or _float_param(params, "longitude")
+    latitude = _float_param(params, "lat")
+    if latitude is None:
+        latitude = _float_param(params, "latitude")
+    longitude = _float_param(params, "lng")
+    if longitude is None:
+        longitude = _float_param(params, "longitude")
     if latitude is not None and longitude is not None:
-        radius_km = _float_param(params, "radius_km") or _float_param(params, "radius")
+        radius_km = _float_param(params, "radius_km")
+        if radius_km is None:
+            radius_km = _float_param(params, "radius")
         has_keyword_filter = bool(params.get("keyword"))
         candidates = query.order_by(Meeting.start_at.is_(None), Meeting.start_at.asc()).limit(80).all()
         for meeting in candidates:
@@ -585,12 +591,32 @@ def list_meeting_sessions(meeting_id, include_cancelled=True):
     return query.order_by(MeetingSession.start_at.asc()).all()
 
 
+def select_current_or_next_session(sessions, now=None):
+    now = now or kst_now()
+    return next((
+        session
+        for session in sessions
+        if session.status == "scheduled"
+        and (
+            session.end_at > now
+            if session.end_at
+            else session.start_at >= now
+        )
+    ), None)
+
+
 def get_next_meeting_session(meeting_id, now=None):
     now = now or kst_now()
     return (
         MeetingSession.query
         .filter_by(meeting_id=meeting_id, status="scheduled")
-        .filter(MeetingSession.start_at >= now)
+        .filter(or_(
+            MeetingSession.end_at > now,
+            and_(
+                MeetingSession.end_at.is_(None),
+                MeetingSession.start_at >= now,
+            ),
+        ))
         .order_by(MeetingSession.start_at.asc())
         .first()
     )

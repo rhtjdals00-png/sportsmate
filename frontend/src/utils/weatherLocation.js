@@ -8,24 +8,55 @@ export const SEOUL_WEATHER_LOCATION = {
 const STORAGE_KEY = "sportsmate_weather_location";
 
 function validLocation(value) {
-  return Number.isFinite(Number(value?.latitude)) && Number.isFinite(Number(value?.longitude));
+  if (value?.latitude == null || value?.longitude == null || value.latitude === "" || value.longitude === "") {
+    return false;
+  }
+  const latitude = Number(value.latitude);
+  const longitude = Number(value.longitude);
+  return Number.isFinite(latitude)
+    && Number.isFinite(longitude)
+    && latitude >= -90
+    && latitude <= 90
+    && longitude >= -180
+    && longitude <= 180;
+}
+
+export function getPreferredWeatherLocation(user) {
+  const profile = user?.profile;
+  const preferredLocations = [
+    {
+      latitude: profile?.region_latitude,
+      longitude: profile?.region_longitude,
+      label: profile?.region,
+    },
+    {
+      latitude: profile?.region_2_latitude,
+      longitude: profile?.region_2_longitude,
+      label: profile?.region_2,
+    },
+  ];
+  const preferred = preferredLocations.find(validLocation);
+  if (!preferred) return null;
+  return {
+    latitude: Number(preferred.latitude),
+    longitude: Number(preferred.longitude),
+    label: preferred.label || "내 선호 지역",
+    source: "profile",
+  };
+}
+
+export function getWeatherFallbackLocation(user) {
+  return getPreferredWeatherLocation(user) || SEOUL_WEATHER_LOCATION;
 }
 
 export function getSavedWeatherLocation(user) {
+  const preferred = getPreferredWeatherLocation(user);
+  if (preferred) return preferred;
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
     if (validLocation(saved)) return saved;
   } catch {
-    // 저장값이 손상되었으면 프로필 위치를 사용한다.
-  }
-  const profile = user?.profile;
-  if (validLocation({ latitude: profile?.region_latitude, longitude: profile?.region_longitude })) {
-    return {
-      latitude: Number(profile.region_latitude),
-      longitude: Number(profile.region_longitude),
-      label: profile.region || "내 활동 지역",
-      source: "profile",
-    };
+    // 저장값이 손상되었으면 기본 위치를 사용한다.
   }
   return SEOUL_WEATHER_LOCATION;
 }
