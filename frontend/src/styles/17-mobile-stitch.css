@@ -2589,16 +2589,17 @@
 }
 
 .mobile-shell .mobile-profile-summary .mobile-profile-summary__regions {
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: 20px max-content minmax(0, 1fr);
   align-items: center;
-  gap: 6px 8px;
-  padding: 14px;
+  gap: 10px;
+  padding: 12px 14px;
 }
 
 .mobile-shell .mobile-profile-summary__regions > strong {
   display: grid;
-  grid-column: 1 / -1;
-  gap: 4px;
+  grid-column: 3;
+  gap: 2px;
+  justify-items: end;
   min-width: 0;
 }
 
@@ -2607,6 +2608,7 @@
   font-size: 13px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .mobile-shell .mobile-my-calendar {
