@@ -15,7 +15,7 @@ function formatNotificationTime(value) {
   return new Intl.DateTimeFormat("ko-KR", {
     month: "long",
     day: "numeric",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
     timeZone: "Asia/Seoul"
   }).format(new Date(value));
@@ -53,7 +53,16 @@ function MobileNotifications() {
 
   const markRead = async (id) => {
     setLocalReadIds((prev) => new Set(prev).add(id));
-    if (Number.isInteger(Number(id))) {
+    if (typeof id === "string" && id.startsWith("chat-")) {
+      const roomId = Number(id.replace("chat-", ""));
+      if (!isNaN(roomId)) {
+        try {
+          await notificationApi.readChatRoom(roomId);
+        } catch (e) {
+          console.error("Failed to mark chat notification as read", e);
+        }
+      }
+    } else if (Number.isInteger(Number(id))) {
       try {
         await notificationApi.read(Number(id));
       } catch (e) {

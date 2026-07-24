@@ -27,7 +27,7 @@ const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
 
 function formatMessageTime(value) {
   if (!value) return "";
-  return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul" }).format(new Date(value));
+  return new Intl.DateTimeFormat("ko-KR", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Seoul" }).format(new Date(value));
 }
 
 function formatMessageDate(value) {
@@ -61,7 +61,7 @@ function formatVoteDateTimeOption(date, time) {
     timeZone: "Asia/Seoul"
   };
   if (time) {
-    options.hour = "2-digit";
+    options.hour = "numeric";
     options.minute = "2-digit";
   }
   return new Intl.DateTimeFormat("ko-KR", options).format(new Date(value));
@@ -73,7 +73,7 @@ function formatVoteDeadline(value) {
     month: "long",
     day: "numeric",
     weekday: "short",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
     timeZone: "Asia/Seoul"
   }).format(new Date(value));
@@ -977,6 +977,7 @@ function MobileChatRoom() {
 
   const createVote = async (event) => {
     event.preventDefault();
+    if (voteSubmitting) return;
     if (!meeting?.id) return;
     const options = voteForm.options.map((option) => option.trim()).filter(Boolean);
     if (!voteForm.title.trim() || options.length < 2) {
@@ -1082,6 +1083,7 @@ function MobileChatRoom() {
   };
 
   const openRoomReport = () => {
+    if (!isDirectChat && isRoomHost) return;
     if (!room?.id) return;
     setReportTarget({
       target_type: "chat_room",
@@ -1246,7 +1248,7 @@ function MobileChatRoom() {
   };
 
   const openUserProfile = async (sender) => {
-    if (!sender) return;
+    if (!sender || sender.is_anonymized) return;
     setProfilePreviewUser(sender);
     setProfileNotice("");
     if (!sender.id) return;
@@ -1289,6 +1291,7 @@ function MobileChatRoom() {
 
   const createNotice = async (event) => {
     event.preventDefault();
+    if (noticeSubmitting) return;
     if (!meeting?.id) return;
     if (!noticeForm.title.trim() || !noticeForm.content.trim()) {
       setNoticeError("공지 제목과 내용을 입력해주세요.");
@@ -1435,9 +1438,13 @@ function MobileChatRoom() {
                       >
                         {!mine && (
                           <div className="message-avatar">
-                            <button type="button" onClick={() => openUserProfile(message.sender)} aria-label="사용자 정보 보기">
-                              {message.sender?.profile_image_url ? <img src={message.sender.profile_image_url} alt="" /> : <UsersRound size={16} />}
-                            </button>
+                            {message.sender?.is_anonymized ? (
+                              <span aria-label="탈퇴한 사용자"><UsersRound size={16} /></span>
+                            ) : (
+                              <button type="button" onClick={() => openUserProfile(message.sender)} aria-label="사용자 정보 보기">
+                                {message.sender?.profile_image_url ? <img src={message.sender.profile_image_url} alt="" /> : <UsersRound size={16} />}
+                              </button>
+                            )}
                           </div>
                         )}
 
@@ -1661,7 +1668,7 @@ function MobileChatRoom() {
               {!splitCommaText(profilePreviewUser.profile?.preferred_sports).length ? <span>선호 종목 미설정</span> : null}
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '14px', width: '100%', boxSizing: 'border-box', padding: '0 16px' }}>
-              {String(profilePreviewUser.id) !== String(user?.id) && !isDirectChat && (
+              {String(profilePreviewUser.id) !== String(user?.id) && !isDirectChat && !profilePreviewUser.is_anonymized && (
                 <button
                   type="button"
                   onClick={() => requestPrivateChat(profilePreviewUser)}
@@ -1681,7 +1688,7 @@ function MobileChatRoom() {
                   1:1 톡
                 </button>
               )}
-              {String(profilePreviewUser.id) !== String(user?.id) && (
+              {String(profilePreviewUser.id) !== String(user?.id) && !profilePreviewUser.is_anonymized && (
                 <>
                   {hiddenChatStorageKey && hiddenChatUserIds.includes(String(profilePreviewUser.id)) ? (
                     <button
@@ -1760,7 +1767,7 @@ function MobileChatRoom() {
                   </button>
                 </>
               )}
-              {isRoomHost && String(profilePreviewUser.id) !== String(user?.id) && (
+              {isRoomHost && String(profilePreviewUser.id) !== String(user?.id) && !profilePreviewUser.is_anonymized && (
                 <button
                   type="button"
                   onClick={() => kickParticipant(profilePreviewUser.id, profilePreviewUser.nickname)}
@@ -2212,6 +2219,8 @@ function MobileChatRoom() {
                         borderRadius: '10px',
                         border: '1px solid #e2e8f0',
                         background: '#fff',
+                        fontSize: '12px',
+                        fontWeight: '700',
                         color: '#334155',
                         display: 'flex',
                         alignItems: 'center',
@@ -2262,6 +2271,7 @@ function MobileChatRoom() {
                     room?.other_user && (
                       <button
                         type="button"
+                        disabled={room.other_user.is_anonymized}
                         onClick={() => { setDrawerOpen(false); openUserProfile(room.other_user); }}
                         style={{
                           display: 'flex',
@@ -2273,7 +2283,7 @@ function MobileChatRoom() {
                           background: 'none',
                           borderRadius: '10px',
                           textAlign: 'left',
-                          cursor: 'pointer'
+                          cursor: room.other_user.is_anonymized ? 'default' : 'pointer'
                         }}
                       >
                         <div style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2305,6 +2315,7 @@ function MobileChatRoom() {
                         >
                           <button
                             type="button"
+                            disabled={pUser.is_anonymized}
                             onClick={() => { setDrawerOpen(false); openUserProfile(pUser); }}
                             style={{
                               display: 'flex',
@@ -2313,7 +2324,7 @@ function MobileChatRoom() {
                               border: 0,
                               background: 'none',
                               textAlign: 'left',
-                              cursor: 'pointer',
+                              cursor: pUser.is_anonymized ? 'default' : 'pointer',
                               flex: 1
                             }}
                           >
@@ -2408,27 +2419,29 @@ function MobileChatRoom() {
                 </>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    onClick={openRoomReport}
-                    style={{
-                      width: '100%',
-                      minHeight: '42px',
-                      borderRadius: '10px',
-                      border: '1px solid #e2e8f0',
-                      background: '#fff',
-                      color: '#ef4444',
-                      fontSize: '13px',
-                      fontWeight: '800',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <span>이 모임 채팅방 신고하기</span>
-                  </button>
+                  {!isRoomHost ? (
+                    <button
+                      type="button"
+                      onClick={openRoomReport}
+                      style={{
+                        width: '100%',
+                        minHeight: '42px',
+                        borderRadius: '10px',
+                        border: '1px solid #e2e8f0',
+                        background: '#fff',
+                        color: '#ef4444',
+                        fontSize: '13px',
+                        fontWeight: '800',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <span>이 모임 채팅방 신고하기</span>
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={leaveRoom}

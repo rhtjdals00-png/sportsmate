@@ -43,7 +43,7 @@ function formatTime(value) {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
     timeZone: "Asia/Seoul"
   }).format(new Date(value));
@@ -62,7 +62,7 @@ function formatDate(value) {
 function formatHourMinute(value) {
   if (!value) return "";
   return new Intl.DateTimeFormat("ko-KR", {
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
     hour12: true,
     timeZone: "Asia/Seoul"

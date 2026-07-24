@@ -210,11 +210,11 @@ export function AuthProvider({ children }) {
       if (currentSyncTokenRef.current !== supabaseAccessToken) return data;
 
       if (data.account_restoration_required) {
-        localStorage.setItem("sportsmate_token", data.access_token);
+        localStorage.removeItem("sportsmate_token");
         setRestorationState({
           user: data.user,
           remainingDays: data.remaining_days,
-          token: data.access_token
+          supabaseAccessToken
         });
         setBackendTokenReady(false);
         setUser(null);

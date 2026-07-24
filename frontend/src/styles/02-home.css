@@ -74,6 +74,14 @@
   color: #334155;
 }
 
+.home-banner--community .home-banner-copy p {
+  color: #1d4ed8;
+  font-weight: 850;
+  text-shadow:
+    0 1px 1px rgba(255, 255, 255, 1),
+    0 0 8px rgba(255, 255, 255, 0.96);
+}
+
 .home-banner-actions {
   display: flex;
   align-items: center;

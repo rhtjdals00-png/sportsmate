@@ -4,7 +4,7 @@ from sqlalchemy import text
 
 from app.extensions import db
 from app.models import User
-from app.services.auth_service import AuthUserIdMismatchError, InvalidStoredProviderError, LoginProviderMismatchError, LoginProviderRequiredError, restore_user, sync_supabase_user, verify_supabase_user
+from app.services.auth_service import AccountLifecycleError, AuthUserIdMismatchError, InvalidStoredProviderError, LoginProviderMismatchError, LoginProviderRequiredError, restore_user, sync_supabase_user, verify_supabase_user
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -176,6 +176,12 @@ def sync_user():
             "code": "LOGIN_PROVIDER_INVALID",
             "message": str(error),
         }), 409
+    except AccountLifecycleError as error:
+        return jsonify({
+            "success": False,
+            "code": error.code,
+            "message": str(error),
+        }), error.status_code
     except ValueError as error:
         msg = str(error)
         if "서비스 점검" in msg:
@@ -211,10 +217,27 @@ def me():
 
 
 @auth_bp.post("/restore")
-@jwt_required()
 def restore():
+    access_token = (request.headers.get("X-Supabase-Access-Token") or "").strip()
+    if not access_token:
+        return jsonify({
+            "code": "SUPABASE_TOKEN_REQUIRED",
+            "message": "계정 복구를 위해 Supabase 인증 토큰이 필요합니다.",
+        }), 401
+
     try:
-        user_id = int(get_jwt_identity())
-        return jsonify(restore_user(user_id))
+        supabase_user = verify_supabase_user(access_token)
+        auth_user_id = (supabase_user.get("id") or "").strip()
+        if not auth_user_id:
+            return jsonify({
+                "code": "SUPABASE_IDENTITY_INVALID",
+                "message": "인증된 사용자 정보를 확인할 수 없습니다.",
+            }), 401
+        return jsonify(restore_user(auth_user_id))
+    except AccountLifecycleError as error:
+        return jsonify({"code": error.code, "message": str(error)}), error.status_code
     except ValueError as error:
-        return jsonify({"message": str(error)}), 400
+        return jsonify({
+            "code": "SUPABASE_TOKEN_INVALID",
+            "message": "Supabase 인증 토큰이 유효하지 않습니다.",
+        }), 401

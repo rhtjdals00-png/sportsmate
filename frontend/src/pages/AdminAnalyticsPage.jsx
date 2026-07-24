@@ -65,6 +65,7 @@ function AdminAnalyticsPage() {
   const [activeTab, setActiveTab] = useState("30일"); // Filter options: 오늘, 7일, 30일
   const [stats, setStats] = useState(initialStats);
   const [logs, setLogs] = useState(systemLogs);
+  const [logFilter, setLogFilter] = useState("all");
   const [topMeetingsList, setTopMeetingsList] = useState(topMeetings);
   const [rawData, setRawData] = useState({ users: [], meetings: [], reports: [] });
   
@@ -825,6 +826,8 @@ function AdminAnalyticsPage() {
     );
   }
 
+  const filteredLogs = logs.filter(log => logFilter === "all" || log.type === logFilter);
+
   return (
     <div className="analytics-page">
       {/* Upper Title Description & Filter row */}
@@ -1293,18 +1296,39 @@ function AdminAnalyticsPage() {
         <section className="admin-panel-card">
           <div className="admin-panel-card__header">
             <h2 className="admin-panel-card__title">최근 시스템 로그</h2>
-            <button type="button" className="admin-panel-card__more-btn" onClick={() => alert("로그 필터 기능 준비 중")}>
-              <Filter size={16} />
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <Filter size={14} style={{ color: "#64748b" }} />
+              <select
+                value={logFilter}
+                onChange={(e) => setLogFilter(e.target.value)}
+                style={{
+                  fontSize: "12px",
+                  padding: "4px 8px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  backgroundColor: "#fff",
+                  color: "#475569",
+                  fontWeight: 600,
+                  outline: "none",
+                  cursor: "pointer"
+                }}
+              >
+                <option value="all">전체 로그</option>
+                <option value="security">보안</option>
+                <option value="action">액션</option>
+                <option value="update">업데이트</option>
+                <option value="error">오류</option>
+              </select>
+            </div>
           </div>
           <div className="admin-panel-card__body">
             <div className="admin-log-list">
-              {logs.length === 0 ? (
+              {filteredLogs.length === 0 ? (
                 <div style={{ textAlign: "center", color: "#94a3b8", padding: "40px 0", fontSize: "14px" }}>
-                  선택한 기간 내에 발생한 시스템 로그가 없습니다.
+                  선택한 필터나 기간 내에 발생한 시스템 로그가 없습니다.
                 </div>
               ) : (
-                logs.map((log) => (
+                filteredLogs.map((log) => (
                   <div className="admin-log-item" key={log.id}>
                     <div className="admin-log-item__dot-outer">
                       <div className={`admin-log-item__dot admin-log-item__dot--${log.type}`}></div>

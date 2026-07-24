@@ -4,6 +4,8 @@ import { useMemo, useState, useEffect } from "react";
 import { meetingApi } from "../../../api/meetingApi.js";
 import { weatherApi } from "../../../api/weatherApi.js";
 import MobileWeatherCard from "../../meeting/mobile/MobileWeatherCard.jsx";
+import { getMeetingOperationEndAt } from "../../../utils/meetingLifecycle.js";
+import { getScheduleOccurrenceState } from "../../../utils/scheduleOccurrenceState.js";
 
 const SCHEDULE_REASON_MAX_LENGTH = 100;
 
@@ -22,7 +24,9 @@ function dateKey(value) {
 function shortTime(value) {
   const date = validDate(value);
   if (!date) return "시간 미정";
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const ampm = date.getHours() >= 12 ? "오후" : "오전";
+  const hour = date.getHours() % 12 || 12;
+  return `${ampm} ${hour}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function buildMonthCells(baseDate, items) {
@@ -31,7 +35,7 @@ function buildMonthCells(baseDate, items) {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   return Array.from({ length: firstDay + daysInMonth }, (_, index) => {
-    if (index < firstDay) return { key: `empty-${index}`, empty: true };
+    if (index < firstDay) return { key: `empty-${index}`, empty: true, items: [] };
     const day = index - firstDay + 1;
     const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     return { key, day, items: items.filter((item) => dateKey(item.start_at) === key) };
@@ -205,7 +209,9 @@ function ScheduleCancelModal({ item, submitting, error, onClose, onSubmit }) {
 }
 
 function MobileMyMeetingItem({ item, openScheduleAction }) {
-  const isClosed = item.status !== "open";
+  const scheduleState = getScheduleOccurrenceState(item);
+  const isTerminalSchedule = scheduleState.isEnded;
+  const isRecruitmentClosed = item.status !== "open";
   const [weatherState, setWeatherState] = useState({ loading: false, forecast: null });
 
   useEffect(() => {
@@ -229,7 +235,7 @@ function MobileMyMeetingItem({ item, openScheduleAction }) {
   }, [item.latitude, item.longitude, item.start_at, item.address]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', borderBottom: '1px solid #f1f5f9', paddingBottom: '16px', marginBottom: '16px' }}>
+    <div className={`mobile-my-calendar__item is-${scheduleState.state}`} style={{ display: 'flex', flexDirection: 'column', borderBottom: '1px solid #f1f5f9', paddingBottom: '16px', marginBottom: '16px' }}>
       <Link to={item.state === "host" ? `/host/meetings/${item.id}` : `/meetings/${item.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
           <span style={{
@@ -254,7 +260,7 @@ function MobileMyMeetingItem({ item, openScheduleAction }) {
             {item.meeting_type === "regular" ? "🔄 정기" : "⚡ 일회성"}
           </span>
           
-          {isClosed && (
+          {isRecruitmentClosed && (
             <span style={{
               fontSize: '11px',
               padding: '3px 8px',
@@ -266,14 +272,20 @@ function MobileMyMeetingItem({ item, openScheduleAction }) {
               🔒 모집 종료
             </span>
           )}
+
+          {isTerminalSchedule && (
+            <span className={`mobile-my-calendar__state is-${scheduleState.state}`}>
+              {scheduleState.label}
+            </span>
+          )}
           
           <span style={{ fontSize: '12px', color: '#94a3b8', marginLeft: 'auto' }}>
             {shortTime(item.start_at)}
           </span>
         </div>
         
-        <strong style={{ color: isClosed ? "#94a3b8" : "inherit", display: 'block' }}>{item.title}</strong>
-        <p style={{ color: isClosed ? "#cbd5e1" : "inherit", margin: '4px 0 0 0', fontSize: '13px' }}>{item.place}</p>
+        <strong style={{ color: isTerminalSchedule ? "#94a3b8" : "inherit", display: 'block' }}>{item.title}</strong>
+        <p style={{ color: isTerminalSchedule ? "#94a3b8" : "inherit", margin: '4px 0 0 0', fontSize: '13px' }}>{item.place}</p>
         
         <div style={{ marginTop: '12px' }}>
           <MobileWeatherCard forecast={weatherState.forecast} loading={weatherState.loading} title="운동 일정 날씨" />
@@ -324,6 +336,7 @@ export default function MobileMyMeetings({ meetings }) {
             state: meeting.state,
             status: meeting.status,
             meeting_type: meeting.meeting_type,
+            operationEndAt: getMeetingOperationEndAt(meeting),
             sessionStatus: session.status || "scheduled",
             cancellationReason: session.cancellation_reason || "",
             rescheduleReason: session.reschedule_reason || "",
@@ -345,6 +358,7 @@ export default function MobileMyMeetings({ meetings }) {
           state: meeting.state,
           status: meeting.status,
           meeting_type: meeting.meeting_type,
+          operationEndAt: getMeetingOperationEndAt(meeting),
           sessionStatus: null,
           latitude: meeting.latitude,
           longitude: meeting.longitude,
@@ -379,6 +393,7 @@ export default function MobileMyMeetings({ meetings }) {
   };
 
   const handleScheduleChange = async (payload, clientError = "") => {
+    if (scheduleActionSubmitting) return;
     if (clientError) {
       setScheduleActionError(clientError);
       return;
@@ -397,6 +412,7 @@ export default function MobileMyMeetings({ meetings }) {
   };
 
   const handleScheduleCancel = async (payload, clientError = "") => {
+    if (scheduleActionSubmitting) return;
     if (clientError) {
       setScheduleActionError(clientError);
       return;
@@ -442,21 +458,30 @@ export default function MobileMyMeetings({ meetings }) {
           <div className="mobile-my-calendar__grid">
             {calendarCells.map((cell) => {
               const isActive = activeScheduleKey === cell.key;
+              const itemStates = cell.items.map((item) => getScheduleOccurrenceState(item).state);
+              const hasEndedOnly = itemStates.length > 0 && itemStates.every((state) => state === "ended");
+              const hasCancelledOnly = itemStates.length > 0 && itemStates.every((state) => state === "cancelled");
+              const hasSuspendedOnly = itemStates.length > 0 && itemStates.every((state) => state === "suspended");
+              const terminalLabel = hasCancelledOnly ? "취소" : hasSuspendedOnly ? "중지" : hasEndedOnly ? "종료" : "";
               return cell.empty ? (
                 <span key={cell.key} aria-hidden="true" />
               ) : (
-                <button key={cell.key} type="button" className={`${cell.items.length ? "has-event" : ""} ${isActive ? "is-active" : ""}`} onClick={() => cell.items.length && setSelectedScheduleKey(cell.key)} disabled={!cell.items.length} style={{ position: 'relative' }}>
+                <button key={cell.key} type="button" className={`${cell.items.length ? "has-event" : ""} ${isActive ? "is-active" : ""} ${terminalLabel ? "is-terminal" : ""} ${hasEndedOnly ? "is-ended" : ""} ${hasCancelledOnly ? "is-cancelled" : ""} ${hasSuspendedOnly ? "is-suspended" : ""}`} onClick={() => cell.items.length && setSelectedScheduleKey(cell.key)} disabled={!cell.items.length} style={{ position: 'relative' }}>
                   <b>{cell.day}</b>
                   {cell.items.length ? (
                     <em style={{
                       position: 'absolute',
                       bottom: '4px',
                       right: '4px',
-                      background: isActive ? '#ffffff' : '#4f46e5',
-                      color: isActive ? '#4f46e5' : 'white',
+                      background: terminalLabel
+                        ? (hasCancelledOnly ? '#fee2e2' : hasSuspendedOnly ? '#ffedd5' : '#e2e8f0')
+                        : (isActive ? '#ffffff' : '#4f46e5'),
+                      color: terminalLabel
+                        ? (hasCancelledOnly ? '#b91c1c' : hasSuspendedOnly ? '#9a3412' : '#475569')
+                        : (isActive ? '#4f46e5' : 'white'),
                       fontSize: '9px',
                       fontWeight: 'bold',
-                      minWidth: '16px',
+                      minWidth: terminalLabel ? '26px' : '16px',
                       height: '16px',
                       display: 'flex',
                       alignItems: 'center',
@@ -465,7 +490,7 @@ export default function MobileMyMeetings({ meetings }) {
                       fontStyle: 'normal',
                       padding: '0 4px'
                     }}>
-                      {cell.items.length}
+                      {terminalLabel || cell.items.length}
                     </em>
                   ) : null}
                 </button>

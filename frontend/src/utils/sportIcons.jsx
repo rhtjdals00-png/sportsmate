@@ -19,13 +19,12 @@ function SoccerBallIcon({ size = 24, strokeWidth = 2, ...props }) {
 function FutsalIcon({ size = 24, strokeWidth = 2, ...props }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="m12 7 3 2-1 4h-4L9 9l3-2Z" />
-      <path d="m9 9-4-.5" />
-      <path d="m15 9 4-.5" />
-      <path d="m10 13-2.5 3" />
-      <path d="m14 13 2.5 3" />
-      <path d="m12 7 .5-3" />
+      <path d="M3 5h18v15" />
+      <path d="M3 5v15" />
+      <path d="M3 20l3.5-5h11L21 20" />
+      <path d="M3 5l3.5 6h11L21 5" strokeWidth="1" />
+      <path d="M6.5 11v4M10 5v10M14 5v10M17.5 11v4" strokeWidth="1" />
+      <path d="M4 9h16M4 12h16M5 15h14" strokeWidth="1" />
     </svg>
   );
 }
@@ -79,8 +78,10 @@ function BaseballIcon({ size = 24, strokeWidth = 2, ...props }) {
 function JokguIcon({ size = 24, strokeWidth = 2, ...props }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="m14.3 17.2h5.2M14.3 17.2 20 14.8M14.3 17.2 20 19.6" />
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 4c2 3 2 6 0 8" />
+      <path d="M12 12c3 0 5 2 6 5" />
+      <path d="M12 12c-3 0-5 2-6 5" />
     </svg>
   );
 }
@@ -126,7 +127,8 @@ function SquashIcon({ size = 24, strokeWidth = 2, ...props }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
       <ellipse cx="9" cy="8" rx="4" ry="5.5" transform="rotate(-35 9 8)" />
       <path d="m12 12 7 7" />
-      <path d="M6.5 5.5 11 10" />
+      <path d="m17.5 20.5 3-3" />
+      <circle cx="18" cy="6" r="1.8" />
     </svg>
   );
 }
@@ -147,8 +149,7 @@ function RunningIcon({ size = 24, strokeWidth = 2, ...props }) {
 function HikingIcon({ size = 24, strokeWidth = 2, ...props }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M10.007 5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
-      <path d="M17 20l-1 -5h-5l1 -7" />
+      <path d="m8 3 4 8 5-5 5 15H2L8 3z" />
     </svg>
   );
 }
@@ -171,10 +172,10 @@ function TrekkingIcon({ size = 24, strokeWidth = 2, ...props }) {
 function CyclingIcon({ size = 24, strokeWidth = 2, ...props }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <circle cx="5.5" cy="17.5" r="2.5" />
-      <circle cx="18.5" cy="17.5" r="2.5" />
-      <path d="M15 6a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
-      <path d="M12 17.5V14l-3-3 4-3 2 3h2" />
+      <path d="M2 18a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" />
+      <path d="M16 18a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" />
+      <path d="M12 19v-4l-3 -3l5 -4l2 3h3" />
+      <path d="M13.007 5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
     </svg>
   );
 }
@@ -183,10 +184,10 @@ function CyclingIcon({ size = 24, strokeWidth = 2, ...props }) {
 function WalkingIcon({ size = 24, strokeWidth = 2, ...props }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <circle cx="12" cy="5" r="2" />
-      <path d="M9 22l2 -6" />
-      <path d="M13 22v-6l-3 -3" />
-      <path d="M10 10h4l2 4" />
+      <path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z" />
+      <path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z" />
+      <path d="M16 17h4" />
+      <path d="M4 13h4" />
     </svg>
   );
 }
@@ -195,11 +196,11 @@ function WalkingIcon({ size = 24, strokeWidth = 2, ...props }) {
 function FitnessIcon({ size = 24, strokeWidth = 2, ...props }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="m6.5 6.5 11 11" />
-      <path d="m21 21-1-1" />
-      <path d="m3 3 1 1" />
-      <path d="m18.5 5.5 1-1" />
-      <path d="m4.5 19.5 1-1" />
+      <path d="M14.4 14.4 9.6 9.6" />
+      <path d="M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z" />
+      <path d="m21.5 21.5-1.4-1.4" />
+      <path d="M3.9 3.9 2.5 2.5" />
+      <path d="M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z" />
     </svg>
   );
 }
@@ -247,9 +248,15 @@ function YogaIcon({ size = 24, strokeWidth = 2, ...props }) {
 function PilatesIcon({ size = 24, strokeWidth = 2, ...props }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <circle cx="12" cy="5" r="2" />
-      <path d="M5 20h14" />
-      <path d="M12 7v7" />
+      <path d="M4 13h16" />
+      <path d="M4 16h16" />
+      <path d="M5 16v4h2v-4" />
+      <path d="M17 16v4h2v-4" />
+      <path d="M7 12 5 10" />
+      <path d="M5 10h4" />
+      <path d="M12 13l6-3" />
+      <path d="M19 8v5" />
+      <path d="M18 8h3" />
     </svg>
   );
 }
@@ -258,10 +265,12 @@ function PilatesIcon({ size = 24, strokeWidth = 2, ...props }) {
 function BowlingIcon({ size = 24, strokeWidth = 2, ...props }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <circle cx="12" cy="12" r="9" />
-      <circle cx="10" cy="8" r=".8" fill="currentColor" stroke="none" />
-      <circle cx="13" cy="7" r=".8" fill="currentColor" stroke="none" />
-      <circle cx="13" cy="10" r=".8" fill="currentColor" stroke="none" />
+      <path d="M7 11v.01" />
+      <path d="M11 10v.01" />
+      <path d="M10 14v.01" />
+      <path d="M11.059 6.07a8 8 0 1 0 .32 15.81" />
+      <path d="M15.969 9h4" />
+      <path d="M14.969 5c0 1.5 1 2 1 4c0 2.5 -2 4.5 -2 7c0 2.6 1.9 6 1.9 6h4.1s2 -3.4 2 -6c0 -2.5 -2 -4.5 -2 -7c0 -2 1 -2.5 1 -4a3 3 0 1 0 -6 0" />
     </svg>
   );
 }
@@ -270,8 +279,12 @@ function BowlingIcon({ size = 24, strokeWidth = 2, ...props }) {
 function BilliardsIcon({ size = 24, strokeWidth = 2, ...props }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <circle cx="12" cy="12" r="9" />
-      <circle cx="9" cy="9" r="1.5" />
+      <path d="M5 5l14 14" />
+      <path d="M19 5 5 19" />
+      <circle cx="12" cy="5.5" r="1.8" />
+      <circle cx="18.5" cy="12" r="1.8" />
+      <circle cx="12" cy="18.5" r="1.8" />
+      <circle cx="5.5" cy="12" r="1.8" />
     </svg>
   );
 }
@@ -280,8 +293,8 @@ function BilliardsIcon({ size = 24, strokeWidth = 2, ...props }) {
 function GolfIcon({ size = 24, strokeWidth = 2, ...props }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M12 21h4" />
-      <path d="M14 6V2l-4 2 4 2Z" />
+      <path d="M12 18v-15l7 4l-7 4" />
+      <path d="M9 17.67c-.62 .36 -1 .82 -1 1.33c0 1.1 1.8 2 4 2s4 -.9 4 -2c0 -.5 -.38 -.97 -1 -1.33" />
     </svg>
   );
 }
@@ -290,8 +303,9 @@ function GolfIcon({ size = 24, strokeWidth = 2, ...props }) {
 function SwimmingIcon({ size = 24, strokeWidth = 2, ...props }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M2 10a4 4 0 0 1 8 0 4 4 0 0 1 8 0 4 4 0 0 1 8 0" />
-      <path d="M2 14a4 4 0 0 1 8 0 4 4 0 0 1 8 0 4 4 0 0 1 8 0" />
+      <path d="M15 9a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+      <path d="M6 11l4 -2l3.5 3l-1.5 2" />
+      <path d="M3 16.75a2.4 2.4 0 0 0 1 .25a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 1 -.25" />
     </svg>
   );
 }

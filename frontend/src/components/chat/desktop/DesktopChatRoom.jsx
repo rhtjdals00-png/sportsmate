@@ -57,7 +57,7 @@ let naverMapClientIdPromise;
 function formatMessageTime(value) {
   if (!value) return "";
   return new Intl.DateTimeFormat("ko-KR", {
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
     timeZone: "Asia/Seoul"
   }).format(new Date(value));
@@ -93,7 +93,7 @@ function formatVoteDateTimeOption(date, time) {
     timeZone: "Asia/Seoul"
   };
   if (time) {
-    options.hour = "2-digit";
+    options.hour = "numeric";
     options.minute = "2-digit";
   }
   return new Intl.DateTimeFormat("ko-KR", options).format(new Date(value));
@@ -105,7 +105,7 @@ function formatVoteDeadline(value) {
     month: "long",
     day: "numeric",
     weekday: "short",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
     timeZone: "Asia/Seoul"
   }).format(new Date(value));
@@ -1264,6 +1264,7 @@ function DesktopChatRoom() {
 
   const createVote = async (event) => {
     event.preventDefault();
+    if (voteSubmitting) return;
     if (!meeting?.id) return;
     if (chatReadOnly) {
       setVoteError("마감된 모임에서는 투표를 새로 만들 수 없습니다.");
@@ -1373,6 +1374,7 @@ function DesktopChatRoom() {
   const createNotice = async (event) => {
     event.preventDefault();
     if (!meeting?.id) return;
+    if (noticeSubmitting) return;
     if (chatReadOnly) {
       setNoticeError("마감된 모임에서는 공지를 새로 등록할 수 없습니다.");
       return;
@@ -1442,6 +1444,7 @@ function DesktopChatRoom() {
   const canUseMessageMenu = (message) => canReplyToMessage(message) || canNoticeMessage(message);
 
   const openRoomReport = () => {
+    if (!isDirectChat && isRoomHost) return;
     if (!room?.id) return;
     setReportTarget({
       target_type: "chat_room",
@@ -1940,10 +1943,12 @@ function DesktopChatRoom() {
                         <UsersRound size={15} />
                         <b>멤버</b>
                       </button>
-                      <button className="talk-tool-btn is-danger-text" type="button" onClick={openRoomReport}>
-                        <Flag size={15} />
-                        <b>방 신고</b>
-                      </button>
+                      {!isRoomHost ? (
+                        <button className="talk-tool-btn is-danger-text" type="button" onClick={openRoomReport}>
+                          <Flag size={15} />
+                          <b>방 신고</b>
+                        </button>
+                      ) : null}
                       {canManageRoom && meeting?.id ? (
                         <>
                           <Link className="talk-tool-btn is-gray-text" to={`/host/meetings/${meeting.id}`}>
@@ -2039,8 +2044,8 @@ function DesktopChatRoom() {
                   );
                   return (
                     <div key={participant.id || participant.user_id} className={`talk-member-row ${isMe ? "is-self" : ""}`}>
-                      {isMe ? (
-                        <div className="talk-member-self" aria-label={`${senderLabel(participantUser)} 본인`}>
+                      {isMe || participantUser.is_anonymized ? (
+                        <div className="talk-member-self" aria-label={isMe ? `${senderLabel(participantUser)} 본인` : "탈퇴한 사용자"}>
                           {memberContent}
                         </div>
                       ) : (
@@ -2108,10 +2113,17 @@ function DesktopChatRoom() {
                       >
                         <div className="talk-message-main">
                           {!mine && !isSystemMessage(message) ? (
-                            <button className="talk-sender-button" type="button" onClick={() => setProfilePreviewUser(message.sender)}>
-                              {message.sender?.profile_image_url ? <img src={message.sender.profile_image_url} alt="" /> : <span><UsersRound size={13} /></span>}
-                              <b>{senderLabel(message.sender)}</b>
-                            </button>
+                            message.sender?.is_anonymized ? (
+                              <div className="talk-sender-button" aria-label="탈퇴한 사용자">
+                                <span><UsersRound size={13} /></span>
+                                <b>{senderLabel(message.sender)}</b>
+                              </div>
+                            ) : (
+                              <button className="talk-sender-button" type="button" onClick={() => setProfilePreviewUser(message.sender)}>
+                                {message.sender?.profile_image_url ? <img src={message.sender.profile_image_url} alt="" /> : <span><UsersRound size={13} /></span>}
+                                <b>{senderLabel(message.sender)}</b>
+                              </button>
+                            )
                           ) : null}
                           {(message.reply_to_message_id || message.reply_to_content) ? (
                             <button
@@ -2262,7 +2274,7 @@ function DesktopChatRoom() {
             </strong>
             <p>{profilePreviewUser.profile?.region || "활동 지역 미설정"}</p>
             {privateChatNotice ? <p className="chat-profile-sheet__notice">{privateChatNotice}</p> : null}
-            {!isProfilePreviewMe ? (
+            {!isProfilePreviewMe && !profilePreviewUser.is_anonymized ? (
               <div className="chat-profile-sheet__actions">
                 <button type="button" onClick={() => requestPrivateChat(profilePreviewUser)}>1:1 톡</button>
                 {(() => {

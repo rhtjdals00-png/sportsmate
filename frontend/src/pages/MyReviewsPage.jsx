@@ -226,7 +226,7 @@ function MyReviewsPage() {
           }}
           onClick={() => setSubTab("written")}
         >
-          내가 작성한 후기
+          내가 작성한 후기 ({writtenReviews.length})
         </button>
         <button
           type="button"
@@ -244,7 +244,7 @@ function MyReviewsPage() {
           }}
           onClick={() => setSubTab("received")}
         >
-          내가 받은 후기
+          내가 받은 후기 ({receivedReviews.length})
         </button>
       </div>
 

@@ -22,7 +22,7 @@ function formatChatTime(value) {
 
   if (diffDays === 0) {
     return new Intl.DateTimeFormat("ko-KR", {
-      hour: "2-digit",
+      hour: "numeric",
       minute: "2-digit",
       timeZone: "Asia/Seoul"
     }).format(date);

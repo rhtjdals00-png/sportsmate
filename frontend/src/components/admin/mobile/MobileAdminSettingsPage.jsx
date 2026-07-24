@@ -281,64 +281,6 @@ function MobileAdminSettingsPage() {
             </div>
           </article>
 
-          {/* 3. API 자격 증명 */}
-          <article className="detail-card" style={{ padding: '16px', borderRadius: '16px' }}>
-            <h2 style={{ fontSize: '14px', fontWeight: '900', color: '#1e293b', margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Database size={15} style={{ color: '#10b981' }} /> 연동 API 키 정보
-            </h2>
-            <div style={{ display: 'grid', gap: '10px' }}>
-              <div style={{ display: 'grid', gap: '4px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}>Supabase URL</label>
-                <input 
-                  type="text" 
-                  name="supabaseUrl" 
-                  value={settings.supabaseUrl} 
-                  onChange={handleChange}
-                  style={{ height: '36px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 10px', fontSize: '13px' }}
-                />
-              </div>
-              <div style={{ display: 'grid', gap: '4px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}>Kakao Developers REST Key</label>
-                <div style={{ position: 'relative' }}>
-                  <input 
-                    type={showKakaoApiKey ? "text" : "password"} 
-                    name="kakaoApiKey" 
-                    value={settings.kakaoApiKey} 
-                    onChange={handleChange}
-                    style={{ width: '100%', height: '36px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 36px 0 10px', fontSize: '13px' }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowKakaoApiKey(prev => !prev)}
-                    title={showKakaoApiKey ? "API 키 숨기기" : "API 키 보기"}
-                    style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px', display: 'flex', alignItems: 'center' }}
-                  >
-                    {showKakaoApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                </div>
-              </div>
-              <div style={{ display: 'grid', gap: '4px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}>Google Cloud Client ID</label>
-                <div style={{ position: 'relative' }}>
-                  <input 
-                    type={showGoogleClientId ? "text" : "password"} 
-                    name="googleClientId" 
-                    value={settings.googleClientId} 
-                    onChange={handleChange}
-                    style={{ width: '100%', height: '36px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 36px 0 10px', fontSize: '13px' }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowGoogleClientId(prev => !prev)}
-                    title={showGoogleClientId ? "클라이언트 ID 숨기기" : "클라이언트 ID 보기"}
-                    style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px', display: 'flex', alignItems: 'center' }}
-                  >
-                    {showGoogleClientId ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </article>
 
           <button 
             type="submit"

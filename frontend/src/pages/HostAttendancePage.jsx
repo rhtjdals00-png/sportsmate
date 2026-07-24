@@ -17,7 +17,7 @@ function formatAttendanceSession(session) {
   if (!session?.start_at) return `${session?.session_number || "-"}회차`;
   const date = new Date(session.start_at);
   const dateLabel = date.toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" });
-  const timeLabel = date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+  const timeLabel = date.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
   return `${session.session_number}회차 · ${dateLabel} ${timeLabel}${session.status === "cancelled" ? " · 취소" : ""}`;
 }
 

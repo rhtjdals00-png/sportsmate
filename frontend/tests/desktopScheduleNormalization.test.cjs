@@ -13,7 +13,18 @@ async function loadScheduleModule(entryPoint = "src/components/schedule/desktop/
     external: ["react", "react-router-dom", "lucide-react"]
   });
   const module = { exports: {} };
-  vm.runInNewContext(result.outputFiles[0].text, { module, exports: module.exports, require, console, Date });
+  const mockRequire = (id) => {
+    if (id === "lucide-react") {
+      return new Proxy({}, {
+        get: () => () => null
+      });
+    }
+    if (id === "react" || id === "react-router-dom") {
+      return {};
+    }
+    return require(id);
+  };
+  vm.runInNewContext(result.outputFiles[0].text, { module, exports: module.exports, require: mockRequire, console, Date });
   return module.exports;
 }
 
@@ -46,6 +57,35 @@ test("desktop schedule normalization keeps missing coordinates undefined", async
   assert.equal(normalized.address, undefined);
   assert.equal(normalized.latitude, undefined);
   assert.equal(normalized.longitude, undefined);
+});
+
+test("desktop schedule normalization prefers an ongoing session over the API next session", async () => {
+  const { normalizeDesktopScheduleMeeting } = await loadScheduleModule();
+  const now = Date.now();
+  const ongoing = {
+    id: 10,
+    start_at: new Date(now - 15 * 60 * 1000).toISOString(),
+    end_at: new Date(now + 60 * 60 * 1000).toISOString(),
+    status: "scheduled",
+  };
+  const future = {
+    id: 11,
+    start_at: new Date(now + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    end_at: new Date(now + 14 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
+    status: "scheduled",
+  };
+
+  const normalized = normalizeDesktopScheduleMeeting({
+    id: 3,
+    title: "Regular meeting",
+    meeting_type: "regular",
+    sessions: [ongoing, future],
+    next_session: future,
+  });
+
+  assert.equal(normalized.nextSession.id, ongoing.id);
+  assert.equal(normalized.startAt, ongoing.start_at);
+  assert.equal(normalized.endAt, ongoing.end_at);
 });
 
 test("desktop schedule state remains unchanged for a future one-time meeting", async () => {

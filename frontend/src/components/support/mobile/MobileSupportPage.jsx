@@ -30,7 +30,7 @@ function formatSupportTime(value) {
   return new Intl.DateTimeFormat("ko-KR", {
     month: "long",
     day: "numeric",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
     timeZone: "Asia/Seoul"
   }).format(new Date(value));

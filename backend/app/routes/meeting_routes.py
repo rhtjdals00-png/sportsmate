@@ -64,7 +64,7 @@ def can_manage_meeting_tools(meeting_id, user_id):
 
 
 def user_display_name(user):
-    return (user.nickname or user.name) if user else "참여자"
+    return (getattr(user, "display_nickname", None) or user.nickname or user.name) if user else "참여자"
 
 
 def add_meeting_system_message(meeting, user_id, content):
@@ -86,7 +86,7 @@ def host_summary(host):
     review_count = (
         Review.query
         .join(Meeting, Review.meeting_id == Meeting.id)
-        .filter(Meeting.host_id == host.id)
+        .filter(Meeting.host_id == host.id, Review.rating >= 0)
         .count()
     )
     return {
@@ -380,7 +380,7 @@ def reviews(meeting_id):
         is_member = Participant.query.filter_by(meeting_id=meeting_id, user_id=current_user_id, status="approved").first()
         if not is_member:
             return jsonify({"message": "모임 멤버만 조회할 수 있습니다."}), 403
-    items = Review.query.options(joinedload(Review.reviewer).joinedload(User.profile)).filter_by(meeting_id=meeting_id).order_by(Review.created_at.desc()).all()
+    items = Review.query.options(joinedload(Review.reviewer).joinedload(User.profile)).filter(Review.meeting_id == meeting_id, Review.rating >= 0).order_by(Review.created_at.desc()).all()
     return jsonify({"items": [item.to_dict() for item in items]})
 
 
@@ -494,7 +494,7 @@ def transfer_host(meeting_id):
             "meeting": meeting.to_dict(),
             "new_host": {
                 "user_id": participant.user_id,
-                "nickname": participant.user.nickname if participant.user else "참가자",
+                "nickname": participant.user.display_nickname if participant.user else "참가자",
             },
         })
     except PermissionError as error:

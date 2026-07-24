@@ -96,5 +96,12 @@
     "action_type": "개별 알림 발송",
     "description": "회원 고성민(ID 22)에게 개별 알림을 전송했습니다. 내용: '알림확인...'",
     "target_id": 22
+  },
+  {
+    "timestamp": "2026-07-24 11:12:58",
+    "admin": "ms",
+    "action_type": "회원 관리",
+    "description": "회원 강경근(ID 63)의 권한을 admin(으)로 변경, 회원 개인 정보 수정 작업을 수행했습니다.",
+    "target_id": 63
   }
 ]

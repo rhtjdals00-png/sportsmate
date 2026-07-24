@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { BellRing, MapPin, ShieldCheck, X } from "lucide-react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import { authApi } from "../api/authApi";
 import { useResponsive } from "../hooks/useResponsive";
 import { enablePushNotifications } from "../utils/pushNotifications";
 import MobileLayout from "./MobileLayout.jsx";
@@ -11,7 +12,7 @@ const AUTH_ROUTES = ["/login", "/register", "/auth/callback", "/profile/intro", 
 
 function ResponsiveLayout() {
   const { isMobile } = useResponsive();
-  const { user, loading: authLoading, logout, syncUser } = useAuth();
+  const { user, session, loading: authLoading, logout } = useAuth();
   const location = useLocation();
   const [toast, setToast] = useState("");
   const [canceling, setCanceling] = useState(false);
@@ -93,9 +94,7 @@ function ResponsiveLayout() {
     if (canceling) return;
     setCanceling(true);
     try {
-      const { userApi } = await import("../api/userApi");
-      await userApi.cancelAccountDeletion();
-      await syncUser();
+      await authApi.restore(session?.access_token);
       alert("탈퇴 처리가 성공적으로 철회되었습니다.");
       window.location.replace("/"); // 강제 새로고침하여 홈으로 이동
     } catch (err) {

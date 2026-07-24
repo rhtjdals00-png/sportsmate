@@ -5,27 +5,6 @@ import { formatMeetingSchedule, formatMeetingType } from "../../../utils/formatt
 import { getMeetingCoverImage, isUsingSportThumbnail } from "../../../utils/sportThumbnails";
 import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
 
-const WEEKDAY_MAP = {
-  MO: "월",
-  TU: "화",
-  WE: "수",
-  TH: "목",
-  FR: "금",
-  SA: "토",
-  SU: "일"
-};
-
-const parseRepeatDays = (rule) => {
-  if (!rule) return null;
-  const match = rule.match(/BYDAY=([^;]+)/);
-  if (!match) return null;
-  const days = match[1].split(",");
-  const koreanDays = days.map(d => WEEKDAY_MAP[d]).filter(Boolean);
-  if (koreanDays.length === 0) return null;
-  return `매주 ${koreanDays.join(", ")}`;
-};
-
-
 function MeetingCard({ meeting, compact = false }) {
   const isEnded = isMeetingLifecycleEnded(meeting);
   const actualStatus = meeting.status === "cancelled" ? "cancelled" : (isEnded ? "closed" : meeting.status);
@@ -52,11 +31,6 @@ function MeetingCard({ meeting, compact = false }) {
               {meeting.sport?.name || meeting.sport_name}
             </Badge>
             <span className="badge badge--type">{formatMeetingType(meeting.meeting_type)}</span>
-            {meeting.meeting_type === "regular" && parseRepeatDays(meeting.repeat_rule) && (
-              <span className="badge badge--type" style={{ marginLeft: '4px', backgroundColor: '#eef2ff', color: '#4f46e5' }}>
-                {parseRepeatDays(meeting.repeat_rule)}
-              </span>
-            )}
           </div>
           <span className="meeting-card__title">
             {meeting.title}

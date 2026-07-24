@@ -100,7 +100,7 @@ def send_message(room_id, user_id, data):
         if not reply_to_message:
             raise ValueError("답장할 메시지를 찾지 못했습니다.")
 
-    sender_name = sender.nickname or sender.name if sender else "참여자"
+    sender_name = (getattr(sender, "display_nickname", None) or sender.nickname or sender.name) if sender else "참여자"
     meeting_title = room.meeting.title if room.meeting else "모임"
     message = ChatMessage(
         chat_room_id=room.id,
@@ -115,7 +115,7 @@ def send_message(room_id, user_id, data):
         reply_to_message_id=reply_to_message.id if reply_to_message else None,
         reply_to_user_id=reply_to_message.user_id if reply_to_message else None,
         reply_to_sender_name=(
-            reply_to_message.sender.nickname or reply_to_message.sender.name
+            getattr(reply_to_message.sender, "display_nickname", None) or reply_to_message.sender.nickname or reply_to_message.sender.name
             if reply_to_message and reply_to_message.sender
             else None
         ),
@@ -172,6 +172,9 @@ def mark_messages_read(messages, user_id):
 
 def mark_room_messages_read(room, user_id):
     mark_messages_read(room.messages, user_id)
+    from app.models.notifications import Notification
+    Notification.query.filter_by(user_id=user_id, type="chat", is_read=False).filter(Notification.link_url == f"/chats/{room.id}").update({"is_read": True}, synchronize_session=False)
+    db.session.commit()
 
 
 def attach_read_counts(messages):
@@ -193,8 +196,14 @@ def attach_read_counts(messages):
 
 def direct_contact_is_blocked(first_user_id, second_user_id):
     return UserBlock.query.filter(or_(
-        and_(UserBlock.blocker_id == first_user_id, UserBlock.blocked_id == second_user_id),
-        and_(UserBlock.blocker_id == second_user_id, UserBlock.blocked_id == first_user_id),
+        and_(
+            UserBlock.blocker_id == first_user_id,
+            UserBlock.blocked_id == second_user_id,
+        ),
+        and_(
+            UserBlock.blocker_id == second_user_id,
+            UserBlock.blocked_id == first_user_id,
+        ),
     )).first() is not None
 
 
@@ -204,19 +213,28 @@ def users_share_meeting(first_user_id, second_user_id):
         .outerjoin(Participant, Participant.meeting_id == Meeting.id)
         .filter(or_(
             Meeting.host_id == first_user_id,
-            and_(Participant.user_id == first_user_id, Participant.status == "approved"),
+            and_(
+                Participant.user_id == first_user_id,
+                Participant.status == "approved",
+            ),
         ))
         .all()
     }
+
     if not first_ids:
         return False
+
     return db.session.query(Meeting.id).outerjoin(
-        Participant, Participant.meeting_id == Meeting.id
+        Participant,
+        Participant.meeting_id == Meeting.id,
     ).filter(
         Meeting.id.in_(first_ids),
         or_(
             Meeting.host_id == second_user_id,
-            and_(Participant.user_id == second_user_id, Participant.status == "approved"),
+            and_(
+                Participant.user_id == second_user_id,
+                Participant.status == "approved",
+            ),
         ),
     ).first() is not None
 
@@ -224,38 +242,75 @@ def users_share_meeting(first_user_id, second_user_id):
 def direct_contact_action(current_user_id, target_user):
     if current_user_id == target_user.id:
         return "self"
+
     if direct_contact_is_blocked(current_user_id, target_user.id):
         return "blocked"
+
     user_a_id, user_b_id = sorted([current_user_id, target_user.id])
     active_room = DirectChatRoom.query.filter_by(
-        user_a_id=user_a_id, user_b_id=user_b_id, is_active=True
+        user_a_id=user_a_id,
+        user_b_id=user_b_id,
+        is_active=True,
     ).first()
+
     if active_room:
         return "room"
+
     policy = target_user.direct_message_policy or "same_meeting"
+
     if policy == "none":
         return "denied"
+
     if users_share_meeting(current_user_id, target_user.id):
         return "room"
+
     if policy == "everyone":
         return "request"
+
     return "denied"
 
 
-def get_or_create_direct_room(current_user_id, target_user_id, skip_policy=False):
+def _direct_chat_user_available(user):
+    return bool(
+        user
+        and user.is_active
+        and user.status == "active"
+        and user.role not in {"suspended", "pending_withdrawal"}
+    )
+
+
+def get_or_create_direct_room(
+    current_user_id,
+    target_user_id,
+    skip_policy=False,
+):
     if current_user_id == target_user_id:
         raise ValueError("자기 자신과는 1:1 톡을 만들 수 없습니다.")
     target_user = User.query.get(target_user_id)
     if not target_user:
         raise ValueError("상대 사용자를 찾지 못했습니다.")
+    if not _direct_chat_user_available(target_user):
+        raise ValueError(
+            "탈퇴하거나 이용할 수 없는 사용자에게는 새 1:1 대화를 시작할 수 없습니다."
+        )
+
     if not skip_policy:
         action = direct_contact_action(current_user_id, target_user)
+
         if action == "blocked":
-            raise PermissionError("차단된 사용자와는 1:1 채팅을 시작할 수 없습니다.")
+            raise PermissionError(
+                "차단된 사용자와는 1:1 채팅을 시작할 수 없습니다."
+            )
+
         if action == "denied":
-            raise PermissionError("상대방의 1:1 채팅 수신 설정으로 대화를 시작할 수 없습니다.")
+            raise PermissionError(
+                "상대방의 1:1 채팅 수신 설정으로 대화를 시작할 수 없습니다."
+            )
+
         if action == "request":
-            raise PermissionError("먼저 1:1 대화 요청을 보내주세요.")
+            raise PermissionError(
+                "먼저 1:1 대화 요청을 보내주세요."
+            )
     user_a_id, user_b_id = sorted([current_user_id, target_user_id])
     room = DirectChatRoom.query.filter_by(user_a_id=user_a_id, user_b_id=user_b_id, is_active=True).first()
     if not room:
@@ -278,9 +333,15 @@ def send_direct_message(room_id, user_id, data):
     room = ensure_direct_room_access(room_id, user_id)
     if not room.is_active:
         raise PermissionError("종료된 1:1 채팅방은 읽기만 가능합니다.")
+
     recipient_id = room.user_b_id if room.user_a_id == user_id else room.user_a_id
+
+    if not _direct_chat_user_available(room.other_user(user_id)):
+        raise ValueError("탈퇴한 사용자에게는 새 메시지를 보낼 수 없습니다.")
+
     if direct_contact_is_blocked(user_id, recipient_id):
         raise PermissionError("차단된 사용자와는 메시지를 주고받을 수 없습니다.")
+
     sender = User.query.options(joinedload(User.profile)).get(user_id)
     if not isinstance(data, dict):
         data = {"content": str(data or "")}

@@ -404,7 +404,7 @@ def _region_filter(column, value):
 def _display_name(user):
     if not user:
         return "참여자"
-    return user.nickname or user.name or "참여자"
+    return getattr(user, "display_nickname", None) or user.nickname or user.name or "참여자"
 
 
 def _add_meeting_system_message(meeting, user_id, content):
@@ -558,10 +558,16 @@ def list_meetings(params, current_user_id=None):
         candidates.sort(key=get_recommend_key)
         return candidates[:limit]
 
-    latitude = _float_param(params, "lat") or _float_param(params, "latitude")
-    longitude = _float_param(params, "lng") or _float_param(params, "longitude")
+    latitude = _float_param(params, "lat")
+    if latitude is None:
+        latitude = _float_param(params, "latitude")
+    longitude = _float_param(params, "lng")
+    if longitude is None:
+        longitude = _float_param(params, "longitude")
     if latitude is not None and longitude is not None:
-        radius_km = _float_param(params, "radius_km") or _float_param(params, "radius")
+        radius_km = _float_param(params, "radius_km")
+        if radius_km is None:
+            radius_km = _float_param(params, "radius")
         has_keyword_filter = bool(params.get("keyword"))
         candidates = query.order_by(Meeting.start_at.is_(None), Meeting.start_at.asc()).limit(80).all()
         for meeting in candidates:
@@ -585,12 +591,32 @@ def list_meeting_sessions(meeting_id, include_cancelled=True):
     return query.order_by(MeetingSession.start_at.asc()).all()
 
 
+def select_current_or_next_session(sessions, now=None):
+    now = now or kst_now()
+    return next((
+        session
+        for session in sessions
+        if session.status == "scheduled"
+        and (
+            session.end_at > now
+            if session.end_at
+            else session.start_at >= now
+        )
+    ), None)
+
+
 def get_next_meeting_session(meeting_id, now=None):
     now = now or kst_now()
     return (
         MeetingSession.query
         .filter_by(meeting_id=meeting_id, status="scheduled")
-        .filter(MeetingSession.start_at >= now)
+        .filter(or_(
+            MeetingSession.end_at > now,
+            and_(
+                MeetingSession.end_at.is_(None),
+                MeetingSession.start_at >= now,
+            ),
+        ))
         .order_by(MeetingSession.start_at.asc())
         .first()
     )
@@ -1057,7 +1083,7 @@ def join_meeting(meeting_id, user_id, join_message=""):
         join_message = _normalize_join_message(join_message)
         meeting = get_meeting_for_update(meeting_id)
         applicant = User.query.options(joinedload(User.profile)).get(user_id)
-        applicant_name = applicant.nickname if applicant and getattr(applicant, "nickname", None) else (applicant.name if applicant else "신청자")
+        applicant_name = applicant.display_nickname if applicant and getattr(applicant, "nickname", None) else (applicant.name if applicant else "신청자")
         if is_meeting_operation_ended(meeting):
             raise ValueError("종료된 모임에는 참가 신청할 수 없습니다.")
         actual_approved_count = approved_participant_count(meeting.id)
@@ -1296,7 +1322,7 @@ def list_meeting_members(meeting_id, host_id):
             ),
             "user": {
                 "id": participant.user.id,
-                "nickname": participant.user.nickname,
+                "nickname": participant.user.display_nickname,
                 "profile_image_url": participant.user.profile_image_url,
             },
         }
@@ -1383,7 +1409,7 @@ def create_review(meeting_id, user_id, data):
 
     # Recalculate average rating for reviewee
     from app.models.users import UserProfile
-    avg_rating = db.session.query(db.func.avg(Review.rating)).filter_by(reviewee_id=reviewee_id).scalar() or 0.0
+    avg_rating = db.session.query(db.func.avg(Review.rating)).filter(Review.reviewee_id == reviewee_id, Review.rating >= 0).scalar() or 0.0
     profile = UserProfile.query.filter_by(user_id=reviewee_id).first()
     if profile:
         profile.rating_average = round(float(avg_rating), 2)
@@ -1393,14 +1419,14 @@ def create_review(meeting_id, user_id, data):
 
 
 def list_user_reviews(user_id):
-    return Review.query.filter_by(reviewer_id=user_id).order_by(Review.created_at.desc()).all()
+    return Review.query.filter(Review.reviewer_id == user_id, Review.rating >= 0).order_by(Review.created_at.desc()).all()
 
 
 def list_written_reviews(user_id):
     return (
         Review.query
         .options(joinedload(Review.reviewee).joinedload(User.profile), joinedload(Review.meeting))
-        .filter_by(reviewer_id=user_id)
+        .filter(Review.reviewer_id == user_id, Review.rating >= 0)
         .order_by(Review.created_at.desc())
         .all()
     )
@@ -1410,7 +1436,7 @@ def list_received_reviews(user_id):
     return (
         Review.query
         .options(joinedload(Review.reviewer).joinedload(User.profile), joinedload(Review.meeting))
-        .filter_by(reviewee_id=user_id)
+        .filter(Review.reviewee_id == user_id, Review.rating >= 0)
         .order_by(Review.created_at.desc())
         .all()
     )
@@ -1476,8 +1502,8 @@ def list_pending_reviews(user_id):
 
 def update_review(review_id, user_id, data):
     review = Review.query.get(review_id)
-    if not review:
-        raise ValueError("존재하지 않는 후기입니다.")
+    if not review or review.rating < 0:
+        raise ValueError("존재하지 않거나 삭제된 후기입니다.")
     if review.reviewer_id != user_id:
         raise PermissionError("본인이 작성한 후기만 수정할 수 있습니다.")
     
@@ -1490,7 +1516,7 @@ def update_review(review_id, user_id, data):
     
     # Recalculate average rating for reviewee
     from app.models.users import UserProfile
-    avg_rating = db.session.query(db.func.avg(Review.rating)).filter_by(reviewee_id=review.reviewee_id).scalar() or 0.0
+    avg_rating = db.session.query(db.func.avg(Review.rating)).filter(Review.reviewee_id == review.reviewee_id, Review.rating >= 0).scalar() or 0.0
     profile = UserProfile.query.filter_by(user_id=review.reviewee_id).first()
     if profile:
         profile.rating_average = round(float(avg_rating), 2)
@@ -1501,18 +1527,18 @@ def update_review(review_id, user_id, data):
 
 def delete_review(review_id, user_id):
     review = Review.query.get(review_id)
-    if not review:
-        raise ReviewNotFoundError("존재하지 않는 후기입니다.")
+    if not review or review.rating < 0:
+        raise ReviewNotFoundError("존재하지 않거나 이미 삭제된 후기입니다.")
     if review.reviewer_id != user_id:
         raise PermissionError("본인이 작성한 후기만 삭제할 수 있습니다.")
 
     try:
         reviewee_id = review.reviewee_id
-        db.session.delete(review)
+        review.rating = -1
+        review.content = "__DELETED__"
 
-        # The aggregate query autoflushes the pending delete before calculating.
         from app.models.users import UserProfile
-        avg_rating = db.session.query(db.func.avg(Review.rating)).filter_by(reviewee_id=reviewee_id).scalar() or 0.0
+        avg_rating = db.session.query(db.func.avg(Review.rating)).filter(Review.reviewee_id == reviewee_id, Review.rating >= 0).scalar() or 0.0
         profile = UserProfile.query.filter_by(user_id=reviewee_id).first()
         if profile:
             profile.rating_average = round(float(avg_rating), 2)

@@ -8,13 +8,13 @@ export default function AccountRestorationModal({ restorationState, onRestored, 
 
   if (!restorationState) return null;
 
-  const { user, remainingDays } = restorationState;
+  const { user, remainingDays, supabaseAccessToken } = restorationState;
 
   const handleRestore = async () => {
     setRestoring(true);
     setError("");
     try {
-      const res = await authApi.restore();
+      const res = await authApi.restore(supabaseAccessToken);
       onRestored(res);
     } catch (e) {
       console.error("Failed to restore account:", e);
@@ -84,7 +84,7 @@ export default function AccountRestorationModal({ restorationState, onRestored, 
             <span style={{ fontSize: "14px", fontWeight: "800", color: "#b45309" }}>{remainingDays ?? 30}일</span>
           </div>
           <p style={{ fontSize: "12px", color: "#78350f", margin: "6px 0 0 0", lineHeight: "1.4" }}>
-            계정을 복구하시면 기존 작성 모임, 신청 내역 및 매너 점수 정보가 그대로 유지됩니다. 30일이 경과하면 DB에서 완전 삭제됩니다.
+            계정을 복구하면 기존 모임과 활동 기록을 그대로 이용할 수 있습니다. 30일이 지나면 기존 계정은 익명화되고 새 서비스 계정으로 시작합니다.
           </p>
         </div>
 

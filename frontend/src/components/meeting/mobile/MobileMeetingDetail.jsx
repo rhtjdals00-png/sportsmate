@@ -567,17 +567,19 @@ function MobileMeetingDetail({ recordedViewCount = null }) {
             </div>
           </section>
         )}
-        <section className="detail-card">
-          <h2>신고</h2>
-          <form className="review-form" onSubmit={submitReport}>
-            <label>
-              신고 사유
-              <textarea required minLength={5} value={reportReason} onChange={(event) => setReportReason(event.target.value)} placeholder="신고 사유를 자세히 입력해 주세요. (최소 5자)" />
-              <small className="mobile-meeting-report-hint">입력한 내용은 모임 운영 확인을 위해 관리자에게 전달됩니다.</small>
-            </label>
-            <Button type="submit" variant="secondary" disabled={reporting}>{reporting ? "접수 중..." : "신고 접수"}</Button>
-          </form>
-        </section>
+        {!isHost ? (
+          <section className="detail-card">
+            <h2>신고</h2>
+            <form className="review-form" onSubmit={submitReport}>
+              <label>
+                신고 사유
+                <textarea required minLength={5} value={reportReason} onChange={(event) => setReportReason(event.target.value)} placeholder="신고 사유를 자세히 입력해 주세요. (최소 5자)" />
+                <small className="mobile-meeting-report-hint">입력한 내용은 모임 운영 확인을 위해 관리자에게 전달됩니다.</small>
+              </label>
+              <Button type="submit" variant="secondary" disabled={reporting}>{reporting ? "접수 중..." : "신고 접수"}</Button>
+            </form>
+          </section>
+        ) : null}
       </article>
 
       <div className="sticky-cta">
