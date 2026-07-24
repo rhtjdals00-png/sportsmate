@@ -379,6 +379,7 @@ export default function MobileMyMeetings({ meetings }) {
   };
 
   const handleScheduleChange = async (payload, clientError = "") => {
+    if (scheduleActionSubmitting) return;
     if (clientError) {
       setScheduleActionError(clientError);
       return;
@@ -397,6 +398,7 @@ export default function MobileMyMeetings({ meetings }) {
   };
 
   const handleScheduleCancel = async (payload, clientError = "") => {
+    if (scheduleActionSubmitting) return;
     if (clientError) {
       setScheduleActionError(clientError);
       return;

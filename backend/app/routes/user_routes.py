@@ -400,7 +400,7 @@ def my_reviews():
     written = (
         Review.query
         .options(joinedload(Review.reviewer).joinedload(User.profile))
-        .filter_by(reviewer_id=user_id)
+        .filter(Review.reviewer_id == user_id, Review.rating >= 0)
         .order_by(Review.created_at.desc())
         .limit(bounded_limit())
         .all()
@@ -410,8 +410,7 @@ def my_reviews():
     received = (
         Review.query
         .options(joinedload(Review.reviewer).joinedload(User.profile))
-        .filter(Review.reviewee_id == user_id)
-        .filter(Review.reviewer_id != user_id)
+        .filter(Review.reviewee_id == user_id, Review.reviewer_id != user_id, Review.rating >= 0)
         .order_by(Review.created_at.desc())
         .limit(bounded_limit())
         .all()
@@ -435,7 +434,7 @@ def my_reviews():
 @jwt_required()
 def update_review(review_id):
     user_id = int(get_jwt_identity())
-    review = Review.query.get_or_404(review_id)
+    review = Review.query.filter(Review.id == review_id, Review.rating >= 0).first_or_404()
     
     # 본인 확인
     if review.reviewer_id != user_id:
@@ -461,6 +460,7 @@ def update_review(review_id):
             Review.query
             .filter(Review.reviewee_id == reviewee.id)
             .filter(Review.reviewer_id != reviewee.id)
+            .filter(Review.rating >= 0)
             .all()
         )
         

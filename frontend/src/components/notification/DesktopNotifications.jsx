@@ -108,7 +108,7 @@ function compactChatNotifications(items) {
         ...item,
         link_url: `/chats/${roomId}?unread=1`,
         chat_room_id: Number(roomId),
-        is_read: Boolean(previous?.is_read) && Boolean(item.is_read)
+        is_read: previous ? (Boolean(previous.is_read) && Boolean(item.is_read)) : Boolean(item.is_read)
       });
     } else if (previous) {
       chatByRoom.set(roomId, {
@@ -125,33 +125,46 @@ function DesktopNotifications() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [readFilter, setReadFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [page, setPage] = useState(1);
   const [savingAll, setSavingAll] = useState(false);
-  const notifications = useAsync(() => notificationApi.list(), [refreshKey]);
+  
+  const notifications = useAsync(
+    () => notificationApi.list({ page, limit: 10, read_filter: readFilter, type_filter: typeFilter }),
+    [page, readFilter, typeFilter, refreshKey]
+  );
+  
   const items = notifications.data?.items || [];
   const displayItems = useMemo(() => compactChatNotifications(items), [items]);
 
-  const unreadCount = displayItems.filter((item) => !item.is_read).length;
-  const readCount = displayItems.length - unreadCount;
+  const unreadCount = notifications.data?.global_unread || 0;
+  const readCount = notifications.data?.global_read || 0;
+  const totalCount = notifications.data?.global_total || 0;
+  const totalPages = notifications.data?.pages || 1;
 
-  const visibleItems = useMemo(() => {
-    return [...displayItems]
-      .filter((item) => {
-        if (readFilter === "unread" && item.is_read) return false;
-        if (readFilter === "read" && !item.is_read) return false;
-        return typeMatches(item, typeFilter);
-      })
-      .sort((a, b) => {
-        if (a.is_read !== b.is_read) return a.is_read ? 1 : -1;
-        return new Date(b.created_at || 0) - new Date(a.created_at || 0);
-      });
-  }, [displayItems, readFilter, typeFilter]);
+  const handleReadFilterChange = (filterId) => {
+    setReadFilter(filterId);
+    setPage(1);
+  };
+
+  const handleTypeFilterChange = (filterValue) => {
+    setTypeFilter(filterValue);
+    setPage(1);
+  };
 
   const markRead = async (item) => {
-    if (!item?.is_read && Number.isInteger(Number(item.id))) {
-      try {
-        await notificationApi.read(item.id);
-      } catch {
-        // 목록 확인 흐름은 막지 않습니다.
+    if (!item?.is_read) {
+      if (item.type === "chat" && item.chat_room_id) {
+        try {
+          await notificationApi.readChatRoom(item.chat_room_id);
+        } catch {
+          // ignore
+        }
+      } else if (Number.isInteger(Number(item.id))) {
+        try {
+          await notificationApi.read(item.id);
+        } catch {
+          // 목록 확인 흐름은 막지 않습니다.
+        }
       }
     }
     setRefreshKey((value) => value + 1);
@@ -188,6 +201,16 @@ function DesktopNotifications() {
     if (targetUrl) navigate(targetUrl);
   };
 
+  const pageBlockSize = 10;
+  const currentBlock = Math.ceil(page / pageBlockSize);
+  const startPage = (currentBlock - 1) * pageBlockSize + 1;
+  const endPage = Math.min(currentBlock * pageBlockSize, totalPages);
+  
+  const pageNumbers = [];
+  for (let i = startPage; i <= endPage; i++) {
+    pageNumbers.push(i);
+  }
+
   return (
     <div className="desktop-notifications">
       <header className="desktop-notifications__head">
@@ -203,7 +226,7 @@ function DesktopNotifications() {
       </header>
 
       <section className="desktop-notifications__summary" aria-label="알림 요약">
-        <span><b>{displayItems.length}</b><em>전체</em></span>
+        <span><b>{totalCount}</b><em>전체</em></span>
         <span><b>{unreadCount}</b><em>안 읽음</em></span>
         <span><b>{readCount}</b><em>읽음</em></span>
       </section>
@@ -211,14 +234,14 @@ function DesktopNotifications() {
       <section className="desktop-notifications__toolbar" aria-label="알림 필터">
         <div className="desktop-notifications__segmented">
           {READ_FILTERS.map((filter) => (
-            <button key={filter.id} type="button" className={readFilter === filter.id ? "is-active" : ""} onClick={() => setReadFilter(filter.id)}>
+            <button key={filter.id} type="button" className={readFilter === filter.id ? "is-active" : ""} onClick={() => handleReadFilterChange(filter.id)}>
               {filter.label}
             </button>
           ))}
         </div>
         <label className="desktop-notifications__type-filter">
           <SlidersHorizontal size={16} />
-          <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+          <select value={typeFilter} onChange={(event) => handleTypeFilterChange(event.target.value)}>
             {TYPE_FILTERS.map((filter) => <option key={filter.id} value={filter.id}>{filter.label}</option>)}
           </select>
         </label>
@@ -226,9 +249,9 @@ function DesktopNotifications() {
 
       {notifications.loading && !notifications.data ? (
         <LoadingCards count={4} />
-      ) : visibleItems.length ? (
+      ) : displayItems.length ? (
         <section className="desktop-notifications__list">
-          {visibleItems.map((item) => (
+          {displayItems.map((item) => (
             <article key={notificationKey(item)} className={`desktop-notification-card is-${item.type} ${item.is_read ? "is-read" : "is-unread"}`}>
               <div className="desktop-notification-card__icon">
                 <NotificationIcon type={item.type} />
@@ -259,6 +282,118 @@ function DesktopNotifications() {
         </section>
       ) : (
         <EmptyState title="조건에 맞는 알림이 없습니다." description="필터를 바꾸면 다른 알림을 확인할 수 있습니다." />
+      )}
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "6px", marginTop: "32px", paddingBottom: "24px" }}>
+          {/* 이전 페이지 */}
+          <button
+            disabled={page === 1}
+            onClick={() => setPage(p => Math.max(p - 1, 1))}
+            style={{
+              border: "1px solid #cbd5e1",
+              backgroundColor: page === 1 ? "#f1f5f9" : "#ffffff",
+              color: page === 1 ? "#94a3b8" : "#334155",
+              padding: "6px 12px",
+              borderRadius: "6px",
+              cursor: page === 1 ? "not-allowed" : "pointer",
+              fontSize: "13px",
+              fontWeight: 600,
+              boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+              transition: "all 0.2s"
+            }}
+          >
+            이전
+          </button>
+          
+          {/* 이전 10페이지 블록 (<<) */}
+          {startPage > 1 && (
+            <button
+              onClick={() => setPage(startPage - 1)}
+              style={{
+                border: "1px solid #cbd5e1",
+                backgroundColor: "#ffffff",
+                color: "#334155",
+                padding: "6px 12px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "13px",
+                fontWeight: 600,
+                boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+                transition: "all 0.2s"
+              }}
+              title="이전 10페이지"
+            >
+              &lt;&lt;
+            </button>
+          )}
+
+          {/* 페이지 번호들 */}
+          {pageNumbers.map(num => (
+            <button
+              key={num}
+              onClick={() => setPage(num)}
+              style={{
+                border: num === page ? "1px solid var(--primary-color, #4f46e5)" : "1px solid #cbd5e1",
+                backgroundColor: num === page ? "var(--primary-color, #4f46e5)" : "#ffffff",
+                color: num === page ? "#ffffff" : "#334155",
+                padding: "6px 12px",
+                minWidth: "32px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "13px",
+                fontWeight: 600,
+                boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+                transition: "all 0.2s"
+              }}
+            >
+              {num}
+            </button>
+          ))}
+
+          {/* 다음 10페이지 블록 (>>) */}
+          {endPage < totalPages && (
+            <button
+              onClick={() => setPage(endPage + 1)}
+              style={{
+                border: "1px solid #cbd5e1",
+                backgroundColor: "#ffffff",
+                color: "#334155",
+                padding: "6px 12px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "13px",
+                fontWeight: 600,
+                boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+                transition: "all 0.2s"
+              }}
+              title="다음 10페이지"
+            >
+              &gt;&gt;
+            </button>
+          )}
+
+          {/* 다음 페이지 */}
+          <button
+            disabled={page === totalPages}
+            onClick={() => setPage(p => Math.min(p + 1, totalPages))}
+            style={{
+              border: "1px solid #cbd5e1",
+              backgroundColor: page === totalPages ? "#f1f5f9" : "#ffffff",
+              color: page === totalPages ? "#94a3b8" : "#334155",
+              padding: "6px 12px",
+              borderRadius: "6px",
+              cursor: page === totalPages ? "not-allowed" : "pointer",
+              fontSize: "13px",
+              fontWeight: 600,
+              boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+              transition: "all 0.2s"
+            }}
+          >
+            다음
+          </button>
+        </div>
       )}
 
       {notifications.error ? <p className="desktop-notifications__error">알림을 불러오지 못했습니다.</p> : null}

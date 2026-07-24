@@ -675,6 +675,7 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
     max_participants: meeting.max_participants || 2
   });
   const [editFeedback, setEditFeedback] = useState(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
 
   const isTimeInvalid = Boolean(editForm.start_at && editForm.end_at && new Date(editForm.end_at) <= new Date(editForm.start_at));
 
@@ -701,7 +702,7 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
 
   const submitEdit = async (e) => {
     e.preventDefault();
-    if (isTimeInvalid) return;
+    if (isTimeInvalid || editSubmitting) return;
     setEditFeedback(null);
     const maxPartCount = Number(editForm.max_participants);
     if (maxPartCount > maxLimit) {
@@ -713,6 +714,7 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
       return;
     }
 
+    setEditSubmitting(true);
     try {
       await meetingApi.update(meeting.id, {
         ...editForm,
@@ -727,6 +729,8 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
         ? "현재 승인된 참가 인원보다 최대 정원을 작게 설정할 수 없습니다."
         : response?.message || "모임 정보 수정에 실패했습니다. 다시 시도해 주세요.";
       setEditFeedback({ type: "error", message });
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -1073,7 +1077,7 @@ function DesktopHostMeetingManage({ meeting, notice, noticeItems, noticesLoading
                 >
                   취소
                 </button>
-                <button className="submit-btn" type="submit" disabled={isTimeInvalid}>수정 완료</button>
+                <button className="submit-btn" type="submit" disabled={isTimeInvalid || editSubmitting}>{editSubmitting ? "수정 중..." : "수정 완료"}</button>
               </div>
             </form>
           </section>

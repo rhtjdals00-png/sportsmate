@@ -1383,7 +1383,7 @@ def create_review(meeting_id, user_id, data):
 
     # Recalculate average rating for reviewee
     from app.models.users import UserProfile
-    avg_rating = db.session.query(db.func.avg(Review.rating)).filter_by(reviewee_id=reviewee_id).scalar() or 0.0
+    avg_rating = db.session.query(db.func.avg(Review.rating)).filter(Review.reviewee_id == reviewee_id, Review.rating >= 0).scalar() or 0.0
     profile = UserProfile.query.filter_by(user_id=reviewee_id).first()
     if profile:
         profile.rating_average = round(float(avg_rating), 2)
@@ -1393,14 +1393,14 @@ def create_review(meeting_id, user_id, data):
 
 
 def list_user_reviews(user_id):
-    return Review.query.filter_by(reviewer_id=user_id).order_by(Review.created_at.desc()).all()
+    return Review.query.filter(Review.reviewer_id == user_id, Review.rating >= 0).order_by(Review.created_at.desc()).all()
 
 
 def list_written_reviews(user_id):
     return (
         Review.query
         .options(joinedload(Review.reviewee).joinedload(User.profile), joinedload(Review.meeting))
-        .filter_by(reviewer_id=user_id)
+        .filter(Review.reviewer_id == user_id, Review.rating >= 0)
         .order_by(Review.created_at.desc())
         .all()
     )
@@ -1410,7 +1410,7 @@ def list_received_reviews(user_id):
     return (
         Review.query
         .options(joinedload(Review.reviewer).joinedload(User.profile), joinedload(Review.meeting))
-        .filter_by(reviewee_id=user_id)
+        .filter(Review.reviewee_id == user_id, Review.rating >= 0)
         .order_by(Review.created_at.desc())
         .all()
     )
@@ -1476,8 +1476,8 @@ def list_pending_reviews(user_id):
 
 def update_review(review_id, user_id, data):
     review = Review.query.get(review_id)
-    if not review:
-        raise ValueError("존재하지 않는 후기입니다.")
+    if not review or review.rating < 0:
+        raise ValueError("존재하지 않거나 삭제된 후기입니다.")
     if review.reviewer_id != user_id:
         raise PermissionError("본인이 작성한 후기만 수정할 수 있습니다.")
     
@@ -1490,7 +1490,7 @@ def update_review(review_id, user_id, data):
     
     # Recalculate average rating for reviewee
     from app.models.users import UserProfile
-    avg_rating = db.session.query(db.func.avg(Review.rating)).filter_by(reviewee_id=review.reviewee_id).scalar() or 0.0
+    avg_rating = db.session.query(db.func.avg(Review.rating)).filter(Review.reviewee_id == review.reviewee_id, Review.rating >= 0).scalar() or 0.0
     profile = UserProfile.query.filter_by(user_id=review.reviewee_id).first()
     if profile:
         profile.rating_average = round(float(avg_rating), 2)
@@ -1501,18 +1501,18 @@ def update_review(review_id, user_id, data):
 
 def delete_review(review_id, user_id):
     review = Review.query.get(review_id)
-    if not review:
-        raise ReviewNotFoundError("존재하지 않는 후기입니다.")
+    if not review or review.rating < 0:
+        raise ReviewNotFoundError("존재하지 않거나 이미 삭제된 후기입니다.")
     if review.reviewer_id != user_id:
         raise PermissionError("본인이 작성한 후기만 삭제할 수 있습니다.")
 
     try:
         reviewee_id = review.reviewee_id
-        db.session.delete(review)
+        review.rating = -1
+        review.content = "__DELETED__"
 
-        # The aggregate query autoflushes the pending delete before calculating.
         from app.models.users import UserProfile
-        avg_rating = db.session.query(db.func.avg(Review.rating)).filter_by(reviewee_id=reviewee_id).scalar() or 0.0
+        avg_rating = db.session.query(db.func.avg(Review.rating)).filter(Review.reviewee_id == reviewee_id, Review.rating >= 0).scalar() or 0.0
         profile = UserProfile.query.filter_by(user_id=reviewee_id).first()
         if profile:
             profile.rating_average = round(float(avg_rating), 2)

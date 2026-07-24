@@ -170,6 +170,7 @@ function AdminUserDetailPage() {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showAllActivities, setShowAllActivities] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editForm, setEditForm] = useState({
     name: "",
@@ -475,8 +476,8 @@ function AdminUserDetailPage() {
         <section className="admin-panel-card" style={{ marginBottom: 0 }}>
           <div className="admin-panel-card__header">
             <h2 className="admin-panel-card__title">최근 활동 내역</h2>
-            <a href="#all" className="admin-panel-card__link" onClick={(e) => { e.preventDefault(); alert("전체 활동 조회를 준비 중입니다."); }}>
-              전체 보기 &gt;
+            <a href="#all" className="admin-panel-card__link" onClick={(e) => { e.preventDefault(); setShowAllActivities(!showAllActivities); }}>
+              {showAllActivities ? "접기" : "전체 보기 >"}
             </a>
           </div>
           <div className="admin-panel-card__body">
@@ -491,7 +492,7 @@ function AdminUserDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {userData.activities.map((act) => (
+                  {(showAllActivities ? userData.activities : userData.activities.slice(0, 5)).map((act) => (
                     <tr key={act.id}>
                       <td style={{ fontWeight: 600 }}>{act.title}</td>
                       <td>{act.category}</td>

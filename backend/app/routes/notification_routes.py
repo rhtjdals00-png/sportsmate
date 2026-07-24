@@ -217,14 +217,82 @@ def _vote_summary_items(user_id):
 @jwt_required()
 def notifications():
     user_id = int(get_jwt_identity())
+    page = request.args.get("page", type=int)
     limit = request.args.get("limit", type=int)
+    read_filter = request.args.get("read_filter", "all")
+    type_filter = request.args.get("type_filter", "all")
     
-    query = Notification.query.filter_by(user_id=user_id).order_by(Notification.created_at.desc())
-    if limit:
-        query = query.limit(limit)
+    # Subquery to get max ID per chat room link_url
+    chat_subquery = (
+        db.session.query(func.max(Notification.id))
+        .filter(Notification.user_id == user_id, Notification.type == "chat")
+        .group_by(Notification.link_url)
+    )
+    
+    # Base query containing non-chat notifications and ONLY the latest chat notification per room
+    base_query = Notification.query.filter(
+        Notification.user_id == user_id,
+        (Notification.type != "chat") | (Notification.id.in_(chat_subquery))
+    )
+    
+    query = base_query
+    
+    # Apply read filter
+    if read_filter == "unread":
+        query = query.filter(Notification.is_read == False)
+    elif read_filter == "read":
+        query = query.filter(Notification.is_read == True)
         
-    items = query.all()
-    return jsonify({"items": [_enrich_notification(item, user_id) for item in items]})
+    # Apply type filter
+    if type_filter == "chat":
+        query = query.filter(Notification.type == "chat")
+    elif type_filter == "notice":
+        notice_types = [
+            "notice", "admin_broadcast", "admin_message", "account_suspension",
+            "account_unsuspension", "broadcast", "admin", "system",
+            "support_inquiry", "support_reply", "report_result"
+        ]
+        query = query.filter(Notification.type.in_(notice_types))
+    elif type_filter == "meeting":
+        notice_types = [
+            "notice", "admin_broadcast", "admin_message", "account_suspension",
+            "account_unsuspension", "broadcast", "admin", "system",
+            "support_inquiry", "support_reply", "report_result"
+        ]
+        query = query.filter(Notification.type != "chat").filter(Notification.type.notin_(notice_types))
+
+    query = query.order_by(Notification.created_at.desc())
+    
+    total_count = base_query.count()
+    unread_count = base_query.filter(Notification.is_read == False).count()
+    read_count = total_count - unread_count
+    
+    if page:
+        per_page = limit or 10
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        items = pagination.items
+        return jsonify({
+            "items": [_enrich_notification(item, user_id) for item in items],
+            "total": pagination.total,
+            "page": pagination.page,
+            "pages": pagination.pages,
+            "has_prev": pagination.has_prev,
+            "has_next": pagination.has_next,
+            
+            "global_total": total_count,
+            "global_unread": unread_count,
+            "global_read": read_count
+        })
+    else:
+        if limit:
+            query = query.limit(limit)
+        items = query.all()
+        return jsonify({
+            "items": [_enrich_notification(item, user_id) for item in items],
+            "global_total": total_count,
+            "global_unread": unread_count,
+            "global_read": read_count
+        })
 
 
 @notification_bp.get("/notifications/summary")
@@ -270,6 +338,44 @@ def read_all_notifications():
         .filter_by(user_id=user_id, is_read=False)
         .update({"is_read": True}, synchronize_session=False)
     )
+    
+    # Mark all unread chat messages as read for this user
+    rooms = (
+        ChatRoom.query
+        .join(Meeting, ChatRoom.meeting_id == Meeting.id)
+        .outerjoin(Participant, Participant.meeting_id == Meeting.id)
+        .filter(
+            Meeting.status.notin_(["cancelled", "suspended"]),
+            or_(
+                Meeting.host_id == user_id,
+                (Participant.user_id == user_id) & (Participant.status == "approved")
+            )
+        )
+        .distinct(ChatRoom.id)
+        .all()
+    )
+    room_ids = [room.id for room in rooms]
+    if room_ids:
+        unread_msg_ids = (
+            db.session.query(ChatMessage.id)
+            .outerjoin(
+                ChatMessageRead,
+                (ChatMessageRead.chat_message_id == ChatMessage.id)
+                & (ChatMessageRead.user_id == user_id)
+            )
+            .filter(ChatMessage.chat_room_id.in_(room_ids))
+            .filter(ChatMessage.user_id != user_id)
+            .filter(ChatMessage.message_type != "notice")
+            .filter(ChatMessageRead.id.is_(None))
+            .all()
+        )
+        unread_msg_ids = [row[0] for row in unread_msg_ids]
+        if unread_msg_ids:
+            db.session.add_all(
+                ChatMessageRead(chat_message_id=msg_id, user_id=user_id)
+                for msg_id in unread_msg_ids
+            )
+            
     db.session.commit()
     return jsonify({"updated": updated})
 
@@ -284,6 +390,24 @@ def read_chat_room_notifications(room_id):
         .filter(Notification.link_url == f"/chats/{room_id}")
         .update({"is_read": True}, synchronize_session=False)
     )
+    
+    # Also mark all unread chat messages as read in ChatMessageRead
+    unread_messages = (
+        ChatMessage.query
+        .outerjoin(
+            ChatMessageRead,
+            (ChatMessageRead.chat_message_id == ChatMessage.id) & (ChatMessageRead.user_id == user_id)
+        )
+        .filter(ChatMessage.chat_room_id == room_id)
+        .filter(ChatMessage.user_id != user_id)
+        .filter(ChatMessage.message_type != "notice")
+        .filter(ChatMessageRead.id.is_(None))
+        .all()
+    )
+    if unread_messages:
+        from app.services.chat_service import mark_messages_read
+        mark_messages_read(unread_messages, user_id)
+        
     db.session.commit()
     return jsonify({"updated": updated, "room_id": room_id})
 

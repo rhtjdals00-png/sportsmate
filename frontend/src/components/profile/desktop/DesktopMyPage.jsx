@@ -418,6 +418,7 @@ function DesktopMyPage() {
   };
 
   const handleScheduleChange = async (payload, clientError = "") => {
+    if (scheduleActionSubmitting) return;
     if (clientError) {
       setScheduleActionError(clientError);
       return;
@@ -439,6 +440,7 @@ function DesktopMyPage() {
   };
 
   const handleScheduleCancel = async (payload, clientError = "") => {
+    if (scheduleActionSubmitting) return;
     if (clientError) {
       setScheduleActionError(clientError);
       return;
@@ -534,7 +536,7 @@ function DesktopMyPage() {
     schedule: { label: "다가오는 일정", count: scheduled.length, items: scheduled },
     hosted: { label: "내가 관리하는 모임", count: filteredHostedMeetings.length, items: filteredHostedMeetings, sourceCount: hostedMeetings.length, filter: createdMeetingFilter, setFilter: setCreatedMeetingFilter },
     joined: { label: "참여 중인 모임", count: filteredJoinedMeetings.length, items: filteredJoinedMeetings, sourceCount: joinedMeetings.length, filter: joinedMeetingFilter, setFilter: setJoinedMeetingFilter },
-    reviews: { label: "후기 관리", count: writtenReviews.length + receivedReviews.length, items: [] },
+    reviews: { label: reviewSubTab === "written" ? "내가 작성한 후기" : "내가 받은 후기", count: reviewSubTab === "written" ? writtenReviews.length : receivedReviews.length, items: [] },
     attendance: { label: "참여 기록", count: attendanceState.data?.summary?.total_count || 0, unit: "회", items: [] }
   };
   const activityMenu = [

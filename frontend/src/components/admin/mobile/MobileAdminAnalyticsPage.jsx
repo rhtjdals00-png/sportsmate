@@ -23,6 +23,7 @@ const systemLogs = [
 function MobileAdminAnalyticsPage() {
   const [activeTab, setActiveTab] = useState("30일");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   
   // Data State
   const [stats, setStats] = useState({
@@ -49,11 +50,18 @@ function MobileAdminAnalyticsPage() {
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
+      setError("");
       const [usersRes, meetingsRes, reportsRes] = await Promise.allSettled([
         adminApi.users(),
         adminApi.meetings(),
         adminApi.reports()
       ]);
+
+      const failedRes = [usersRes, meetingsRes, reportsRes].find(r => r.status === "rejected");
+      if (failedRes) {
+        setError("통계 데이터를 불러오는 데 실패했습니다. 서버 상태나 관리자 권한을 확인해 주세요.");
+        return;
+      }
 
       const apiUsers = usersRes.status === "fulfilled" && usersRes.value?.items ? usersRes.value.items : [];
       const apiMeetings = meetingsRes.status === "fulfilled" && meetingsRes.value?.items ? meetingsRes.value.items : [];
@@ -138,6 +146,34 @@ function MobileAdminAnalyticsPage() {
   useEffect(() => {
     fetchAnalytics();
   }, []);
+
+  if (error) {
+    return (
+      <>
+        <MobileHeader title="운영 지표 분석" />
+        <div style={{ padding: '40px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+          <AlertCircle size={48} color="#ef4444" />
+          <span style={{ fontSize: '15px', color: '#ef4444', fontWeight: '800' }}>{error}</span>
+          <button
+            type="button"
+            onClick={fetchAnalytics}
+            style={{
+              padding: '10px 20px',
+              borderRadius: '10px',
+              border: 0,
+              backgroundColor: 'var(--mobile-primary)',
+              color: '#fff',
+              fontSize: '13px',
+              fontWeight: '800',
+              cursor: 'pointer'
+            }}
+          >
+            다시 시도
+          </button>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

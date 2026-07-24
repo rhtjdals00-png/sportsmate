@@ -13,6 +13,7 @@ function MeetingEditPage() {
   const detail = useAsync(() => meetingApi.detail(meetingId), [meetingId]);
   const sports = useAsync(() => sportApi.sports(), []);
   const [form, setForm] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!detail.data?.meeting) return;
@@ -58,13 +59,20 @@ function MeetingEditPage() {
 
   const submit = async (event) => {
     event.preventDefault();
-    if (isTimeInvalid) return;
-    const data = await meetingApi.update(meetingId, {
-      ...form,
-      sport_id: Number(form.sport_id),
-      max_participants: Number(form.max_participants)
-    });
-    navigate(`/meetings/${data.meeting.id}`);
+    if (isTimeInvalid || submitting) return;
+    setSubmitting(true);
+    try {
+      const data = await meetingApi.update(meetingId, {
+        ...form,
+        sport_id: Number(form.sport_id),
+        max_participants: Number(form.max_participants)
+      });
+      navigate(`/meetings/${data.meeting.id}`);
+    } catch (err) {
+      alert(err.response?.data?.message || "수정에 실패했습니다.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (detail.loading || !form) return <LoadingCards count={2} />;
@@ -107,7 +115,7 @@ function MeetingEditPage() {
           {isTimeInvalid && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>종료 시간은 시작 시간 이후여야 합니다.</span>}
         </label>
         <label>정원<input type="number" min="2" max="50" value={form.max_participants} onChange={(event) => update("max_participants", event.target.value)} /></label>
-        <Button type="submit" disabled={isTimeInvalid}>수정 저장</Button>
+        <Button type="submit" disabled={isTimeInvalid || submitting}>{submitting ? "저장 중..." : "수정 저장"}</Button>
       </form>
     </>
   );

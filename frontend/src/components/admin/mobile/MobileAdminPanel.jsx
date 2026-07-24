@@ -29,15 +29,23 @@ function MobileAdminPanel({ title = "운영 대시보드" }) {
   const [meetings, setMeetings] = useState([]);
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+      setError("");
       const [usersRes, meetingsRes, reportsRes] = await Promise.allSettled([
         adminApi.users(),
         adminApi.meetings(),
         adminApi.reports()
       ]);
+
+      const failedRes = [usersRes, meetingsRes, reportsRes].find(r => r.status === "rejected");
+      if (failedRes) {
+        setError("데이터를 로딩하지 못했습니다. 서버 상태나 관리자 권한을 확인해 주세요.");
+        return;
+      }
 
       if (usersRes.status === "fulfilled" && usersRes.value?.items) {
         setUsers(usersRes.value.items);
@@ -50,6 +58,7 @@ function MobileAdminPanel({ title = "운영 대시보드" }) {
       }
     } catch (err) {
       console.error("Failed to load dashboard data", err);
+      setError("오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
@@ -104,6 +113,34 @@ function MobileAdminPanel({ title = "운영 대시보드" }) {
       created_at: u.created_at ? new Date(u.created_at).toLocaleDateString().replace(/\s/g, "").replace(/\.$/, "") : "2023.10.27"
     };
   });
+
+  if (error) {
+    return (
+      <>
+        <MobileHeader title={title} />
+        <div style={{ padding: '40px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+          <AlertTriangle size={48} color="#ef4444" />
+          <span style={{ fontSize: '15px', color: '#ef4444', fontWeight: '800' }}>{error}</span>
+          <button
+            type="button"
+            onClick={fetchDashboardData}
+            style={{
+              padding: '10px 20px',
+              borderRadius: '10px',
+              border: 0,
+              backgroundColor: 'var(--mobile-primary)',
+              color: '#fff',
+              fontSize: '13px',
+              fontWeight: '800',
+              cursor: 'pointer'
+            }}
+          >
+            다시 시도
+          </button>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

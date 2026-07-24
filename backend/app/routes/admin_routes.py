@@ -84,7 +84,7 @@ def user_detail(user_id):
         Meeting.end_at < now
     ).options(
         joinedload(Participant.meeting).joinedload(Meeting.sport).joinedload(Sport.category)
-    ).order_by(Meeting.end_at.desc()).limit(5).all()
+    ).order_by(Meeting.end_at.desc()).limit(50).all()
     
     for p in participants:
         meeting = p.meeting

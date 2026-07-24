@@ -13,7 +13,18 @@ async function loadScheduleModule(entryPoint = "src/components/schedule/desktop/
     external: ["react", "react-router-dom", "lucide-react"]
   });
   const module = { exports: {} };
-  vm.runInNewContext(result.outputFiles[0].text, { module, exports: module.exports, require, console, Date });
+  const mockRequire = (id) => {
+    if (id === "lucide-react") {
+      return new Proxy({}, {
+        get: () => () => null
+      });
+    }
+    if (id === "react" || id === "react-router-dom") {
+      return {};
+    }
+    return require(id);
+  };
+  vm.runInNewContext(result.outputFiles[0].text, { module, exports: module.exports, require: mockRequire, console, Date });
   return module.exports;
 }
 

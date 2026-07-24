@@ -64,18 +64,27 @@ function AdminPage() {
   });
 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   // Fetch real data from backend API
   useEffect(() => {
     async function fetchAdminData() {
       try {
         setLoading(true);
+        setError("");
         // 관리자 요약 데이터는 병렬로 요청합니다.
         const [usersRes, meetingsRes, reportsRes] = await Promise.allSettled([
           adminApi.users(),
           adminApi.meetings(),
           adminApi.reports()
         ]);
+
+        const failedRes = [usersRes, meetingsRes, reportsRes].find(r => r.status === "rejected");
+        if (failedRes) {
+          setError("데이터베이스에서 통계 데이터를 불러오는 데 실패했습니다. 관리자 권한이나 서버 상태를 확인해 주세요.");
+          setLoading(false);
+          return;
+        }
 
         const updatedStats = {
           totalUsers: 0,
@@ -132,11 +141,6 @@ function AdminPage() {
             };
           });
 
-          // API 데이터가 부족하면 기본 데이터로 빈 영역을 채웁니다.
-          for (let i = formattedUsers.length; i < 4; i++) {
-            if (mockNewUsers[i]) formattedUsers.push(mockNewUsers[i]);
-          }
-          
           setNewUsers(formattedUsers);
         }
 
@@ -175,24 +179,12 @@ function AdminPage() {
           } else {
             setReports([]);
           }
- // 26.07.01 충돌 지점 검증필요
-//          const formatted = apiReports.slice(0, 4).map((r, index) => ({
-//           id: r.id || index + 1,
-//            type: r.reason || "기타",
-//            target: r.target_name || r.target_type || `대상 #${r.target_id || ""}`,
-//            reporter: r.reporter_name || "신고자",
-//            date: r.created_at ? new Date(r.created_at).toLocaleDateString() : "2023.10.27",
-//            status: r.status === "pending" || r.status === "대기 중" ? "대기 중" : "처리 완료"
-//          }));
-          
-//          setReports(formatted);
-//        } else {
-//          setReports([]);
         }
 
         setStats(updatedStats);
       } catch (err) {
         console.error("Failed to load real-time admin data:", err);
+        setError("데이터를 로드하는 중 오류가 발생했습니다.");
       } finally {
         setLoading(false);
       }
@@ -208,6 +200,30 @@ function AdminPage() {
   if (isMobile) {
     return <MobileAdminPanel title="관리자 운영 관리" />;
   }
+  
+  if (error) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "400px", gap: "16px" }}>
+        <span style={{ fontSize: "16px", color: "#ef4444", fontWeight: 600 }}>{error}</span>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: "#3b82f6",
+            color: "#fff",
+            border: "none",
+            borderRadius: "8px",
+            cursor: "pointer",
+            fontWeight: "bold"
+          }}
+        >
+          다시 시도
+        </button>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "400px", gap: "16px" }}>
@@ -369,7 +385,7 @@ function AdminPage() {
         <section className="admin-panel-card">
           <div className="admin-panel-card__header">
             <h2 className="admin-panel-card__title">최근 가입 회원</h2>
-            <button type="button" className="admin-panel-card__more-btn" onClick={() => alert("더보기 메뉴는 준비 중입니다.")}>
+            <button type="button" className="admin-panel-card__more-btn" onClick={() => navigate("/admin/users")} title="전체 회원 관리 페이지로 이동">
               <MoreHorizontal size={18} />
             </button>
           </div>

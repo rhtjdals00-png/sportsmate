@@ -933,6 +933,7 @@ function MobileChatRoom() {
 
   const createVote = async (event) => {
     event.preventDefault();
+    if (voteSubmitting) return;
     if (!meeting?.id) return;
     const options = voteForm.options.map((option) => option.trim()).filter(Boolean);
     if (!voteForm.title.trim() || options.length < 2) {
@@ -1223,6 +1224,7 @@ function MobileChatRoom() {
 
   const createNotice = async (event) => {
     event.preventDefault();
+    if (noticeSubmitting) return;
     if (!meeting?.id) return;
     if (!noticeForm.title.trim() || !noticeForm.content.trim()) {
       setNoticeError("공지 제목과 내용을 입력해주세요.");

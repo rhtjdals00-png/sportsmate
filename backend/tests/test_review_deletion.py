@@ -8,22 +8,29 @@ from app.routes import user_routes
 from app.services import meeting_service
 
 
+class MockColumn:
+    def __ge__(self, other):
+        return True
+    def __eq__(self, other):
+        return True
+
+
 class ReviewDeletionTests(unittest.TestCase):
     def setUp(self):
         self.db = MagicMock()
-        self.review = SimpleNamespace(id=7, reviewer_id=11, reviewee_id=22)
+        self.review = SimpleNamespace(id=7, reviewer_id=11, reviewee_id=22, rating=5, content="good")
         self.profile = SimpleNamespace(rating_average=0.0)
         self.review_query = MagicMock()
         self.review_query.get.return_value = self.review
         self.profile_query = MagicMock()
         self.profile_query.filter_by.return_value.first.return_value = self.profile
-        self.average_query = self.db.session.query.return_value.filter_by.return_value
+        self.average_query = self.db.session.query.return_value.filter.return_value
         self.average_query.scalar.return_value = 4.125
 
     def service_context(self):
         return (
             patch.object(meeting_service, "db", self.db),
-            patch.object(meeting_service, "Review", SimpleNamespace(query=self.review_query, rating="rating")),
+            patch.object(meeting_service, "Review", SimpleNamespace(query=self.review_query, rating=MockColumn(), reviewee_id=MockColumn())),
             patch("app.models.users.UserProfile", SimpleNamespace(query=self.profile_query)),
         )
 
@@ -40,7 +47,8 @@ class ReviewDeletionTests(unittest.TestCase):
     def test_delete_recalculates_rating_to_two_decimals_and_commits_once(self):
         self.run_service()
 
-        self.db.session.delete.assert_called_once_with(self.review)
+        self.assertEqual(self.review.rating, -1)
+        self.assertEqual(self.review.content, "__DELETED__")
         self.assertEqual(self.profile.rating_average, 4.12)
         self.db.session.commit.assert_called_once()
         self.db.session.rollback.assert_not_called()
@@ -65,7 +73,6 @@ class ReviewDeletionTests(unittest.TestCase):
             for item in reversed(patches):
                 item.stop()
 
-        self.db.session.delete.assert_not_called()
         self.db.session.commit.assert_not_called()
         self.db.session.rollback.assert_not_called()
 
@@ -75,7 +82,6 @@ class ReviewDeletionTests(unittest.TestCase):
             with self.assertRaises(PermissionError):
                 meeting_service.delete_review(7, 99)
 
-        self.db.session.delete.assert_not_called()
         self.db.session.commit.assert_not_called()
 
     def test_rating_failure_rolls_back_delete(self):
@@ -90,7 +96,7 @@ class ReviewDeletionTests(unittest.TestCase):
             for item in reversed(patches):
                 item.stop()
 
-        self.db.session.delete.assert_called_once_with(self.review)
+        self.assertEqual(self.review.rating, -1)
         self.db.session.commit.assert_not_called()
         self.db.session.rollback.assert_called_once()
 

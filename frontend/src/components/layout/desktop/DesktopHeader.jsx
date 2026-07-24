@@ -83,7 +83,16 @@ function DesktopHeader() {
     }
     loadNotifications();
     const timer = window.setInterval(loadNotifications, 20000);
-    return () => window.clearInterval(timer);
+    
+    const handleUpdate = () => {
+      loadNotifications();
+    };
+    window.addEventListener("notifications_updated", handleUpdate);
+    
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("notifications_updated", handleUpdate);
+    };
   }, [isAuthenticated]);
 
   useEffect(() => {
@@ -113,7 +122,25 @@ function DesktopHeader() {
       const nextItems = (current.items || []).filter((candidate) => notificationKey(candidate) !== key);
       return { ...current, unread_count: nextItems.length, items: nextItems };
     });
-    if (item.source === "admin" && Number.isInteger(Number(item.id))) {
+    
+    const isChat = item.type === "chat" || (typeof item.id === "string" && item.id.startsWith("chat-"));
+    let chatRoomId = null;
+    if (isChat) {
+      const match = String(item.link_url || "").match(/\/chats\/(\d+)/);
+      if (match) {
+        chatRoomId = Number(match[1]);
+      } else if (typeof item.id === "string" && item.id.startsWith("chat-")) {
+        chatRoomId = Number(item.id.replace("chat-", ""));
+      }
+    }
+
+    if (isChat && chatRoomId && !isNaN(chatRoomId)) {
+      try {
+        await notificationApi.readChatRoom(chatRoomId);
+      } catch {
+        // 이동을 막지 않습니다.
+      }
+    } else if (item.source === "admin" && Number.isInteger(Number(item.id))) {
       try {
         await notificationApi.read(item.id);
       } catch {

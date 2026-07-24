@@ -1,7 +1,7 @@
 import { apiClient } from "./client";
 
 export const notificationApi = {
-  list: () => apiClient.get("/notifications").then((res) => res.data),
+  list: (params) => apiClient.get("/notifications", { params }).then((res) => res.data),
   summary: () => apiClient.get("/notifications/summary").then((res) => res.data),
   read: (id) => apiClient.patch(`/notifications/${id}/read`).then((res) => res.data),
   readAll: () => apiClient.patch("/notifications/read-all").then((res) => res.data),

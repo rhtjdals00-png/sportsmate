@@ -172,6 +172,9 @@ def mark_messages_read(messages, user_id):
 
 def mark_room_messages_read(room, user_id):
     mark_messages_read(room.messages, user_id)
+    from app.models.notifications import Notification
+    Notification.query.filter_by(user_id=user_id, type="chat", is_read=False).filter(Notification.link_url == f"/chats/{room.id}").update({"is_read": True}, synchronize_session=False)
+    db.session.commit()
 
 
 def attach_read_counts(messages):

@@ -1168,6 +1168,7 @@ function DesktopChatRoom() {
 
   const createVote = async (event) => {
     event.preventDefault();
+    if (voteSubmitting) return;
     if (!meeting?.id) return;
     if (chatReadOnly) {
       setVoteError("마감된 모임에서는 투표를 새로 만들 수 없습니다.");
@@ -1277,6 +1278,7 @@ function DesktopChatRoom() {
   const createNotice = async (event) => {
     event.preventDefault();
     if (!meeting?.id) return;
+    if (noticeSubmitting) return;
     if (chatReadOnly) {
       setNoticeError("마감된 모임에서는 공지를 새로 등록할 수 없습니다.");
       return;
