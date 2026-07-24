@@ -105,6 +105,16 @@ test("regular meeting before its operation end is not ended", async () => {
   }, NOW), "upcoming");
 });
 
+test("regular meeting with a future next session ignores a legacy first-session end", async () => {
+  const { isMeetingLifecycleEnded } = await loadLifecycleModule();
+  assert.equal(isMeetingLifecycleEnded({
+    meeting_type: "regular",
+    status: "open",
+    end_at: "2026-07-17T17:00:00",
+    next_session: { start_at: FUTURE_START, end_at: FUTURE_END }
+  }, NOW), false);
+});
+
 test("indefinite regular meeting without a next session is not assumed ended", async () => {
   const { getMeetingLifecycleState } = await loadLifecycleModule();
   assert.equal(getMeetingLifecycleState({

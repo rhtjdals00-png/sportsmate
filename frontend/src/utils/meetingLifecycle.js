@@ -39,10 +39,12 @@ export function getMeetingOperationEndAt(meeting) {
   const sessions = Array.isArray(meeting.sessions)
     ? meeting.sessions.filter((session) => session.status !== "cancelled")
     : [];
+  const nextSession = meeting.nextSession ?? meeting.next_session ?? null;
+  const nextSessionDay = calendarDayValue(nextSession?.endAt ?? nextSession?.end_at ?? nextSession?.startAt ?? nextSession?.start_at);
   const latestSessionDay = sessions.reduce((latest, session) => {
     const day = calendarDayValue(session.end_at ?? session.start_at);
     return day === null ? latest : Math.max(latest ?? day, day);
-  }, null);
+  }, nextSessionDay);
   const meetingEndDay = calendarDayValue(meetingEnd);
 
   // Legacy regular meetings may store the first session's end time in Meeting.end_at.

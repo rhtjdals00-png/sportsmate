@@ -172,12 +172,26 @@ function MobileChatList() {
 
   // 폴링 (리얼타임 미연결 시)
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (document.hidden || realtimeConnected) return;
+    const refreshVisibleRooms = () => {
+      if (document.hidden) return;
       setRefreshKey((v) => v + 1);
       setDirectRefreshKey((v) => v + 1);
-    }, 3000);
-    return () => window.clearInterval(timer);
+    };
+    const timer = window.setInterval(() => {
+      refreshVisibleRooms();
+    }, realtimeConnected ? 30000 : 5000);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) refreshVisibleRooms();
+    };
+    window.addEventListener("focus", refreshVisibleRooms);
+    window.addEventListener("online", refreshVisibleRooms);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshVisibleRooms);
+      window.removeEventListener("online", refreshVisibleRooms);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [realtimeConnected]);
 
   // Supabase 리얼타임

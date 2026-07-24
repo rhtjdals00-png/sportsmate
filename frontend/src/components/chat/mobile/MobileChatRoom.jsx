@@ -345,6 +345,7 @@ function MobileChatRoom() {
   const [mutedRooms, setMutedRooms] = useState([]);
   const [roomRefreshKey, setRoomRefreshKey] = useState(0);
   const [directRoomRefreshKey, setDirectRoomRefreshKey] = useState(0);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [voteSelections, setVoteSelections] = useState({});
   const [voteConfirm, setVoteConfirm] = useState(null);
   const [privateChatNotice, setPrivateChatNotice] = useState("");
@@ -499,13 +500,27 @@ function MobileChatRoom() {
   }, [activeMessages.data?.items?.length]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
+    const syncVisibleChat = () => {
       if (document.hidden || sending) return;
       const fetchDelta = isDirectChat ? fetchDirectDelta : fetchMeetingDelta;
-      fetchDelta().catch((pollError) => console.warn("Chat delta poll failed", pollError));
-    }, 30000);
-    return () => window.clearInterval(timer);
-  }, [sending, isDirectChat, chatRoomId, directRoomId]);
+      fetchDelta().catch((pollError) => console.warn("Chat delta sync failed", pollError));
+    };
+    const timer = window.setInterval(() => {
+      syncVisibleChat();
+    }, realtimeConnected ? 30000 : 5000);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) syncVisibleChat();
+    };
+    window.addEventListener("focus", syncVisibleChat);
+    window.addEventListener("online", syncVisibleChat);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", syncVisibleChat);
+      window.removeEventListener("online", syncVisibleChat);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [sending, isDirectChat, chatRoomId, directRoomId, realtimeConnected]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -525,9 +540,11 @@ function MobileChatRoom() {
   // Supabase realtime - 모임 채팅
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !chatRoomId) {
+      if (!directRoomId) setRealtimeConnected(false);
       return undefined;
     }
 
+    setRealtimeConnected(false);
     const refreshChat = () => {
       fetchMeetingDelta().catch((realtimeError) => console.warn("Chat realtime refresh failed", realtimeError));
       setRoomRefreshKey((value) => value + 1);
@@ -544,19 +561,24 @@ function MobileChatRoom() {
         },
         refreshChat
       )
-      .subscribe();
+      .subscribe((status) => {
+        setRealtimeConnected(status === "SUBSCRIBED");
+      });
 
     return () => {
+      setRealtimeConnected(false);
       supabase.removeChannel(channel);
     };
-  }, [chatRoomId]);
+  }, [chatRoomId, directRoomId]);
 
   // Supabase realtime - 1:1 채팅
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !directRoomId) {
+      if (!chatRoomId) setRealtimeConnected(false);
       return undefined;
     }
 
+    setRealtimeConnected(false);
     const refreshDirectChat = () => {
       fetchDirectDelta().catch((realtimeError) => console.warn("Direct chat realtime refresh failed", realtimeError));
       setDirectRoomRefreshKey((value) => value + 1);
@@ -573,12 +595,15 @@ function MobileChatRoom() {
         },
         refreshDirectChat
       )
-      .subscribe();
+      .subscribe((status) => {
+        setRealtimeConnected(status === "SUBSCRIBED");
+      });
 
     return () => {
+      setRealtimeConnected(false);
       supabase.removeChannel(channel);
     };
-  }, [directRoomId]);
+  }, [directRoomId, chatRoomId]);
 
   useEffect(() => {
     if (!chatReadOnly) return;

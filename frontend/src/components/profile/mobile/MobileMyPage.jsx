@@ -146,7 +146,7 @@ function MobileMyPage() {
   }
 
   return (
-    <>
+    <div className="mobile-mypage-theme">
       <MobileHeader title="내 정보" />
       <section className="profile-card profile-card--stitch">
         <div className="profile-card__main-row">
@@ -331,7 +331,7 @@ function MobileMyPage() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 

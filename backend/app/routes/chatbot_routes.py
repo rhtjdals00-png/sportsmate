@@ -5,11 +5,11 @@ from urllib.parse import urlencode
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
-from sqlalchemy import or_
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import ChatbotMessage, ChatbotSession, ChatbotUserMemory, Meeting, Participant, Region, Sport, User
+from app.models import ChatbotMessage, ChatbotSession, ChatbotUserMemory, Meeting, MeetingSession, Participant, Region, Sport, User
 from app.services.location_service import reverse_geocode, search_places
 from app.services.openai_service import generate_openai_chatbot_nlu, generate_openai_chatbot_reply
 from app.services.weather_service import WeatherServiceError, get_daily_forecast, get_forecast
@@ -690,9 +690,10 @@ def update_user_memory(user, content):
 
 
 def meeting_datetime_label(meeting):
-    if not meeting.start_at:
+    start_at = getattr(meeting, "_recommendation_start_at", meeting.start_at)
+    if not start_at:
         return "일정 미정"
-    return meeting.start_at.strftime("%m월 %d일 %H:%M")
+    return start_at.strftime("%m월 %d일 %H:%M")
 
 
 def meeting_line(meeting):
@@ -738,6 +739,53 @@ def meeting_matches_location_terms(meeting, terms):
     return any(term.lower() in haystack for term in compact_unique(terms))
 
 
+def chatbot_recommendation_active_filter(now):
+    future_regular_session_exists = (
+        select(MeetingSession.id)
+        .where(
+            MeetingSession.meeting_id == Meeting.id,
+            MeetingSession.status == "scheduled",
+            MeetingSession.start_at >= now,
+        )
+        .exists()
+    )
+    return or_(
+        and_(Meeting.meeting_type == "regular", future_regular_session_exists),
+        and_(
+            Meeting.meeting_type != "regular",
+            or_(Meeting.start_at.is_(None), Meeting.start_at >= now),
+        ),
+    )
+
+
+def attach_recommendation_start_times(meetings, now):
+    meeting_ids = [meeting.id for meeting in meetings]
+    if not meeting_ids:
+        return
+
+    sessions = (
+        MeetingSession.query
+        .filter(
+            MeetingSession.meeting_id.in_(meeting_ids),
+            MeetingSession.status == "scheduled",
+            MeetingSession.start_at >= now,
+        )
+        .order_by(MeetingSession.meeting_id.asc(), MeetingSession.start_at.asc())
+        .all()
+    )
+    next_session_by_meeting = {}
+    for session in sessions:
+        next_session_by_meeting.setdefault(session.meeting_id, session)
+
+    for meeting in meetings:
+        next_session = next_session_by_meeting.get(meeting.id)
+        meeting._recommendation_start_at = (
+            next_session.start_at
+            if meeting.meeting_type == "regular" and next_session
+            else meeting.start_at
+        )
+
+
 def recommend_meetings(user, content, memory, payload=None, limit=5, nlu=None):
     now = kst_now()
     nlu = nlu or fallback_chatbot_nlu(content)
@@ -770,9 +818,10 @@ def recommend_meetings(user, content, memory, payload=None, limit=5, nlu=None):
     query = (
         Meeting.query.options(joinedload(Meeting.sport), joinedload(Meeting.host), joinedload(Meeting.chat_room))
         .filter(Meeting.status == "open")
-        .filter(or_(Meeting.start_at.is_(None), Meeting.start_at >= now))
+        .filter(chatbot_recommendation_active_filter(now))
     )
     candidates = query.order_by(Meeting.start_at.asc().nullslast(), Meeting.created_at.desc()).limit(80).all()
+    attach_recommendation_start_times(candidates, now)
 
     lowered = content.lower()
     scored = []
@@ -820,7 +869,13 @@ def recommend_meetings(user, content, memory, payload=None, limit=5, nlu=None):
             continue
         scored.append((score, meeting))
 
-    scored.sort(key=lambda pair: (-pair[0], getattr(pair[1], "_distance_km", 999999), pair[1].start_at or datetime.max))
+    scored.sort(
+        key=lambda pair: (
+            -pair[0],
+            getattr(pair[1], "_distance_km", 999999),
+            getattr(pair[1], "_recommendation_start_at", pair[1].start_at) or datetime.max,
+        )
+    )
     return [meeting for _, meeting in scored[:limit]]
 
 
@@ -890,6 +945,7 @@ def build_general_reply(user, content, memory, payload=None, nlu=None):
 
 
 def meeting_context(meeting):
+    recommendation_start_at = getattr(meeting, "_recommendation_start_at", meeting.start_at)
     return {
         "id": meeting.id,
         "title": meeting.title,
@@ -899,7 +955,7 @@ def meeting_context(meeting):
         "latitude": meeting.latitude,
         "longitude": meeting.longitude,
         "distance_km": getattr(meeting, "_distance_km", None),
-        "start_at": meeting.start_at.isoformat() if meeting.start_at else None,
+        "start_at": recommendation_start_at.isoformat() if recommendation_start_at else None,
         "current_participants": meeting.current_participants,
         "max_participants": meeting.max_participants,
         "status": meeting.status,

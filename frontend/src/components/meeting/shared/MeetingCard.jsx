@@ -1,7 +1,7 @@
 import { CalendarClock, MapPin, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import Badge from "../../common/Badge.jsx";
-import { formatDateTime, formatMeetingType } from "../../../utils/formatters";
+import { formatMeetingSchedule, formatMeetingType } from "../../../utils/formatters";
 import { getMeetingCoverImage, isUsingSportThumbnail } from "../../../utils/sportThumbnails";
 import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
 
@@ -71,7 +71,7 @@ function MeetingCard({ meeting, compact = false }) {
         </div>
         <div>
           <CalendarClock size={16} />
-          <span>{meeting.start_at ? formatDateTime(meeting.start_at) : "일정 미정"}</span>
+          <span>{formatMeetingSchedule(meeting) || "일정 미정"}</span>
         </div>
         <div>
           <Users size={16} />

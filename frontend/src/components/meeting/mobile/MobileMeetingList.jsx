@@ -89,7 +89,11 @@ function MobileMeetingList() {
   }, [params]);
 
   const query = Object.fromEntries(params.entries());
-  const meetings = useAsync(() => meetingApi.list({ limit: 10, ...query }), [params.toString()]);
+  if (query.status === "all") {
+    delete query.status;
+    query.include_all = "1";
+  }
+  const meetings = useAsync(() => meetingApi.list(query), [params.toString()]);
   const categories = useAsync(() => sportApi.categories(), []);
   const sports = useAsync(
     () => sportApi.sports(isNumericId(params.get("category")) ? { category_id: params.get("category") } : {}),
@@ -117,21 +121,7 @@ function MobileMeetingList() {
   const filterType = params.get("meeting_type");
   const displayedMeetings = useMemo(() => {
     const rawItems = meetings.data?.items || [];
-    
-    const openItems = rawItems.filter((meeting) => {
-      if (meeting.status !== "open") return false;
-      if (meeting.current_participants >= meeting.max_participants) return false;
-      
-      if (meeting.meeting_type === "regular") {
-        if (meeting.end_at) return new Date(meeting.end_at) >= new Date();
-        return true;
-      } else {
-        return new Date(meeting.start_at) >= new Date();
-      }
-    });
-
-    if (!filterType) return openItems;
-    return openItems.filter((meeting) => meeting.meeting_type === filterType);
+    return rawItems.filter((meeting) => meeting.status === "open");
   }, [meetings.data?.items, filterType]);
 
   const currentMeetingTypeLabel = useMemo(() => {

@@ -531,12 +531,12 @@ function DesktopMeetingDetail({ recordedViewCount = null }) {
       setIsJoinModalOpen(false);
       setJoinMessage("");
       setMessage({
-        text: "참가 신청이 접수됐습니다. 방장 승인 후 참여가 확정됩니다.",
+        text: "참여 신청이 접수됐습니다. 방장 승인 후 참여가 확정됩니다.",
         tone: "notice"
       });
       setRefreshKey((value) => value + 1);
     } catch (error) {
-      setJoinError(error.response?.data?.message || "참가 신청을 처리하지 못했습니다.");
+      setJoinError(error.response?.data?.message || "참여 신청을 처리하지 못했습니다.");
     } finally {
       setJoining(false);
     }
@@ -567,7 +567,7 @@ function DesktopMeetingDetail({ recordedViewCount = null }) {
       await meetingApi.cancelJoin(meeting.id);
       setParticipationConfirm(null);
       setMessage({
-        text: actionType === "leave" ? "모임에서 나왔습니다." : "참가 신청을 취소했습니다.",
+        text: actionType === "leave" ? "모임에서 나왔습니다." : "참여 신청을 취소했습니다.",
         tone: "notice"
       });
       setRefreshKey((value) => value + 1);
@@ -775,7 +775,7 @@ function DesktopMeetingDetail({ recordedViewCount = null }) {
           <form className="desktop-meeting-join-modal__panel" onSubmit={joinMeeting}>
             <div className="desktop-meeting-join-modal__head">
               <div>
-                <h2 id="desktop-meeting-join-title">참가 신청</h2>
+                <h2 id="desktop-meeting-join-title">참여 신청</h2>
                 <p>방장에게 전달할 메시지를 작성해 주세요.</p>
               </div>
               <button type="button" onClick={closeJoinModal} aria-label="닫기" disabled={joining}>
@@ -817,12 +817,12 @@ function DesktopMeetingDetail({ recordedViewCount = null }) {
             <span className="desktop-participation-confirm__icon" aria-hidden="true"><CircleAlert size={24} /></span>
             <div className="desktop-participation-confirm__copy">
               <h2 id="desktop-participation-confirm-title">
-                {participationConfirm === "leave" ? "모임에서 나갈까요?" : "참가 신청을 취소할까요?"}
+                {participationConfirm === "leave" ? "모임에서 나갈까요?" : "참여 신청을 취소할까요?"}
               </h2>
               <p id="desktop-participation-confirm-description">
                 {participationConfirm === "leave"
-                  ? "나가면 참가자 목록과 모임 채팅에서 제외됩니다. 다시 참여하려면 참가 신청과 방장 승인이 필요합니다."
-                  : "취소 후에도 모집 중인 모임에는 다시 참가 신청할 수 있습니다."}
+                  ? "나가면 참가자 목록과 모임 채팅에서 제외됩니다. 다시 참여하려면 참여 신청과 방장 승인이 필요합니다."
+                  : "취소 후에도 모집 중인 모임에는 다시 참여 신청할 수 있습니다."}
               </p>
             </div>
             {participationError && <p className="desktop-participation-confirm__error">{participationError}</p>}
@@ -880,7 +880,7 @@ function getActionLabel({ joining, cancelling, isClosed, isFull, isHost, isOpera
   if (myParticipant?.status === "rejected") return "신청 거절됨";
   if (isFull) return "모집마감";
   if (isClosed) return "모집종료";
-  return "참가 신청";
+  return "참여 신청";
 }
 
 export default DesktopMeetingDetail;

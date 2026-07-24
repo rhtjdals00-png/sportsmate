@@ -2409,16 +2409,116 @@
   font-weight: 950 !important;
 }
 
+.desktop-prototype .desktop-chat-room-groups {
+  display: block;
+  padding-bottom: 12px;
+}
+
+.desktop-prototype .desktop-chat-room-group {
+  display: grid;
+  gap: 4px;
+}
+
+.desktop-prototype .desktop-chat-room-group__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  color: #334155;
+}
+
+.desktop-prototype .desktop-chat-room-group__head strong,
+.desktop-prototype .desktop-chat-room-group__toggle strong {
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.desktop-prototype .desktop-chat-room-group__head span,
+.desktop-prototype .desktop-chat-room-group__toggle em {
+  display: grid;
+  min-width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  padding: 0 6px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.desktop-prototype .desktop-chat-room-group--closed {
+  gap: 0;
+  margin-top: 12px;
+  border-top: 6px solid #f1f5f9;
+  padding-top: 8px;
+}
+
+.desktop-prototype .desktop-chat-room-group__toggle {
+  display: flex;
+  width: 100%;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.desktop-prototype .desktop-chat-room-group__toggle:hover {
+  background: #f8fafc;
+  color: #334155;
+}
+
+.desktop-prototype .desktop-chat-room-group__toggle > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.desktop-prototype .desktop-chat-room-group__closed-items {
+  display: grid;
+  gap: 2px;
+}
+
+.desktop-prototype .desktop-chat-room-group__empty {
+  margin: 0;
+  color: #94a3b8;
+  padding: 18px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.desktop-prototype .proto-talk-room-item.is-pinned > a {
+  background: rgba(79, 70, 229, 0.06);
+}
+
+.desktop-prototype .proto-talk-room-item > a > em {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.desktop-prototype .talk-room-pin-indicator {
+  color: #4f46e5;
+  transform: rotate(45deg);
+}
+
 .desktop-prototype .talk-room-item-hover-actions {
   position: absolute;
-  top: 50%;
+  top: 8px;
   right: 8px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   gap: 4px;
   opacity: 0;
-  transform: translateY(-50%);
   transition: opacity 150ms ease;
   pointer-events: none;
 }
@@ -2430,6 +2530,7 @@
 }
 
 .desktop-prototype .talk-room-mute-btn,
+.desktop-prototype .talk-room-pin-btn,
 .desktop-prototype .talk-room-leave-btn-new {
   width: 28px;
   height: 28px;
@@ -2440,6 +2541,22 @@
   cursor: pointer;
   transition: all 150ms ease;
   padding: 0;
+}
+
+.desktop-prototype .talk-room-pin-btn {
+  border: 1px solid #c7d2fe;
+  color: #94a3b8;
+}
+
+.desktop-prototype .talk-room-pin-btn:hover,
+.desktop-prototype .talk-room-pin-btn.is-pinned {
+  border-color: #a5b4fc;
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.desktop-prototype .talk-room-pin-btn svg {
+  transform: rotate(45deg);
 }
 
 .desktop-prototype .talk-room-mute-btn {

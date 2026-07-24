@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { LogOut, MessageCircle, UsersRound, Bell, BellOff } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bell, BellOff, ChevronDown, ChevronUp, LogOut, MessageCircle, Pin, UsersRound } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import EmptyState from "../../common/EmptyState.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import { chatApi } from "../../../api/chatApi";
@@ -34,10 +34,23 @@ function isReadOnlyRoom(room) {
   return isMeetingLifecycleEnded(meeting);
 }
 
+function roomActivityTime(room) {
+  return new Date(room.last_message?.created_at || room.updated_at || room.created_at || 0).getTime();
+}
+
 function DesktopChatList() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [directRefreshKey, setDirectRefreshKey] = useState(0);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [chatListMode, setChatListMode] = useState("meeting");
+  const [closedRoomsExpanded, setClosedRoomsExpanded] = useState(false);
+  const [pinnedRooms, setPinnedRooms] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("sportsmate_pinned_rooms")) || [];
+    } catch {
+      return [];
+    }
+  });
   const [mutedRooms, setMutedRooms] = useState([]);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [leaveTargetRoom, setLeaveTargetRoom] = useState(null);
@@ -45,14 +58,39 @@ function DesktopChatList() {
 
   const rooms = useAsync(() => chatApi.rooms(), [refreshKey]);
   const directRooms = useAsync(() => chatApi.directRooms(), [directRefreshKey]);
-  const items = rooms.data?.items || [];
-  const directItems = directRooms.data?.items || [];
+  const rawMeetingItems = rooms.data?.items || [];
+  const rawDirectItems = directRooms.data?.items || [];
+  const items = useMemo(() => [...rawMeetingItems].sort((a, b) => {
+    const pinDifference =
+      Number(pinnedRooms.includes(`meeting-${b.id}`))
+      - Number(pinnedRooms.includes(`meeting-${a.id}`));
+    return pinDifference || roomActivityTime(b) - roomActivityTime(a);
+  }), [rawMeetingItems, pinnedRooms]);
+  const directItems = useMemo(() => [...rawDirectItems].sort((a, b) => {
+    const pinDifference =
+      Number(pinnedRooms.includes(`direct-${b.id}`))
+      - Number(pinnedRooms.includes(`direct-${a.id}`));
+    return pinDifference || roomActivityTime(b) - roomActivityTime(a);
+  }), [rawDirectItems, pinnedRooms]);
+  const activeMeetingItems = items.filter((room) => !isReadOnlyRoom(room));
+  const closedMeetingItems = items.filter((room) => isReadOnlyRoom(room));
 
   useEffect(() => {
     chatApi.mutedRooms()
       .then((res) => setMutedRooms(res.muted_rooms || []))
       .catch((err) => console.error("Failed to load muted rooms", err));
   }, []);
+
+  const togglePin = (roomId, roomType) => {
+    const pinKey = `${roomType}-${roomId}`;
+    setPinnedRooms((current) => {
+      const next = current.includes(pinKey)
+        ? current.filter((key) => key !== pinKey)
+        : [...current, pinKey];
+      localStorage.setItem("sportsmate_pinned_rooms", JSON.stringify(next));
+      return next;
+    });
+  };
 
   const toggleMute = async (roomId, roomType) => {
     const isCurrentlyMuted = mutedRooms.some(r => String(r.room_id) === String(roomId) && r.room_type === roomType);
@@ -87,19 +125,35 @@ function DesktopChatList() {
   };
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
+    const refreshVisibleRooms = () => {
       if (document.hidden) return;
       setRefreshKey((value) => value + 1);
       setDirectRefreshKey((value) => value + 1);
-    }, 30000);
-    return () => window.clearInterval(timer);
-  }, []);
+    };
+    const timer = window.setInterval(() => {
+      refreshVisibleRooms();
+    }, realtimeConnected ? 30000 : 5000);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) refreshVisibleRooms();
+    };
+    window.addEventListener("focus", refreshVisibleRooms);
+    window.addEventListener("online", refreshVisibleRooms);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshVisibleRooms);
+      window.removeEventListener("online", refreshVisibleRooms);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [realtimeConnected]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
+      setRealtimeConnected(false);
       return undefined;
     }
 
+    setRealtimeConnected(false);
     const refreshRooms = () => setRefreshKey((value) => value + 1);
     const channel = supabase
       .channel("desktop-chat-list")
@@ -130,12 +184,71 @@ function DesktopChatList() {
         },
         () => setDirectRefreshKey((value) => value + 1)
       )
-      .subscribe();
+      .subscribe((status) => {
+        setRealtimeConnected(status === "SUBSCRIBED");
+      });
 
     return () => {
+      setRealtimeConnected(false);
       supabase.removeChannel(channel);
     };
   }, []);
+
+  const renderMeetingRoom = (room) => {
+    const meeting = room.meeting || {};
+    const isMuted = mutedRooms.some((item) => String(item.room_id) === String(room.id) && item.room_type === "meeting");
+    const readOnly = isReadOnlyRoom(room);
+    const isPinned = pinnedRooms.includes(`meeting-${room.id}`);
+    return (
+      <div key={room.id} className={`proto-talk-room-item ${readOnly ? "is-read-only" : ""} ${isPinned ? "is-pinned" : ""}`}>
+        <Link to={`/chats/${room.id}`}>
+          {meeting.cover_image_url ? <img src={meeting.cover_image_url} alt="" /> : <div className="talk-room-fallback"><MessageCircle size={20} /></div>}
+          <span>
+            <b>{meeting.title || "모임 채팅방"}</b>
+            <small>{meeting.location_name || "장소 미정"} · {meeting.current_participants || 0}/{meeting.max_participants || 0}명</small>
+            {readOnly ? <small className="talk-room-ended-label">활동 종료</small> : null}
+          </span>
+          <em>
+            {isPinned ? <Pin className="talk-room-pin-indicator" size={11} fill="currentColor" /> : null}
+            {isMuted ? <BellOff size={11} /> : null}
+            {formatChatTime(room.last_message?.created_at)}
+          </em>
+          {Number(room.unread_count || 0) > 0 ? <i>{room.unread_count}</i> : null}
+        </Link>
+        <div className="talk-room-item-hover-actions">
+          <button
+            className={`talk-room-pin-btn ${isPinned ? "is-pinned" : ""}`}
+            type="button"
+            onClick={() => togglePin(room.id, "meeting")}
+            aria-label={isPinned ? "고정 해제" : "상단 고정"}
+            title={isPinned ? "고정 해제" : "상단 고정"}
+          >
+            <Pin size={13} fill={isPinned ? "currentColor" : "none"} />
+          </button>
+          <button
+            className={`talk-room-mute-btn ${isMuted ? "muted" : ""}`}
+            type="button"
+            onClick={() => toggleMute(room.id, "meeting")}
+            title={isMuted ? "알림 켜기" : "알림 끄기"}
+          >
+            {isMuted ? <BellOff size={13} /> : <Bell size={13} />}
+          </button>
+          <button
+            className="talk-room-leave-btn-new"
+            type="button"
+            onClick={() => {
+              setLeaveTargetRoom(room);
+              setLeaveConfirmOpen(true);
+            }}
+            aria-label="채팅방 나가기"
+            title="채팅방 나가기"
+          >
+            <LogOut size={13} />
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <section className="desktop-page desktop-prototype legacy-pc legacy-chat-page">
@@ -168,59 +281,46 @@ function DesktopChatList() {
           ) : chatListMode === "direct" && directRooms.error ? (
             <EmptyState title="1대1 톡 목록을 불러오지 못했습니다." description="잠시 후 다시 시도해주세요." />
           ) : chatListMode === "meeting" && items.length ? (
-            <div className="talk-list-items">
-              {items.map((room) => {
-                const meeting = room.meeting || {};
-                const isMuted = mutedRooms.some(r => String(r.room_id) === String(room.id) && r.room_type === "meeting");
-                const readOnly = isReadOnlyRoom(room);
-                return (
-                  <div key={room.id} className={`proto-talk-room-item ${readOnly ? "is-read-only" : ""}`}>
-                    <Link to={`/chats/${room.id}`}>
-                      {meeting.cover_image_url ? <img src={meeting.cover_image_url} alt="" /> : <div className="talk-room-fallback"><MessageCircle size={20} /></div>}
-                      <span>
-                        <b>{meeting.title || "모임 채팅방"}</b>
-                        <small>{meeting.location_name || "장소 미정"} · {meeting.current_participants || 0}/{meeting.max_participants || 0}명</small>
-                        {readOnly ? <small className="talk-room-ended-label">마감된 모임</small> : null}
-                      </span>
-                      <em>
-                        {isMuted ? <BellOff size={11} style={{ marginRight: '3px', color: '#94a3b8', verticalAlign: 'middle' }} /> : null}
-                        {formatChatTime(room.last_message?.created_at)}
-                      </em>
-                      {Number(room.unread_count || 0) > 0 ? <i>{room.unread_count}</i> : null}
-                    </Link>
-                    <div className="talk-room-item-hover-actions">
-                      <button
-                        className={`talk-room-mute-btn ${isMuted ? "muted" : ""}`}
-                        type="button"
-                        onClick={() => toggleMute(room.id, "meeting")}
-                        title={isMuted ? "알림 켜기" : "알림 끄기"}
-                      >
-                        {isMuted ? <BellOff size={13} /> : <Bell size={13} />}
-                      </button>
-                      <button
-                        className="talk-room-leave-btn-new"
-                        type="button"
-                        onClick={() => {
-                          setLeaveTargetRoom(room);
-                          setLeaveConfirmOpen(true);
-                        }}
-                        aria-label="채팅방 나가기"
-                        title="채팅방 나가기"
-                      >
-                        <LogOut size={13} />
-                      </button>
+            <div className="talk-list-items desktop-chat-room-groups">
+              <section className="desktop-chat-room-group" aria-labelledby="active-meeting-chats">
+                <div className="desktop-chat-room-group__head">
+                  <strong id="active-meeting-chats">활동 중인 모임 채팅방</strong>
+                  <span>{activeMeetingItems.length}</span>
+                </div>
+                {activeMeetingItems.length
+                  ? activeMeetingItems.map(renderMeetingRoom)
+                  : <p className="desktop-chat-room-group__empty">활동 중인 모임 채팅방이 없습니다.</p>}
+              </section>
+              {closedMeetingItems.length ? (
+                <section className="desktop-chat-room-group desktop-chat-room-group--closed" aria-labelledby="closed-meeting-chats">
+                  <button
+                    className="desktop-chat-room-group__toggle"
+                    type="button"
+                    onClick={() => setClosedRoomsExpanded((expanded) => !expanded)}
+                    aria-expanded={closedRoomsExpanded}
+                  >
+                    <span>
+                      <strong id="closed-meeting-chats">활동 종료된 모임 채팅방</strong>
+                      <em>{closedMeetingItems.length}</em>
+                    </span>
+                    {closedRoomsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
+                  {closedRoomsExpanded ? (
+                    <div className="desktop-chat-room-group__closed-items">
+                      {closedMeetingItems.map(renderMeetingRoom)}
                     </div>
-                  </div>
-                );
-              })}
+                  ) : null}
+                </section>
+              ) : null}
             </div>
           ) : chatListMode === "direct" && directItems.length ? (
             <div className="talk-list-items">
               {directItems.map((room) => {
                 const otherUser = room.other_user || {};
                 const isMuted = mutedRooms.some(r => String(r.room_id) === String(room.id) && r.room_type === "direct");
+                const isPinned = pinnedRooms.includes(`direct-${room.id}`);
                 return (
-                  <div key={room.id} className="proto-talk-room-item">
+                  <div key={room.id} className={`proto-talk-room-item ${isPinned ? "is-pinned" : ""}`}>
                     <Link to={`/chats/direct/${room.id}`}>
                       {otherUser.profile_image_url ? <img src={otherUser.profile_image_url} alt="" /> : <div className="talk-room-fallback"><UsersRound size={20} /></div>}
                       <span>
@@ -228,11 +328,21 @@ function DesktopChatList() {
                         <small>{room.last_message?.content || "아직 대화가 없습니다."}</small>
                       </span>
                       <em>
-                        {isMuted ? <BellOff size={11} style={{ marginRight: '3px', color: '#94a3b8', verticalAlign: 'middle' }} /> : null}
+                        {isPinned ? <Pin className="talk-room-pin-indicator" size={11} fill="currentColor" /> : null}
+                        {isMuted ? <BellOff size={11} /> : null}
                         {formatChatTime(room.last_message?.created_at || room.updated_at || room.created_at)}
                       </em>
                     </Link>
                     <div className="talk-room-item-hover-actions">
+                      <button
+                        className={`talk-room-pin-btn ${isPinned ? "is-pinned" : ""}`}
+                        type="button"
+                        onClick={() => togglePin(room.id, "direct")}
+                        aria-label={isPinned ? "고정 해제" : "상단 고정"}
+                        title={isPinned ? "고정 해제" : "상단 고정"}
+                      >
+                        <Pin size={13} fill={isPinned ? "currentColor" : "none"} />
+                      </button>
                       <button
                         className={`talk-room-mute-btn ${isMuted ? "muted" : ""}`}
                         type="button"
