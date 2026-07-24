@@ -133,7 +133,8 @@ const emptyForm = {
   selected_region_locations: [],
   exercise_level: "beginner",
   preferred_sports: [],
-  preferred_sport_levels: {}
+  preferred_sport_levels: {},
+  direct_message_policy: "same_meeting"
 };
 
 function splitList(value) {
@@ -356,7 +357,8 @@ function buildFormFromUser(user) {
     selected_region_locations: selectedLocations,
     exercise_level: profile.exercise_level || levels.all || "beginner",
     preferred_sports: preferredSports,
-    preferred_sport_levels: levels
+    preferred_sport_levels: levels,
+    direct_message_policy: user?.direct_message_policy || "same_meeting"
   };
 }
 
@@ -802,6 +804,7 @@ function DesktopProfileEdit() {
         region_2_longitude: form.region_2_longitude,
         exercise_level: form.exercise_level,
         preferred_sports: normalizedSports.join(", "),
+        direct_message_policy: form.direct_message_policy,
         preferred_sport_levels: useSportLevels
           ? { ...form.preferred_sport_levels, all: form.exercise_level }
           : { all: form.exercise_level }
@@ -1082,6 +1085,23 @@ function DesktopProfileEdit() {
             </div>
           </>
         )}
+      </section>
+
+      <section className="page-card desktop-profile-edit-panel">
+        <div className="section-head">
+          <h2>소통 및 개인정보</h2>
+        </div>
+        <div className="desktop-security-section desktop-communication-setting">
+          <span>
+            <strong>1:1 채팅 수신 범위</strong>
+            <small>태그 검색으로 누가 나에게 대화를 요청할 수 있는지 설정합니다.</small>
+          </span>
+          <select value={form.direct_message_policy} onChange={(event) => update("direct_message_policy", event.target.value)}>
+            <option value="everyone">누구나 · 모임 밖 사용자는 요청 후 대화</option>
+            <option value="same_meeting">같은 모임 회원만</option>
+            <option value="none">1:1 채팅 받지 않음</option>
+          </select>
+        </div>
       </section>
 
       <section className="page-card desktop-profile-edit-panel desktop-account-security-panel">

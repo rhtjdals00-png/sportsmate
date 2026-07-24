@@ -451,7 +451,7 @@ function MobileChatRoom() {
 
   const room = activeMessages.data?.room;
   const meeting = room?.meeting;
-  const chatReadOnly = !isDirectChat && Boolean(room?.is_read_only);
+  const chatReadOnly = isDirectChat ? room?.is_active === false : Boolean(room?.is_read_only);
   const isRoomHost = String(meeting?.host?.id ?? "") === String(user?.id ?? "");
   const myRole = isRoomHost ? "host" : (meeting?.my_participant?.role || "member");
   const canCreateVote = ["host", "cohost", "subhost", "assistant"].includes(String(myRole).toLowerCase());
@@ -1061,11 +1061,16 @@ function MobileChatRoom() {
   const leaveRoom = async () => {
     const targetRoomId = chatRoomId || directRoomId;
     if (!targetRoomId || leavingRoom) return;
-    if (!window.confirm("이 채팅방에서 나가시겠습니까?")) return;
+    const confirmMessage = isDirectChat
+      ? (chatReadOnly
+        ? "종료된 채팅방을 목록에서 삭제할까요?"
+        : "1:1 채팅방을 나갈까요?\n\n나가면 이 대화는 종료되고 내 채팅 목록에서 사라집니다. 상대방은 이전 대화만 볼 수 있습니다.")
+      : "이 채팅방에서 나가시겠습니까?";
+    if (!window.confirm(confirmMessage)) return;
     setLeavingRoom(true);
     setError("");
     try {
-      await chatApi.leave(targetRoomId);
+      await (isDirectChat ? chatApi.leaveDirect(targetRoomId) : chatApi.leave(targetRoomId));
       setDrawerOpen(false);
       setRefreshKey((value) => value + 1);
       setRoomRefreshKey((value) => value + 1);
@@ -1123,6 +1128,18 @@ function MobileChatRoom() {
     } catch (storageError) {
       console.error("Failed to save hidden chat users:", storageError);
       setProfileNotice("채팅 숨김 설정을 저장하지 못했습니다.");
+    }
+  };
+
+  const blockChatUser = async (targetUser) => {
+    if (!targetUser?.id || !window.confirm(`${targetUser.nickname || "이 사용자"}님을 차단할까요? 진행 중인 1:1 대화도 종료됩니다.`)) return;
+    try {
+      await chatApi.blockDirectUser(targetUser.id);
+      setProfilePreviewUser(null);
+      if (isDirectChat) navigate("/chats", { replace: true });
+      else setProfileNotice("사용자를 차단했습니다.");
+    } catch (blockError) {
+      setProfileNotice(blockError.response?.data?.message || "사용자를 차단하지 못했습니다.");
     }
   };
 
@@ -1539,7 +1556,9 @@ function MobileChatRoom() {
         </button>
       ) : null}
       {chatReadOnly ? (
-        <div className="chat-input mobile-chat-read-only">종료된 모임의 채팅 기록입니다.</div>
+        <div className="chat-input mobile-chat-read-only">
+          {isDirectChat ? "상대방이 채팅방을 나갔습니다. 이전 대화만 확인할 수 있습니다." : "종료된 모임의 채팅 기록입니다."}
+        </div>
       ) : <form className="chat-input" onSubmit={send}>
         {error ? <p className="chat-input__error">{error}</p> : null}
         {actionNotice ? <p className="chat-input__notice">{actionNotice}</p> : null}
@@ -1727,6 +1746,24 @@ function MobileChatRoom() {
                     }}
                   >
                     신고
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => blockChatUser(profilePreviewUser)}
+                    style={{
+                      flex: 1,
+                      maxWidth: '140px',
+                      minHeight: '38px',
+                      borderRadius: '10px',
+                      background: '#991b1b',
+                      color: '#fff',
+                      border: 0,
+                      fontWeight: '800',
+                      fontSize: '12px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    차단
                   </button>
                 </>
               )}
@@ -2358,26 +2395,26 @@ function MobileChatRoom() {
                     <span>이 채팅방 신고하기</span>
                   </button>
                   <button
-                    type="button"
-                    onClick={leaveRoom}
-                    style={{
-                      width: '100%',
-                      minHeight: '42px',
-                      borderRadius: '10px',
-                      border: '1px solid #e2e8f0',
-                      background: '#fff',
-                      color: '#64748b',
-                      fontSize: '13px',
-                      fontWeight: '800',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <LogOut size={16} />
-                    <span>대화방 나가기</span>
+                      type="button"
+                      onClick={leaveRoom}
+                      style={{
+                        width: '100%',
+                        minHeight: '42px',
+                        borderRadius: '10px',
+                        border: '1px solid #e2e8f0',
+                        background: '#fff',
+                        color: '#64748b',
+                        fontSize: '13px',
+                        fontWeight: '800',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <LogOut size={16} />
+                      <span>{chatReadOnly ? "목록에서 삭제" : "1:1 채팅 종료"}</span>
                   </button>
                 </>
               ) : (

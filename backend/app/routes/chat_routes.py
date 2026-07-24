@@ -9,11 +9,13 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import ChatMessage, ChatMessageRead, ChatRoom, DirectChatMessage, DirectChatRoom, Meeting, Participant, Sport, User
+from app.models import ChatMessage, ChatMessageRead, ChatRoom, DirectChatMessage, DirectChatRequest, DirectChatRoom, Meeting, Participant, Sport, User, UserBlock
 from app.services.chat_service import (
     attach_read_counts,
     ensure_chat_access,
     ensure_direct_room_access,
+    direct_contact_action,
+    direct_contact_is_blocked,
     get_or_create_direct_room,
     mark_messages_read,
     mark_room_messages_read,
@@ -21,7 +23,9 @@ from app.services.chat_service import (
     send_message,
 )
 from app.services.meeting_service import get_meeting_for_update, get_participant_for_update, recalculate_current_participants
+from app.services.notification_service import create_notification
 from app.utils.meeting_state import meeting_chat_is_read_only
+from app.utils.timezone import kst_now
 
 chat_bp = Blueprint("chat", __name__)
 
@@ -351,7 +355,10 @@ def direct_rooms():
     rooms = (
         DirectChatRoom.query
         .options(joinedload(DirectChatRoom.user_a).joinedload(User.profile), joinedload(DirectChatRoom.user_b).joinedload(User.profile), joinedload(DirectChatRoom.messages))
-        .filter(or_(DirectChatRoom.user_a_id == user_id, DirectChatRoom.user_b_id == user_id))
+        .filter(or_(
+            and_(DirectChatRoom.user_a_id == user_id, DirectChatRoom.user_a_left_at.is_(None)),
+            and_(DirectChatRoom.user_b_id == user_id, DirectChatRoom.user_b_left_at.is_(None)),
+        ))
         .order_by(DirectChatRoom.updated_at.desc().nullslast(), DirectChatRoom.created_at.desc().nullslast(), DirectChatRoom.id.desc())
         .all()
     )
@@ -369,6 +376,224 @@ def create_direct_room():
         return jsonify({"room": room.to_dict(current_user_id=user_id)}), 201
     except (TypeError, ValueError) as error:
         return jsonify({"message": str(error)}), 400
+    except PermissionError as error:
+        return jsonify({"message": str(error)}), 403
+
+
+def direct_tag_user_payload(target, action, request_id=None):
+    payload = {
+        "id": target.id,
+        "nickname": target.nickname,
+        "user_tag": target.user_tag,
+        "profile_image_url": target.profile_image_url,
+        "region": target.profile.region if target.profile else "",
+        "bio": target.profile.bio if target.profile else "",
+        "contact_action": action,
+    }
+    if request_id:
+        payload["request_id"] = request_id
+    return payload
+
+
+@chat_bp.get("/direct/by-tag")
+@jwt_required()
+def find_direct_user_by_tag():
+    user_id = int(get_jwt_identity())
+    tag = (request.args.get("tag") or "").strip().lstrip("#")
+    if not tag:
+        return jsonify({"message": "사용자 태그를 입력해주세요."}), 400
+    target = User.query.options(joinedload(User.profile)).filter_by(user_tag=tag, is_active=True).first()
+    if not target or target.id == user_id or direct_contact_is_blocked(user_id, target.id):
+        return jsonify({"message": "일치하는 사용자를 찾지 못했습니다."}), 404
+    action = direct_contact_action(user_id, target)
+    pending = DirectChatRequest.query.filter(
+        DirectChatRequest.status == "pending",
+        or_(
+            and_(DirectChatRequest.sender_id == user_id, DirectChatRequest.recipient_id == target.id),
+            and_(DirectChatRequest.sender_id == target.id, DirectChatRequest.recipient_id == user_id),
+        ),
+    ).first()
+    if pending:
+        action = "request_pending" if pending.sender_id == user_id else "request_received"
+    return jsonify({"user": direct_tag_user_payload(target, action, pending.id if pending else None)})
+
+
+@chat_bp.post("/direct/by-tag")
+@jwt_required()
+def contact_direct_user_by_tag():
+    user_id = int(get_jwt_identity())
+    data = request.get_json() or {}
+    tag = (data.get("tag") or "").strip().lstrip("#")
+    target = User.query.options(joinedload(User.profile)).filter_by(user_tag=tag, is_active=True).first()
+    if not target or target.id == user_id:
+        return jsonify({"message": "일치하는 사용자를 찾지 못했습니다."}), 404
+    action = direct_contact_action(user_id, target)
+    if action == "blocked":
+        return jsonify({"message": "차단된 사용자에게는 대화를 요청할 수 없습니다."}), 403
+    if action == "denied":
+        return jsonify({"message": "상대방의 1:1 채팅 수신 설정으로 대화를 시작할 수 없습니다."}), 403
+    if action == "room":
+        room = get_or_create_direct_room(user_id, target.id)
+        return jsonify({"kind": "room", "room": room.to_dict(current_user_id=user_id)}), 201
+
+    reverse_request = DirectChatRequest.query.filter_by(
+        sender_id=target.id, recipient_id=user_id, status="pending"
+    ).first()
+    if reverse_request:
+        return jsonify({"message": "상대방이 보낸 대화 요청을 먼저 확인해주세요."}), 409
+
+    message = (data.get("message") or "").strip()[:500]
+    existing = DirectChatRequest.query.filter_by(
+        sender_id=user_id, recipient_id=target.id, status="pending"
+    ).first()
+    if existing:
+        return jsonify({"message": "이미 보낸 대화 요청이 있습니다.", "request": existing.to_dict(user_id)}), 409
+    chat_request = DirectChatRequest(
+        sender_id=user_id,
+        recipient_id=target.id,
+        message=message,
+    )
+    db.session.add(chat_request)
+    sender = User.query.get(user_id)
+    create_notification(
+        target.id,
+        "direct_chat_request",
+        "새로운 1:1 대화 요청",
+        f"{sender.nickname if sender else '사용자'}님이 대화를 요청했습니다.",
+        "/chats?tab=direct&panel=requests",
+        commit=False,
+        send_push=True,
+    )
+    db.session.commit()
+    return jsonify({"kind": "request", "request": chat_request.to_dict(user_id)}), 201
+
+
+@chat_bp.get("/direct/requests")
+@jwt_required()
+def direct_chat_requests():
+    user_id = int(get_jwt_identity())
+    requests = (
+        DirectChatRequest.query
+        .options(
+            joinedload(DirectChatRequest.sender).joinedload(User.profile),
+            joinedload(DirectChatRequest.recipient).joinedload(User.profile),
+        )
+        .filter(
+            DirectChatRequest.status == "pending",
+            or_(DirectChatRequest.sender_id == user_id, DirectChatRequest.recipient_id == user_id),
+        )
+        .order_by(DirectChatRequest.created_at.desc(), DirectChatRequest.id.desc())
+        .all()
+    )
+    return jsonify({"items": [item.to_dict(user_id) for item in requests]})
+
+
+@chat_bp.post("/direct/requests/<int:request_id>/respond")
+@jwt_required()
+def respond_direct_chat_request(request_id):
+    user_id = int(get_jwt_identity())
+    chat_request = DirectChatRequest.query.get_or_404(request_id)
+    if chat_request.recipient_id != user_id or chat_request.status != "pending":
+        return jsonify({"message": "처리할 수 없는 대화 요청입니다."}), 403
+    action = (request.get_json() or {}).get("action")
+    if action not in {"accept", "reject"}:
+        return jsonify({"message": "요청 처리 방식을 확인해주세요."}), 400
+    chat_request.status = "accepted" if action == "accept" else "rejected"
+    chat_request.responded_at = kst_now()
+    room = None
+    if action == "accept":
+        if direct_contact_is_blocked(user_id, chat_request.sender_id):
+            return jsonify({"message": "차단된 사용자의 요청은 수락할 수 없습니다."}), 403
+        room = get_or_create_direct_room(user_id, chat_request.sender_id, skip_policy=True)
+        create_notification(
+            chat_request.sender_id,
+            "direct_chat_request",
+            "1:1 대화 요청이 수락되었습니다",
+            "상대방이 대화 요청을 수락했습니다.",
+            f"/chats/direct/{room.id}",
+            commit=False,
+            send_push=True,
+        )
+    else:
+        create_notification(
+            chat_request.sender_id,
+            "direct_chat_request",
+            "1:1 대화 요청이 거절되었습니다",
+            "상대방이 대화 요청을 거절했습니다.",
+            "/chats?tab=direct&panel=requests",
+            commit=False,
+            send_push=True,
+        )
+    db.session.commit()
+    return jsonify({
+        "request": chat_request.to_dict(user_id),
+        "room": room.to_dict(current_user_id=user_id) if room else None,
+    })
+
+
+@chat_bp.post("/direct/blocks/<int:target_user_id>")
+@jwt_required()
+def block_direct_user(target_user_id):
+    user_id = int(get_jwt_identity())
+    if target_user_id == user_id or not User.query.get(target_user_id):
+        return jsonify({"message": "차단할 사용자를 확인해주세요."}), 400
+    block = UserBlock.query.filter_by(blocker_id=user_id, blocked_id=target_user_id).first()
+    if not block:
+        db.session.add(UserBlock(blocker_id=user_id, blocked_id=target_user_id))
+    user_a_id, user_b_id = sorted([user_id, target_user_id])
+    active_room = DirectChatRoom.query.filter_by(
+        user_a_id=user_a_id, user_b_id=user_b_id, is_active=True
+    ).first()
+    if active_room:
+        active_room.end(user_id)
+        active_room.updated_at = active_room.ended_at
+        db.session.add(DirectChatMessage(
+            direct_chat_room_id=active_room.id,
+            sender_id=user_id,
+            content="상대방이 채팅방을 나갔습니다.",
+            message_type="system",
+            created_at=active_room.ended_at,
+        ))
+    DirectChatRequest.query.filter(
+        DirectChatRequest.status == "pending",
+        or_(
+            and_(DirectChatRequest.sender_id == user_id, DirectChatRequest.recipient_id == target_user_id),
+            and_(DirectChatRequest.sender_id == target_user_id, DirectChatRequest.recipient_id == user_id),
+        ),
+    ).update({"status": "rejected", "responded_at": kst_now()}, synchronize_session=False)
+    db.session.commit()
+    return jsonify({"blocked": True, "user_id": target_user_id})
+
+
+@chat_bp.get("/direct/blocks")
+@jwt_required()
+def direct_blocked_users():
+    user_id = int(get_jwt_identity())
+    blocks = (
+        UserBlock.query
+        .options(joinedload(UserBlock.blocked).joinedload(User.profile))
+        .filter_by(blocker_id=user_id)
+        .order_by(UserBlock.created_at.desc(), UserBlock.id.desc())
+        .all()
+    )
+    return jsonify({"items": [
+        {
+            "id": block.blocked.id,
+            "nickname": block.blocked.nickname,
+            "user_tag": block.blocked.user_tag,
+            "profile_image_url": block.blocked.profile_image_url,
+        }
+        for block in blocks if block.blocked
+    ]})
+
+
+@chat_bp.delete("/direct/blocks/<int:target_user_id>")
+@jwt_required()
+def unblock_direct_user(target_user_id):
+    user_id = int(get_jwt_identity())
+    UserBlock.query.filter_by(blocker_id=user_id, blocked_id=target_user_id).delete()
+    db.session.commit()
+    return jsonify({"blocked": False, "user_id": target_user_id})
 
 
 @chat_bp.get("/direct/<int:room_id>/messages")
@@ -398,14 +623,7 @@ def direct_messages(room_id):
             "next_before_id": ordered_messages[0].id if has_more and ordered_messages else None,
         }
         if not after_id:
-            other_user = room.other_user(user_id)
-            response["room"] = {
-                "id": room.id,
-                "other_user": other_user.to_dict() if other_user else None,
-                "last_message": None,
-                "created_at": room.created_at.isoformat() if room.created_at else None,
-                "updated_at": room.updated_at.isoformat() if room.updated_at else None,
-            }
+            response["room"] = room.to_dict(current_user_id=user_id)
         return jsonify(response)
     except ValueError as error:
         return jsonify({"message": str(error)}), 400
@@ -422,6 +640,31 @@ def create_direct_message(room_id):
         return jsonify({"message": message.to_dict()}), 201
     except ValueError as error:
         return jsonify({"message": str(error)}), 400
+    except PermissionError as error:
+        return jsonify({"message": str(error)}), 403
+
+
+@chat_bp.post("/direct/<int:room_id>/leave")
+@jwt_required()
+def leave_direct_room(room_id):
+    user_id = int(get_jwt_identity())
+    try:
+        room = ensure_direct_room_access(room_id, user_id)
+        if not room.is_active:
+            room.mark_left(user_id)
+            db.session.commit()
+            return jsonify({"left": True, "room_id": room.id, "ended": True, "hidden": True})
+        room.end(user_id)
+        room.updated_at = room.ended_at
+        db.session.add(DirectChatMessage(
+            direct_chat_room_id=room.id,
+            sender_id=user_id,
+            content="상대방이 채팅방을 나갔습니다.",
+            message_type="system",
+            created_at=room.ended_at,
+        ))
+        db.session.commit()
+        return jsonify({"left": True, "room_id": room.id, "ended": True})
     except PermissionError as error:
         return jsonify({"message": str(error)}), 403
 
@@ -556,7 +799,8 @@ def unread_count():
             or_(
                 DirectChatRoom.user_a_id == user_id,
                 DirectChatRoom.user_b_id == user_id,
-            )
+            ),
+            DirectChatRoom.is_active.is_(True),
         )
         .all()
     )

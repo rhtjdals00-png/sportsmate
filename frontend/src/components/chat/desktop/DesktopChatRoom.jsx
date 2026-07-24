@@ -25,7 +25,9 @@ import {
   X,
   Menu,
   Bell,
-  BellOff
+  BellOff,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
@@ -47,6 +49,7 @@ import {
   shouldHideChatMessage
 } from "../../../utils/chatMessageVisibility.js";
 import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
+import DirectChatTagLauncher from "../DirectChatTagLauncher.jsx";
 
 const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
 let naverMapClientIdPromise;
@@ -161,6 +164,10 @@ function isReadOnlyRoomItem(item) {
   if (typeof item?.meeting?.is_chat_read_only === "boolean") return item.meeting.is_chat_read_only;
   const meeting = item?.meeting || {};
   return isMeetingLifecycleEnded(meeting);
+}
+
+function roomActivityTime(room) {
+  return new Date(room?.last_message?.created_at || room?.updated_at || room?.created_at || 0).getTime();
 }
 
 function mapUrl(message) {
@@ -461,6 +468,14 @@ function DesktopChatRoom() {
   const [directRoomRefreshKey, setDirectRoomRefreshKey] = useState(0);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [chatListMode, setChatListMode] = useState(isDirectChat ? "direct" : "meeting");
+  const [closedRoomsExpanded, setClosedRoomsExpanded] = useState(false);
+  const [pinnedRooms, setPinnedRooms] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("sportsmate_pinned_rooms")) || [];
+    } catch {
+      return [];
+    }
+  });
   const [talkSearchOpen, setTalkSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [talkInfoOpen, setTalkInfoOpen] = useState(false);
@@ -472,6 +487,7 @@ function DesktopChatRoom() {
   const [leavingRoom, setLeavingRoom] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [leaveTargetRoom, setLeaveTargetRoom] = useState(null);
+  const [leaveTargetType, setLeaveTargetType] = useState(null);
   const [privateChatNotice, setPrivateChatNotice] = useState("");
   const [profilePreviewUser, setProfilePreviewUser] = useState(null);
   const [hiddenChatUserIds, setHiddenChatUserIds] = useState([]);
@@ -573,6 +589,17 @@ function DesktopChatRoom() {
       alert("알림 설정 변경에 실패했습니다.");
     }
   };
+
+  const togglePin = (roomId, roomType) => {
+    const pinKey = `${roomType}-${roomId}`;
+    setPinnedRooms((current) => {
+      const next = current.includes(pinKey)
+        ? current.filter((key) => key !== pinKey)
+        : [...current, pinKey];
+      localStorage.setItem("sportsmate_pinned_rooms", JSON.stringify(next));
+      return next;
+    });
+  };
   const activeMessages = isDirectChat ? directMessages : messages;
   const mergeMessagePage = (resource, page, { prepend = false } = {}) => {
     if (!page?.items?.length) return;
@@ -645,10 +672,24 @@ function DesktopChatRoom() {
   const firstUnreadMessageId = room?.first_unread_message_id;
   const directOtherUser = isDirectChat ? room?.other_user : null;
   const meeting = room?.meeting;
-  const chatReadOnly = !isDirectChat && Boolean(room?.is_read_only);
+  const chatReadOnly = isDirectChat ? room?.is_active === false : Boolean(room?.is_read_only);
   const renderedMessages = activeMessages.data?.items || [];
-  const roomItems = rooms.data?.items || [];
-  const directRoomItems = directRooms.data?.items || [];
+  const rawRoomItems = rooms.data?.items;
+  const rawDirectRoomItems = directRooms.data?.items;
+  const roomItems = useMemo(() => [...(rawRoomItems || [])].sort((a, b) => {
+    const pinDifference =
+      Number(pinnedRooms.includes(`meeting-${b.id}`))
+      - Number(pinnedRooms.includes(`meeting-${a.id}`));
+    return pinDifference || roomActivityTime(b) - roomActivityTime(a);
+  }), [rawRoomItems, pinnedRooms]);
+  const directRoomItems = useMemo(() => [...(rawDirectRoomItems || [])].sort((a, b) => {
+    const pinDifference =
+      Number(pinnedRooms.includes(`direct-${b.id}`))
+      - Number(pinnedRooms.includes(`direct-${a.id}`));
+    return pinDifference || roomActivityTime(b) - roomActivityTime(a);
+  }), [rawDirectRoomItems, pinnedRooms]);
+  const activeMeetingRoomItems = roomItems.filter((item) => !isReadOnlyRoomItem(item));
+  const closedMeetingRoomItems = roomItems.filter((item) => isReadOnlyRoomItem(item));
   const participantItems = room?.participants || [];
   const isProfilePreviewMe = Boolean(profilePreviewUser?.id)
     && String(profilePreviewUser.id) === String(user?.id ?? "");
@@ -1557,17 +1598,21 @@ function DesktopChatRoom() {
   };
 
   const leaveRoom = async () => {
-    const targetRoomId = leaveTargetRoom?.id || chatRoomId;
+    const targetType = leaveTargetType || (isDirectChat ? "direct" : "meeting");
+    const targetRoomId = leaveTargetRoom?.id || (targetType === "direct" ? directRoomId : chatRoomId);
     if (!targetRoomId || leavingRoom) return;
     setLeavingRoom(true);
     setError("");
     try {
-      await chatApi.leave(targetRoomId);
+      await (targetType === "direct" ? chatApi.leaveDirect(targetRoomId) : chatApi.leave(targetRoomId));
       setLeaveConfirmOpen(false);
       setLeaveTargetRoom(null);
+      setLeaveTargetType(null);
       setRefreshKey((value) => value + 1);
       setRoomRefreshKey((value) => value + 1);
-      if (String(targetRoomId) === String(chatRoomId)) {
+      setDirectRoomRefreshKey((value) => value + 1);
+      const currentRoomId = targetType === "direct" ? directRoomId : chatRoomId;
+      if (String(targetRoomId) === String(currentRoomId)) {
         navigate("/chats", { replace: true });
       }
     } catch (leaveError) {
@@ -1660,6 +1705,78 @@ function DesktopChatRoom() {
 
   const displayedNotice = selectedNotice || pinnedNotice;
 
+  const renderMeetingRoomItem = (item) => {
+    const itemMeeting = item.meeting || {};
+    const itemReadOnly = isReadOnlyRoomItem(item);
+    const isMuted = mutedRooms.some((room) => String(room.room_id) === String(item.id) && room.room_type === "meeting");
+    const isPinned = pinnedRooms.includes(`meeting-${item.id}`);
+    return (
+      <div
+        key={item.id}
+        className={`proto-talk-room-item ${String(item.id) === String(chatRoomId) ? "selected" : ""} ${itemReadOnly ? "is-read-only" : ""} ${isPinned ? "is-pinned" : ""}`}
+      >
+        <Link to={`/chats/${item.id}`}>
+          {itemMeeting.cover_image_url ? <img src={itemMeeting.cover_image_url} alt="" /> : <div className="talk-room-fallback"><MessageCircle size={20} /></div>}
+          <span>
+            <b>{itemMeeting.title || "모임 채팅방"}</b>
+            <small>{itemMeeting.location_name || "장소 미정"} · {itemMeeting.current_participants || 0}/{itemMeeting.max_participants || 0}명</small>
+            {itemReadOnly ? <small className="talk-room-ended-label">활동 종료</small> : null}
+          </span>
+          <em>
+            {isPinned ? <Pin className="talk-room-pin-indicator" size={11} fill="currentColor" /> : null}
+            {isMuted ? <BellOff size={11} /> : null}
+            {formatMessageTime(item.last_message?.created_at) || "방금"}
+          </em>
+          {Number(item.unread_count || 0) > 0 ? <i>{item.unread_count}</i> : null}
+        </Link>
+        <div className="talk-room-item-hover-actions">
+          <button
+            className={`talk-room-pin-btn ${isPinned ? "is-pinned" : ""}`}
+            type="button"
+            onClick={() => togglePin(item.id, "meeting")}
+            aria-label={isPinned ? "고정 해제" : "상단 고정"}
+            title={isPinned ? "고정 해제" : "상단 고정"}
+          >
+            <Pin size={13} fill={isPinned ? "currentColor" : "none"} />
+          </button>
+          <button
+            className={`talk-room-mute-btn ${isMuted ? "muted" : ""}`}
+            type="button"
+            onClick={() => toggleMute(item.id, "meeting")}
+            title={isMuted ? "알림 켜기" : "알림 끄기"}
+          >
+            {isMuted ? <BellOff size={13} /> : <Bell size={13} />}
+          </button>
+          <button
+            className="talk-room-leave-btn-new"
+            type="button"
+            onClick={() => {
+              setLeaveTargetRoom(item);
+              setLeaveTargetType("meeting");
+              setLeaveConfirmOpen(true);
+            }}
+            aria-label="채팅방 나가기"
+            title="채팅방 나가기"
+          >
+            <LogOut size={13} />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const blockChatUser = async (targetUser) => {
+    if (!targetUser?.id || !window.confirm(`${targetUser.nickname || "이 사용자"}님을 차단할까요? 진행 중인 1:1 대화도 종료됩니다.`)) return;
+    try {
+      await chatApi.blockDirectUser(targetUser.id);
+      setProfilePreviewUser(null);
+      if (isDirectChat) navigate("/chats", { replace: true });
+      else setPrivateChatNotice("사용자를 차단했습니다.");
+    } catch (blockError) {
+      setPrivateChatNotice(blockError.response?.data?.message || "사용자를 차단하지 못했습니다.");
+    }
+  };
+
   return (
     <section className="desktop-page desktop-prototype legacy-pc legacy-chat-page">
       <div className="screen-title">
@@ -1682,69 +1799,54 @@ function DesktopChatRoom() {
               1:1 채팅
             </button>
           </div>
+          {chatListMode === "direct" ? (
+            <DirectChatTagLauncher compact onChanged={() => setDirectRoomRefreshKey((value) => value + 1)} />
+          ) : null}
           {chatListMode === "meeting" && rooms.loading && !rooms.data ? (
             <LoadingCards count={4} />
           ) : chatListMode === "direct" && directRooms.loading && !directRooms.data ? (
             <LoadingCards count={4} />
           ) : chatListMode === "meeting" && roomItems.length ? (
-            <div className="talk-list-items">
-              {roomItems.map((item) => {
-                const itemMeeting = item.meeting || {};
-                const itemReadOnly = isReadOnlyRoomItem(item);
-                return (
-                  <div key={item.id} className={`proto-talk-room-item ${String(item.id) === String(chatRoomId) ? "selected" : ""} ${itemReadOnly ? "is-read-only" : ""}`}>
-                    {(() => {
-                      const isMuted = mutedRooms.some(r => String(r.room_id) === String(item.id) && r.room_type === "meeting");
-                      return (
-                        <>
-                          <Link to={`/chats/${item.id}`}>
-                            {itemMeeting.cover_image_url ? <img src={itemMeeting.cover_image_url} alt="" /> : <div className="talk-room-fallback"><MessageCircle size={20} /></div>}
-                            <span>
-                              <b>{itemMeeting.title || "모임 채팅방"}</b>
-                              <small>{itemMeeting.location_name || "장소 미정"} · {itemMeeting.current_participants || 0}/{itemMeeting.max_participants || 0}명</small>
-                              {itemReadOnly ? <small className="talk-room-ended-label">마감된 모임</small> : null}
-                            </span>
-                            <em>
-                              {isMuted ? <BellOff size={11} style={{ marginRight: '3px', color: '#94a3b8', verticalAlign: 'middle' }} /> : null}
-                              {formatMessageTime(item.last_message?.created_at) || "방금"}
-                            </em>
-                            {Number(item.unread_count || 0) > 0 ? <i>{item.unread_count}</i> : null}
-                          </Link>
-                          <div className="talk-room-item-hover-actions">
-                            <button
-                              className={`talk-room-mute-btn ${isMuted ? "muted" : ""}`}
-                              type="button"
-                              onClick={() => toggleMute(item.id, "meeting")}
-                              title={isMuted ? "알림 켜기" : "알림 끄기"}
-                            >
-                              {isMuted ? <BellOff size={13} /> : <Bell size={13} />}
-                            </button>
-                            <button
-                              className="talk-room-leave-btn-new"
-                              type="button"
-                              onClick={() => {
-                                setLeaveTargetRoom(item);
-                                setLeaveConfirmOpen(true);
-                              }}
-                              aria-label="채팅방 나가기"
-                              title="채팅방 나가기"
-                            >
-                              <LogOut size={13} />
-                            </button>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                );
-              })}
+            <div className="talk-list-items desktop-chat-room-groups">
+              <section className="desktop-chat-room-group" aria-labelledby="active-meeting-chats-room">
+                <div className="desktop-chat-room-group__head">
+                  <strong id="active-meeting-chats-room">활동 중인 모임 채팅방</strong>
+                  <span>{activeMeetingRoomItems.length}</span>
+                </div>
+                {activeMeetingRoomItems.length
+                  ? activeMeetingRoomItems.map(renderMeetingRoomItem)
+                  : <p className="desktop-chat-room-group__empty">활동 중인 모임 채팅방이 없습니다.</p>}
+              </section>
+              {closedMeetingRoomItems.length ? (
+                <section className="desktop-chat-room-group desktop-chat-room-group--closed" aria-labelledby="closed-meeting-chats-room">
+                  <button
+                    className="desktop-chat-room-group__toggle"
+                    type="button"
+                    onClick={() => setClosedRoomsExpanded((expanded) => !expanded)}
+                    aria-expanded={closedRoomsExpanded}
+                  >
+                    <span>
+                      <strong id="closed-meeting-chats-room">활동 종료된 모임 채팅방</strong>
+                      <em>{closedMeetingRoomItems.length}</em>
+                    </span>
+                    {closedRoomsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
+                  {closedRoomsExpanded ? (
+                    <div className="desktop-chat-room-group__closed-items">
+                      {closedMeetingRoomItems.map(renderMeetingRoomItem)}
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
             </div>
           ) : chatListMode === "direct" && directRoomItems.length ? (
             <div className="talk-list-items">
               {directRoomItems.map((item) => {
                 const otherUser = item.other_user || {};
+                const itemReadOnly = item.is_active === false;
+                const isPinned = pinnedRooms.includes(`direct-${item.id}`);
                 return (
-                  <div key={item.id} className={`proto-talk-room-item ${String(item.id) === String(directRoomId) ? "selected" : ""}`}>
+                  <div key={item.id} className={`proto-talk-room-item ${String(item.id) === String(directRoomId) ? "selected" : ""} ${itemReadOnly ? "is-read-only" : ""} ${isPinned ? "is-pinned" : ""}`}>
                     {(() => {
                       const isMuted = mutedRooms.some(r => String(r.room_id) === String(item.id) && r.room_type === "direct");
                       return (
@@ -1754,13 +1856,24 @@ function DesktopChatRoom() {
                             <span>
                               <b>{senderLabel(otherUser)}</b>
                               <small>{item.last_message?.content || "아직 대화가 없습니다."}</small>
+                              {itemReadOnly ? <small className="talk-room-ended-label">활동 종료</small> : null}
                             </span>
                             <em>
+                              {isPinned ? <Pin className="talk-room-pin-indicator" size={11} fill="currentColor" /> : null}
                               {isMuted ? <BellOff size={11} style={{ marginRight: '3px', color: '#94a3b8', verticalAlign: 'middle' }} /> : null}
                               {formatMessageTime(item.last_message?.created_at || item.updated_at || item.created_at) || "방금"}
                             </em>
                           </Link>
                           <div className="talk-room-item-hover-actions">
+                            <button
+                              className={`talk-room-pin-btn ${isPinned ? "is-pinned" : ""}`}
+                              type="button"
+                              onClick={() => togglePin(item.id, "direct")}
+                              aria-label={isPinned ? "고정 해제" : "상단 고정"}
+                              title={isPinned ? "고정 해제" : "상단 고정"}
+                            >
+                              <Pin size={13} fill={isPinned ? "currentColor" : "none"} />
+                            </button>
                             <button
                               className={`talk-room-mute-btn ${isMuted ? "muted" : ""}`}
                               type="button"
@@ -1768,6 +1881,19 @@ function DesktopChatRoom() {
                               title={isMuted ? "알림 켜기" : "알림 끄기"}
                             >
                               {isMuted ? <BellOff size={13} /> : <Bell size={13} />}
+                            </button>
+                            <button
+                              className="talk-room-leave-btn-new"
+                              type="button"
+                              onClick={() => {
+                                setLeaveTargetRoom(item);
+                                setLeaveTargetType("direct");
+                                setLeaveConfirmOpen(true);
+                              }}
+                              aria-label={itemReadOnly ? "종료된 채팅방 목록에서 삭제" : "1:1 채팅 종료"}
+                              title={itemReadOnly ? "목록에서 삭제" : "1:1 채팅 종료"}
+                            >
+                              <LogOut size={13} />
                             </button>
                           </div>
                         </>
@@ -1848,6 +1974,21 @@ function DesktopChatRoom() {
                     </button>
                   </div>
                 ) : null}
+                {isDirectChat ? (
+                  <button
+                    className="talk-icon-btn"
+                    type="button"
+                    onClick={() => {
+                      setLeaveTargetRoom(null);
+                      setLeaveTargetType("direct");
+                      setLeaveConfirmOpen(true);
+                    }}
+                    aria-label="1:1 채팅 종료"
+                    title="1:1 채팅 종료"
+                  >
+                    <LogOut size={15} />
+                  </button>
+                ) : null}
                 <button className="talk-icon-btn" type="button" onClick={() => setTalkSearchOpen((v) => !v)} aria-label="대화 검색">
                   <Search size={15} />
                 </button>
@@ -1927,12 +2068,12 @@ function DesktopChatRoom() {
               </button>
             ) : null}
 
-            {!isDirectChat && chatReadOnly ? (
+            {chatReadOnly ? (
               <div className="talk-readonly-banner">
                 <Megaphone size={18} />
                 <span>
-                  <strong>마감된 모임입니다.</strong>
-                  <small>채팅 입력과 기능 사용은 종료되었고, 이전 대화와 공지 기록만 확인할 수 있어요.</small>
+                  <strong>{isDirectChat ? "상대방이 채팅방을 나갔습니다." : "마감된 모임입니다."}</strong>
+                  <small>{isDirectChat ? "대화가 종료되어 이전 메시지만 확인할 수 있습니다." : "채팅 입력과 기능 사용은 종료되었고, 이전 대화와 공지 기록만 확인할 수 있어요."}</small>
                 </span>
               </div>
             ) : null}
@@ -2059,8 +2200,8 @@ function DesktopChatRoom() {
               <div className="talk-input talk-input--readonly">
                 <Megaphone size={18} />
                 <span>
-                  <strong>마감된 모임의 채팅방입니다.</strong>
-                  <small>채팅 기록과 공지만 확인할 수 있습니다.</small>
+                  <strong>{isDirectChat ? "상대방이 채팅방을 나갔습니다." : "마감된 모임의 채팅방입니다."}</strong>
+                  <small>{isDirectChat ? "이전 대화만 확인할 수 있습니다." : "채팅 기록과 공지만 확인할 수 있습니다."}</small>
                 </span>
               </div>
             ) : (
@@ -2146,6 +2287,7 @@ function DesktopChatRoom() {
                   <Flag size={14} />
                   신고
                 </button>
+                <button className="is-danger" type="button" onClick={() => blockChatUser(profilePreviewUser)}>차단</button>
                 {hiddenChatStorageKey ? (
                   hiddenChatUserIds.includes(String(profilePreviewUser.id)) ? (
                     <button type="button" onClick={() => updateHiddenChatUser(profilePreviewUser, false)}>채팅 다시 보기</button>
@@ -2283,8 +2425,14 @@ function DesktopChatRoom() {
         <div className="chat-vote-confirm" role="dialog" aria-modal="true" aria-label="채팅방 나가기">
           <button className="chat-vote-modal__backdrop" type="button" onClick={() => setLeaveConfirmOpen(false)} aria-label="닫기" />
           <section>
-            <strong>채팅방을 나갈까요?</strong>
-            <p>{leaveTargetRoom?.meeting?.title || meeting?.title || "이 채팅방"}에서 나가면 모임 참여도 함께 취소됩니다.</p>
+            <strong>{(leaveTargetType || (isDirectChat ? "direct" : "meeting")) === "direct" ? "1:1 채팅방을 나갈까요?" : "채팅방을 나갈까요?"}</strong>
+            <p>
+              {(leaveTargetType || (isDirectChat ? "direct" : "meeting")) === "direct"
+                ? ((leaveTargetRoom?.is_active === false || (isDirectChat && chatReadOnly && !leaveTargetRoom))
+                  ? "종료된 대화가 내 채팅 목록에서 삭제됩니다."
+                  : "나가면 이 대화는 종료되고 내 채팅 목록에서 사라집니다. 상대방은 이전 대화만 볼 수 있습니다.")
+                : `${leaveTargetRoom?.meeting?.title || meeting?.title || "이 채팅방"}에서 나가면 모임 참여도 함께 취소됩니다.`}
+            </p>
             <div className="chat-vote-confirm__actions">
               <button type="button" onClick={() => setLeaveConfirmOpen(false)}>취소</button>
               <button type="button" className="is-danger" onClick={leaveRoom} disabled={leavingRoom}>
