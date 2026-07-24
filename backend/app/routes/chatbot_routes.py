@@ -94,7 +94,7 @@ PLACE_COORD_FALLBACKS = {
     "상암월드컵경기장": (37.5683, 126.8972),
     "서울월드컵경기장": (37.5683, 126.8972),
 }
-PLACEHOLDER_REGIONS = {"", "서울", "?쒖슱", "전국", "지역 미설정", "활동 지역 미설정", "미설정"}
+PLACEHOLDER_REGIONS = {"", "서울", "전국", "지역 미설정", "활동 지역 미설정", "미설정"}
 PLACEHOLDER_REGION_PREFIXES = ("?", "�")
 REGION_TEXT_ALIASES = {
     "서울": "서울",

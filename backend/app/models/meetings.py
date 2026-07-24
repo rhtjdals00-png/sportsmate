@@ -141,7 +141,7 @@ class Meeting(db.Model, TimestampMixin):
             "remaining_days": remaining_days,
             "host": {
                 "id": self.host.id,
-                "nickname": self.host.nickname,
+                "nickname": self.host.display_nickname,
                 "profile_image_url": self.host.profile_image_url
             } if self.host else None,
             "my_participant": {

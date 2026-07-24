@@ -404,7 +404,7 @@ def _region_filter(column, value):
 def _display_name(user):
     if not user:
         return "참여자"
-    return user.nickname or user.name or "참여자"
+    return getattr(user, "display_nickname", None) or user.nickname or user.name or "참여자"
 
 
 def _add_meeting_system_message(meeting, user_id, content):
@@ -1057,7 +1057,7 @@ def join_meeting(meeting_id, user_id, join_message=""):
         join_message = _normalize_join_message(join_message)
         meeting = get_meeting_for_update(meeting_id)
         applicant = User.query.options(joinedload(User.profile)).get(user_id)
-        applicant_name = applicant.nickname if applicant and getattr(applicant, "nickname", None) else (applicant.name if applicant else "신청자")
+        applicant_name = applicant.display_nickname if applicant and getattr(applicant, "nickname", None) else (applicant.name if applicant else "신청자")
         if is_meeting_operation_ended(meeting):
             raise ValueError("종료된 모임에는 참가 신청할 수 없습니다.")
         actual_approved_count = approved_participant_count(meeting.id)
@@ -1296,7 +1296,7 @@ def list_meeting_members(meeting_id, host_id):
             ),
             "user": {
                 "id": participant.user.id,
-                "nickname": participant.user.nickname,
+                "nickname": participant.user.display_nickname,
                 "profile_image_url": participant.user.profile_image_url,
             },
         }

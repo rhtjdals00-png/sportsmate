@@ -18,8 +18,8 @@ AUTOMATIC_SCHEDULE_NOTICE_TYPES = {"schedule_changed", "schedule_cancelled"}
 def _display_name(user):
     if not user:
         return "알 수 없는 사용자"
-    if user.nickname:
-        return user.nickname
+    if user.display_nickname:
+        return user.display_nickname
     return user.name or user.email or "알 수 없는 사용자"
 
 

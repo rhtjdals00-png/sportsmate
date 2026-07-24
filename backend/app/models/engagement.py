@@ -23,7 +23,7 @@ class Review(db.Model):
             "meeting_id": self.meeting_id,
             "meeting": {"id": self.meeting.id, "title": self.meeting.title} if self.meeting else None,
             "meeting_title": self.meeting.title if self.meeting else "삭제된 모임",
-            "meeting_host_nickname": self.meeting.host.nickname if (self.meeting and self.meeting.host) else "방장 없음",
+            "meeting_host_nickname": self.meeting.host.display_nickname if (self.meeting and self.meeting.host) else "방장 없음",
             "reviewer": self.reviewer.to_dict() if self.reviewer else None,
             "reviewee_id": self.reviewee_id,
             "reviewee": self.reviewee.to_dict() if self.reviewee else None,

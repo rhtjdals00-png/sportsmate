@@ -30,6 +30,7 @@ import DesktopScheduleCalendarModal, {
   normalizeDesktopScheduleMeeting
 } from "../../schedule/desktop/DesktopScheduleCalendarModal.jsx";
 import { getDesktopScheduleState } from "../../schedule/desktop/DesktopScheduleCard.jsx";
+import { moveEndedScheduleItemsLast } from "../../../utils/scheduleOccurrenceState.js";
 import { weatherApi } from "../../../api/weatherApi";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { useAsync } from "../../../hooks/useAsync";
@@ -468,7 +469,7 @@ function DesktopMyPage() {
   const joinedMeetings = (meetingsState.data?.joined || []).map((meeting) => normalizeDesktopScheduleMeeting(meeting, "joined"));
   const attendanceCount = Number(meetingsState.data?.attendance_count || 0);
   const filteredHostedMeetings = useMemo(
-    () => filterMeetingItems(hostedMeetings, createdMeetingFilter),
+    () => moveEndedScheduleItemsLast(filterMeetingItems(hostedMeetings, createdMeetingFilter)),
     [createdMeetingFilter, hostedMeetings]
   );
   const filteredJoinedMeetings = useMemo(

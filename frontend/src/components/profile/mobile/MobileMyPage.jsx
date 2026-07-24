@@ -59,6 +59,7 @@ function MobileMyPage() {
   const navigate = useNavigate();
   const { user, logout, setCurrentUser } = useAuth();
   const meetings = useAsync(() => (user ? userApi.myMeetings() : Promise.resolve({ hosted: [], joined: [], pending: [] })), [user?.id]);
+  const calendarMeetings = useAsync(() => (user ? userApi.myCalendar() : Promise.resolve({ hosted: [], joined: [] })), [user?.id]);
   const reviews = useAsync(() => (user ? userApi.myReviews() : Promise.resolve({ items: [] })), [user?.id]);
   const attendance = useAsync(() => (user ? userApi.myAttendanceHistory() : Promise.resolve({ summary: {}, items: [] })), [user?.id]);
 
@@ -267,7 +268,7 @@ function MobileMyPage() {
           <strong>{meetings.loading ? "확인 중" : `${pendingCount}건`}</strong>
         </Link>
       </section>
-      <MobileMyMeetings meetings={meetings} />
+      <MobileMyMeetings meetings={calendarMeetings} />
       <div className="menu-list">
         {showAdminEntry ? (
           <Link className="mobile-my-admin-link" to="/admin">

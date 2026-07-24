@@ -29,6 +29,10 @@ class User(db.Model, TimestampMixin):
     profile = db.relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     hosted_meetings = db.relationship("Meeting", back_populates="host")
 
+    @property
+    def display_nickname(self):
+        return "탈퇴한 사용자" if self.status == "anonymized" else self.nickname
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -52,17 +56,19 @@ class User(db.Model, TimestampMixin):
 
     def to_dict(self, include_private=False):
         profile = self.profile
+        is_anonymized = self.status == "anonymized"
         provider_values = {item.strip() for item in (self.provider or "").split(",") if item.strip()}
         data = {
             "id": self.id,
-            "nickname": self.nickname,
-            "user_tag": self.user_tag,
-            "user_tag_display": f"[{self.user_tag}]" if self.user_tag else "",
-            "nickname_with_tag": f"{self.nickname} [{self.user_tag}]" if self.user_tag else self.nickname,
-            "profile_image_url": self.profile_image_url,
+            "nickname": self.display_nickname,
+            "user_tag": "" if is_anonymized else self.user_tag,
+            "user_tag_display": "" if is_anonymized else (f"[{self.user_tag}]" if self.user_tag else ""),
+            "nickname_with_tag": self.display_nickname if is_anonymized else (f"{self.nickname} [{self.user_tag}]" if self.user_tag else self.nickname),
+            "profile_image_url": None if is_anonymized else self.profile_image_url,
             "role": self.role,
             "is_active": self.is_active,
             "status": self.status,
+            "is_anonymized": is_anonymized,
             "profile_intro_dismissed": self.profile_intro_dismissed,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
@@ -83,10 +89,10 @@ class User(db.Model, TimestampMixin):
         }
         if include_private:
             data.update({
-                "auth_user_id": self.auth_user_id,
-                "email": self.email,
-                "name": self.name,
-                "phone_number": self.phone_number,
+                "auth_user_id": None if is_anonymized else self.auth_user_id,
+                "email": None if is_anonymized else self.email,
+                "name": "탈퇴한 사용자" if is_anonymized else self.name,
+                "phone_number": None if is_anonymized else self.phone_number,
                 "withdrawn_at": self.withdrawn_at.isoformat() if self.withdrawn_at else None,
                 "remaining_withdraw_days": self.remaining_withdraw_days() if self.status == "withdrawn_pending" else None,
                 "provider": self.provider,

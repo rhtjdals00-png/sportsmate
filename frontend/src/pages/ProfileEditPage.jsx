@@ -1,5 +1,4 @@
 import { Camera, CheckCircle2, KeyRound, MapPin, Search, X, CircleAlert, LockKeyhole, XCircle } from "lucide-react";
-import StatusMessages from "../constants/statusMessages";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Button from "../components/common/Button.jsx";

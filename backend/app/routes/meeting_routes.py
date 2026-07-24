@@ -64,7 +64,7 @@ def can_manage_meeting_tools(meeting_id, user_id):
 
 
 def user_display_name(user):
-    return (user.nickname or user.name) if user else "참여자"
+    return (getattr(user, "display_nickname", None) or user.nickname or user.name) if user else "참여자"
 
 
 def add_meeting_system_message(meeting, user_id, content):
@@ -494,7 +494,7 @@ def transfer_host(meeting_id):
             "meeting": meeting.to_dict(),
             "new_host": {
                 "user_id": participant.user_id,
-                "nickname": participant.user.nickname if participant.user else "참가자",
+                "nickname": participant.user.display_nickname if participant.user else "참가자",
             },
         })
     except PermissionError as error:

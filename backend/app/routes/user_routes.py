@@ -150,49 +150,28 @@ def update_profile_intro_preference():
 @user_bp.delete("/me")
 @jwt_required()
 def delete_me():
-    user = user_query().get_or_404(int(get_jwt_identity()))
-    from app.utils.timezone import kst_now
-    
+    from app.services.auth_service import AccountLifecycleError, request_withdrawal
+
+    user_id = int(get_jwt_identity())
     try:
-        user.status = "withdrawn_pending"
-        user.role = "pending_withdrawal"
-        user.withdrawn_at = kst_now()
-        user.deleted_at = kst_now()
+        withdrawn_user = request_withdrawal(user_id)
         db.session.commit()
         return jsonify({
-            "message": "30일 탈퇴 유예 기간이 시작되었습니다. 30일 이내 재로그인 시 계정을 복구할 수 있습니다.",
+            "message": "30일의 탈퇴 유예 기간이 시작되었습니다. 30일 이내 다시 로그인하면 계정을 복구할 수 있습니다.",
             "status": "withdrawn_pending",
-            "withdrawn_at": user.withdrawn_at.isoformat()
+            "withdrawn_at": withdrawn_user.withdrawn_at.isoformat() if withdrawn_user.withdrawn_at else None,
         })
-    except Exception as e:
+    except AccountLifecycleError as error:
+        db.session.rollback()
+        return jsonify({"code": error.code, "message": str(error)}), error.status_code
+    except Exception:
         db.session.rollback()
         from flask import current_app
-        current_app.logger.error(f"Error requesting withdrawal for user {user.id}: {str(e)}")
-        return jsonify({"message": "계정 탈퇴 처리 중 오류가 발생했습니다."}), 500
-
-
-@user_bp.post("/me/cancel-deletion")
-@jwt_required()
-def cancel_account_deletion():
-    user = user_query().get_or_404(int(get_jwt_identity()))
-    
-    if user.role != "pending_withdrawal" and user.status != "withdrawn_pending":
-        return jsonify({"message": "탈퇴 대기 중인 계정이 아닙니다."}), 400
-        
-    try:
-        user.role = "user"
-        user.status = "active"
-        user.deleted_at = None
-        user.withdrawn_at = None
-        db.session.commit()
-        return jsonify({"message": "탈퇴가 성공적으로 철회되었습니다.", "user": user.to_dict(include_private=True)})
-    except Exception as e:
-        db.session.rollback()
-        from flask import current_app
-        current_app.logger.error(f"Error canceling deletion for user {user.id}: {str(e)}")
-        return jsonify({"message": "탈퇴 철회 중 오류가 발생했습니다."}), 500
-
-
+        current_app.logger.exception("Withdrawal request failed for user_id=%s", user_id)
+        return jsonify({
+            "code": "ACCOUNT_WITHDRAWAL_FAILED",
+            "message": "계정 탈퇴 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+        }), 500
 
 _verify_attempts = defaultdict(list)
 

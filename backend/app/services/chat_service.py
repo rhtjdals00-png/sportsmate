@@ -100,7 +100,7 @@ def send_message(room_id, user_id, data):
         if not reply_to_message:
             raise ValueError("답장할 메시지를 찾지 못했습니다.")
 
-    sender_name = sender.nickname or sender.name if sender else "참여자"
+    sender_name = (getattr(sender, "display_nickname", None) or sender.nickname or sender.name) if sender else "참여자"
     meeting_title = room.meeting.title if room.meeting else "모임"
     message = ChatMessage(
         chat_room_id=room.id,
@@ -115,7 +115,7 @@ def send_message(room_id, user_id, data):
         reply_to_message_id=reply_to_message.id if reply_to_message else None,
         reply_to_user_id=reply_to_message.user_id if reply_to_message else None,
         reply_to_sender_name=(
-            reply_to_message.sender.nickname or reply_to_message.sender.name
+            getattr(reply_to_message.sender, "display_nickname", None) or reply_to_message.sender.nickname or reply_to_message.sender.name
             if reply_to_message and reply_to_message.sender
             else None
         ),
@@ -191,11 +191,23 @@ def attach_read_counts(messages):
         message._read_count = counts.get(message.id, 0)
 
 
+def _direct_chat_user_available(user):
+    return bool(
+        user
+        and user.is_active
+        and user.status == "active"
+        and user.role not in {"suspended", "pending_withdrawal"}
+    )
+
+
 def get_or_create_direct_room(current_user_id, target_user_id):
     if current_user_id == target_user_id:
         raise ValueError("자기 자신과는 1:1 톡을 만들 수 없습니다.")
-    if not User.query.get(target_user_id):
+    target_user = User.query.get(target_user_id)
+    if not target_user:
         raise ValueError("상대 사용자를 찾지 못했습니다.")
+    if not _direct_chat_user_available(target_user):
+        raise ValueError("탈퇴하거나 이용할 수 없는 사용자에게는 새 1:1 대화를 시작할 수 없습니다.")
     user_a_id, user_b_id = sorted([current_user_id, target_user_id])
     room = DirectChatRoom.query.filter_by(user_a_id=user_a_id, user_b_id=user_b_id).first()
     if not room:
@@ -214,6 +226,8 @@ def ensure_direct_room_access(room_id, user_id):
 
 def send_direct_message(room_id, user_id, data):
     room = ensure_direct_room_access(room_id, user_id)
+    if not _direct_chat_user_available(room.other_user(user_id)):
+        raise ValueError("탈퇴한 사용자에게는 새 메시지를 보낼 수 없습니다.")
     if not isinstance(data, dict):
         data = {"content": str(data or "")}
     message_type = data.get("message_type") or "text"

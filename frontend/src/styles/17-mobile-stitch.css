@@ -7985,3 +7985,58 @@
   align-items: flex-start;
   flex-wrap: wrap;
 }
+
+/* 개별 회차가 끝난 정기 일정은 모임 전체의 모집 상태와 별도로 표시한다. */
+.mobile-shell .mobile-my-calendar__grid button.is-terminal {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.mobile-shell .mobile-my-calendar__grid button.is-terminal.is-active {
+  box-shadow: inset 0 0 0 2px #94a3b8;
+}
+
+.mobile-shell .mobile-my-calendar__grid button.is-cancelled {
+  border-color: #fecaca;
+  background: #fff7f7;
+  color: #b91c1c;
+}
+
+.mobile-shell .mobile-my-calendar__grid button.is-suspended {
+  border-color: #fdba74;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.mobile-shell .mobile-my-calendar__item.is-ended > a {
+  display: block;
+  background: #f1f5f9;
+}
+
+.mobile-shell .mobile-my-calendar__item.is-ended {
+  color: #64748b;
+}
+
+.mobile-shell .mobile-my-calendar__state {
+  display: inline-flex;
+  min-height: 20px;
+  align-items: center;
+  margin: 0;
+  border-radius: 12px;
+  background: #e2e8f0;
+  padding: 3px 8px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.mobile-shell .mobile-my-calendar__state.is-cancelled {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.mobile-shell .mobile-my-calendar__state.is-suspended {
+  background: #ffedd5;
+  color: #9a3412;
+}

@@ -97,7 +97,7 @@ def approved_chat_participants(meeting_id):
 
 
 def user_display_name(user):
-    return (user.nickname or user.name) if user else "참여자"
+    return (getattr(user, "display_nickname", None) or user.nickname or user.name) if user else "참여자"
 
 
 @chat_bp.get("")
