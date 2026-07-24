@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Bell, BellOff, ChevronDown, ChevronUp, LogOut, MessageCircle, Pin, UsersRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import EmptyState from "../../common/EmptyState.jsx";
@@ -7,6 +7,7 @@ import { chatApi } from "../../../api/chatApi";
 import { isSupabaseConfigured, supabase } from "../../../api/supabaseClient";
 import { useAsync } from "../../../hooks/useAsync";
 import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
+import DirectChatTagLauncher from "../DirectChatTagLauncher.jsx";
 
 function formatChatTime(value) {
   if (!value) return "방금";
@@ -39,10 +40,14 @@ function roomActivityTime(room) {
 }
 
 function DesktopChatList() {
+  const [searchParams] = useSearchParams();
+  const openDirectRequests = searchParams.get("panel") === "requests";
   const [refreshKey, setRefreshKey] = useState(0);
   const [directRefreshKey, setDirectRefreshKey] = useState(0);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
-  const [chatListMode, setChatListMode] = useState("meeting");
+  const [chatListMode, setChatListMode] = useState(() => (
+    searchParams.get("tab") === "direct" || openDirectRequests ? "direct" : "meeting"
+  ));
   const [closedRoomsExpanded, setClosedRoomsExpanded] = useState(false);
   const [pinnedRooms, setPinnedRooms] = useState(() => {
     try {
@@ -54,6 +59,7 @@ function DesktopChatList() {
   const [mutedRooms, setMutedRooms] = useState([]);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [leaveTargetRoom, setLeaveTargetRoom] = useState(null);
+  const [leaveTargetType, setLeaveTargetType] = useState("meeting");
   const [leavingRoom, setLeavingRoom] = useState(false);
 
   const rooms = useAsync(() => chatApi.rooms(), [refreshKey]);
@@ -112,10 +118,18 @@ function DesktopChatList() {
     if (!targetRoomId || leavingRoom) return;
     setLeavingRoom(true);
     try {
-      await chatApi.leave(targetRoomId);
+      if (leaveTargetType === "direct") {
+        await chatApi.leaveDirect(targetRoomId);
+      } else {
+        await chatApi.leave(targetRoomId);
+      }
       setLeaveConfirmOpen(false);
       setLeaveTargetRoom(null);
-      setRefreshKey((value) => value + 1);
+      if (leaveTargetType === "direct") {
+        setDirectRefreshKey((value) => value + 1);
+      } else {
+        setRefreshKey((value) => value + 1);
+      }
     } catch (leaveError) {
       window.alert(leaveError.response?.data?.message || "채팅방 나가기에 실패했습니다.");
       setLeaveConfirmOpen(false);
@@ -238,6 +252,7 @@ function DesktopChatList() {
             type="button"
             onClick={() => {
               setLeaveTargetRoom(room);
+              setLeaveTargetType("meeting");
               setLeaveConfirmOpen(true);
             }}
             aria-label="채팅방 나가기"
@@ -272,6 +287,9 @@ function DesktopChatList() {
               1:1 채팅
             </button>
           </div>
+          {chatListMode === "direct" ? (
+            <DirectChatTagLauncher compact openRequests={openDirectRequests} onChanged={() => setDirectRefreshKey((value) => value + 1)} />
+          ) : null}
           {chatListMode === "meeting" && rooms.loading && !rooms.data ? (
             <LoadingCards count={4} />
           ) : chatListMode === "direct" && directRooms.loading && !directRooms.data ? (
@@ -319,13 +337,15 @@ function DesktopChatList() {
                 const otherUser = room.other_user || {};
                 const isMuted = mutedRooms.some(r => String(r.room_id) === String(room.id) && r.room_type === "direct");
                 const isPinned = pinnedRooms.includes(`direct-${room.id}`);
+                const isEnded = room.is_active === false;
                 return (
-                  <div key={room.id} className={`proto-talk-room-item ${isPinned ? "is-pinned" : ""}`}>
+                  <div key={room.id} className={`proto-talk-room-item ${isPinned ? "is-pinned" : ""} ${isEnded ? "is-read-only" : ""}`}>
                     <Link to={`/chats/direct/${room.id}`}>
                       {otherUser.profile_image_url ? <img src={otherUser.profile_image_url} alt="" /> : <div className="talk-room-fallback"><UsersRound size={20} /></div>}
                       <span>
                         <b>{otherUser.nickname || otherUser.name || "참여자"}</b>
                         <small>{room.last_message?.content || "아직 대화가 없습니다."}</small>
+                        {isEnded ? <small className="talk-room-ended-label">활동 종료</small> : null}
                       </span>
                       <em>
                         {isPinned ? <Pin className="talk-room-pin-indicator" size={11} fill="currentColor" /> : null}
@@ -351,6 +371,19 @@ function DesktopChatList() {
                       >
                         {isMuted ? <BellOff size={13} /> : <Bell size={13} />}
                       </button>
+                      <button
+                        className="talk-room-leave-btn-new"
+                        type="button"
+                        onClick={() => {
+                          setLeaveTargetRoom(room);
+                          setLeaveTargetType("direct");
+                          setLeaveConfirmOpen(true);
+                        }}
+                        aria-label={isEnded ? "종료된 채팅방 목록에서 삭제" : "1:1 채팅방 나가기"}
+                        title={isEnded ? "목록에서 삭제" : "채팅방 나가기"}
+                      >
+                        <LogOut size={13} />
+                      </button>
                     </div>
                   </div>
                 );
@@ -374,8 +407,14 @@ function DesktopChatList() {
         <div className="chat-vote-confirm" role="dialog" aria-modal="true" aria-label="채팅방 나가기">
           <button className="chat-vote-modal__backdrop" type="button" onClick={() => setLeaveConfirmOpen(false)} aria-label="닫기" />
           <section>
-            <strong>채팅방을 나갈까요?</strong>
-            <p>{leaveTargetRoom?.meeting?.title || "이 채팅방"}에서 나가면 모임 참여도 함께 취소됩니다.</p>
+            <strong>{leaveTargetType === "direct" ? "1:1 채팅방을 나갈까요?" : "채팅방을 나갈까요?"}</strong>
+            <p>
+              {leaveTargetType === "direct"
+                ? (leaveTargetRoom?.is_active === false
+                  ? "종료된 대화가 내 채팅 목록에서 삭제됩니다."
+                  : "나가면 이 대화는 종료되고 내 채팅 목록에서 사라집니다. 상대방은 이전 대화만 볼 수 있습니다.")
+                : `${leaveTargetRoom?.meeting?.title || "이 채팅방"}에서 나가면 모임 참여도 함께 취소됩니다.`}
+            </p>
             <div className="chat-vote-confirm__actions">
               <button type="button" onClick={() => setLeaveConfirmOpen(false)}>취소</button>
               <button type="button" className="is-danger" onClick={leaveRoom} disabled={leavingRoom}>

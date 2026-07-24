@@ -25,16 +25,37 @@ DIRECT_CHAT_MESSAGE_COLUMNS = {
     "location_label": "VARCHAR(255)",
 }
 
+DIRECT_CHAT_ROOM_COLUMNS = {
+    "user_a_left_at": "TIMESTAMP",
+    "user_b_left_at": "TIMESTAMP",
+    "ended_at": "TIMESTAMP",
+    "ended_by_user_id": "INTEGER",
+}
+
 
 def ensure_chat_schema(app):
     try:
         inspector = inspect(db.engine)
         existing = {column["name"] for column in inspector.get_columns("chat_messages")}
         missing = [(name, column_type) for name, column_type in CHAT_MESSAGE_COLUMNS.items() if name not in existing]
+        direct_room_exists = inspector.has_table("direct_chat_rooms")
+        direct_message_exists = inspector.has_table("direct_chat_messages")
         direct_existing = set()
-        if inspector.has_table("direct_chat_messages"):
+        direct_room_existing = set()
+        if direct_room_exists:
+            direct_room_existing = {column["name"] for column in inspector.get_columns("direct_chat_rooms")}
+        if direct_message_exists:
             direct_existing = {column["name"] for column in inspector.get_columns("direct_chat_messages")}
-        direct_missing = [(name, column_type) for name, column_type in DIRECT_CHAT_MESSAGE_COLUMNS.items() if name not in direct_existing]
+        direct_room_missing = [
+            (name, column_type)
+            for name, column_type in DIRECT_CHAT_ROOM_COLUMNS.items()
+            if direct_room_exists and name not in direct_room_existing
+        ]
+        direct_missing = [
+            (name, column_type)
+            for name, column_type in DIRECT_CHAT_MESSAGE_COLUMNS.items()
+            if direct_message_exists and name not in direct_existing
+        ]
         with db.engine.begin() as connection:
             for name, column_type in missing:
                 connection.execute(text(f"ALTER TABLE chat_messages ADD COLUMN {name} {column_type}"))
@@ -53,11 +74,41 @@ def ensure_chat_schema(app):
                     user_a_id INTEGER NOT NULL REFERENCES users(id),
                     user_b_id INTEGER NOT NULL REFERENCES users(id),
                     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    user_a_left_at TIMESTAMP,
+                    user_b_left_at TIMESTAMP,
+                    ended_at TIMESTAMP,
+                    ended_by_user_id INTEGER REFERENCES users(id),
                     created_at TIMESTAMP,
-                    updated_at TIMESTAMP,
-                    CONSTRAINT uq_direct_chat_pair UNIQUE (user_a_id, user_b_id)
+                    updated_at TIMESTAMP
                 )
             """))
+            for name, column_type in direct_room_missing:
+                connection.execute(text(f"ALTER TABLE direct_chat_rooms ADD COLUMN {name} {column_type}"))
+            connection.execute(text("""
+                UPDATE direct_chat_rooms
+                SET user_a_left_at = COALESCE(user_a_left_at, ended_at)
+                WHERE is_active = FALSE
+                  AND ended_by_user_id = user_a_id
+            """))
+            connection.execute(text("""
+                UPDATE direct_chat_rooms
+                SET user_b_left_at = COALESCE(user_b_left_at, ended_at)
+                WHERE is_active = FALSE
+                  AND ended_by_user_id = user_b_id
+            """))
+            if db.engine.dialect.name == "postgresql":
+                connection.execute(text("ALTER TABLE direct_chat_rooms DROP CONSTRAINT IF EXISTS uq_direct_chat_pair"))
+                connection.execute(text("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_direct_chat_pair_active
+                    ON direct_chat_rooms(user_a_id, user_b_id)
+                    WHERE is_active = TRUE
+                """))
+            elif db.engine.dialect.name == "sqlite":
+                connection.execute(text("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_direct_chat_pair_active
+                    ON direct_chat_rooms(user_a_id, user_b_id)
+                    WHERE is_active = 1
+                """))
             connection.execute(text("""
                 CREATE TABLE IF NOT EXISTS direct_chat_messages (
                     id SERIAL PRIMARY KEY,
@@ -75,6 +126,31 @@ def ensure_chat_schema(app):
             """))
             for name, column_type in direct_missing:
                 connection.execute(text(f"ALTER TABLE direct_chat_messages ADD COLUMN {name} {column_type}"))
+            connection.execute(text("""
+                INSERT INTO direct_chat_messages (
+                    direct_chat_room_id,
+                    sender_id,
+                    content,
+                    message_type,
+                    created_at
+                )
+                SELECT
+                    room.id,
+                    room.ended_by_user_id,
+                    '상대방이 채팅방을 나갔습니다.',
+                    'system',
+                    COALESCE(room.ended_at, room.updated_at, CURRENT_TIMESTAMP)
+                FROM direct_chat_rooms AS room
+                WHERE room.is_active = FALSE
+                  AND room.ended_by_user_id IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM direct_chat_messages AS message
+                      WHERE message.direct_chat_room_id = room.id
+                        AND message.message_type = 'system'
+                        AND message.content = '상대방이 채팅방을 나갔습니다.'
+                  )
+            """))
     except Exception as error:
         app.logger.warning("Chat message schema compatibility check failed: %s", error)
 
@@ -129,6 +205,44 @@ def ensure_report_schema(app):
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
             """))
+            connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS direct_chat_requests (
+                    id SERIAL PRIMARY KEY,
+                    sender_id INTEGER NOT NULL REFERENCES users(id),
+                    recipient_id INTEGER NOT NULL REFERENCES users(id),
+                    message VARCHAR(500) NOT NULL DEFAULT '',
+                    status VARCHAR(30) NOT NULL DEFAULT 'pending',
+                    responded_at TIMESTAMP,
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP
+                )
+            """))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_direct_chat_requests_sender_id ON direct_chat_requests(sender_id)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_direct_chat_requests_recipient_id ON direct_chat_requests(recipient_id)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_direct_chat_requests_status ON direct_chat_requests(status)"))
+            if db.engine.dialect.name == "postgresql":
+                connection.execute(text("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_direct_chat_request_pending
+                    ON direct_chat_requests(sender_id, recipient_id)
+                    WHERE status = 'pending'
+                """))
+            elif db.engine.dialect.name == "sqlite":
+                connection.execute(text("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_direct_chat_request_pending
+                    ON direct_chat_requests(sender_id, recipient_id)
+                    WHERE status = 'pending'
+                """))
+            connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS user_blocks (
+                    id SERIAL PRIMARY KEY,
+                    blocker_id INTEGER NOT NULL REFERENCES users(id),
+                    blocked_id INTEGER NOT NULL REFERENCES users(id),
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT uq_user_block_pair UNIQUE (blocker_id, blocked_id)
+                )
+            """))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_user_blocks_blocker_id ON user_blocks(blocker_id)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_user_blocks_blocked_id ON user_blocks(blocked_id)"))
             if inspector.has_table("reports"):
                 existing = {column["name"] for column in inspector.get_columns("reports")}
                 for name, column_type in REPORT_COLUMNS.items():
@@ -187,6 +301,7 @@ def ensure_support_schema(app):
 USER_WITHDRAW_COLUMNS = {
     "status": "VARCHAR(30) NOT NULL DEFAULT 'active'",
     "withdrawn_at": "TIMESTAMP",
+    "direct_message_policy": "VARCHAR(30) NOT NULL DEFAULT 'same_meeting'",
 }
 
 

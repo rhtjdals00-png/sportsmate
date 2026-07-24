@@ -110,7 +110,8 @@ function MobileProfileEdit() {
     selected_regions: initialRegions.length ? initialRegions : [mobileProfileFallback.region],
     exercise_level: user?.profile?.exercise_level || mobileProfileFallback.exercise_level,
     preferred_sports: selectedSportNames.length ? selectedSportNames : mobileProfileFallback.preferred_sports,
-    preferred_sport_levels: user?.profile?.preferred_sport_levels || mobileProfileFallback.preferred_sport_levels
+    preferred_sport_levels: user?.profile?.preferred_sport_levels || mobileProfileFallback.preferred_sport_levels,
+    direct_message_policy: user?.direct_message_policy || "same_meeting"
   });
   const [categories, setCategories] = useState([]);
   const [sports, setSports] = useState([]);
@@ -407,7 +408,8 @@ function MobileProfileEdit() {
       region: form.region,
       exercise_level: form.exercise_level,
       preferred_sports: form.preferred_sports.join(", "),
-      preferred_sport_levels: form.preferred_sport_levels
+      preferred_sport_levels: form.preferred_sport_levels,
+      direct_message_policy: form.direct_message_policy
     });
     setCurrentUser(data.user);
     navigate("/mypage");
@@ -631,6 +633,25 @@ function MobileProfileEdit() {
           </>
         )}
       </section>
+      <section className="page-card mobile-profile-edit-panel">
+        <div className="section-head">
+          <h2>소통 및 개인정보</h2>
+        </div>
+        <label style={{ display: "grid", gap: "7px" }}>
+          <strong style={{ fontSize: "14px", color: "#0f172a" }}>1:1 채팅 수신 범위</strong>
+          <small style={{ color: "#64748b", lineHeight: 1.5 }}>태그 검색으로 누가 나에게 대화를 요청할 수 있는지 설정합니다.</small>
+          <select
+            value={form.direct_message_policy}
+            onChange={(event) => update("direct_message_policy", event.target.value)}
+            style={{ width: "100%", padding: "11px", border: "1px solid #cbd5e1", borderRadius: "10px", background: "#fff" }}
+          >
+            <option value="everyone">누구나 · 모임 밖 사용자는 요청 후 대화</option>
+            <option value="same_meeting">같은 모임 회원만</option>
+            <option value="none">1:1 채팅 받지 않음</option>
+          </select>
+        </label>
+      </section>
+
       <section className="page-card mobile-profile-edit-panel mobile-account-security-panel">
         <div className="section-head">
           <h2>계정 보안</h2>

@@ -78,6 +78,12 @@ def update_me():
     user = user_query().get_or_404(int(get_jwt_identity()))
     data = request.get_json() or {}
 
+    if "direct_message_policy" in data:
+        policy = str(data["direct_message_policy"] or "").strip()
+        if policy not in {"everyone", "same_meeting", "none"}:
+            return jsonify({"message": "1:1 채팅 수신 설정이 올바르지 않습니다."}), 400
+        user.direct_message_policy = policy
+
     if "preferred_sports" in data:
         try:
             normalized_sports = normalize_preferred_sports(data["preferred_sports"])

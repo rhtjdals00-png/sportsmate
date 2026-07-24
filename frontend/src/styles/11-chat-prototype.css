@@ -4567,3 +4567,66 @@
   font-size: 12px;
   font-weight: 700;
 }
+.direct-tag-launcher {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid #c7d2fe;
+  border-radius: 10px;
+  background: #eef2ff;
+  color: #4338ca;
+  padding: 8px 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.direct-tag-launcher.is-compact { padding: 6px 9px; font-size: 12px; }
+.direct-tag-launcher-group {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+.desktop-prototype .talk-list > .direct-tag-launcher-group {
+  width: 100%;
+  margin: 0 0 14px;
+  box-sizing: border-box;
+}
+.direct-tag-launcher i { min-width: 18px; height: 18px; border-radius: 9px; background: #ef4444; color: white; font-size: 10px; line-height: 18px; font-style: normal; }
+.direct-tag-modal { position: fixed; inset: 0; z-index: 2200; display: grid; place-items: center; padding: 16px; }
+.direct-tag-modal__backdrop { position: absolute; inset: 0; border: 0; background: rgba(15, 23, 42, .5); }
+.direct-tag-modal > section { position: relative; width: min(480px, 100%); max-height: 85vh; overflow: auto; border-radius: 20px; background: #fff; padding: 22px; box-shadow: 0 24px 60px rgba(15,23,42,.24); }
+.direct-tag-modal header { display: flex; justify-content: space-between; gap: 12px; }
+.direct-tag-modal header div { display: grid; gap: 4px; }
+.direct-tag-modal header strong { font-size: 20px; color: #0f172a; }
+.direct-tag-modal header small { color: #64748b; }
+.direct-tag-modal header > button { border: 0; background: none; font-size: 26px; cursor: pointer; }
+.direct-tag-modal nav { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 18px 0; padding: 4px; border-radius: 12px; background: #f1f5f9; }
+.direct-tag-modal nav button { border: 0; border-radius: 9px; background: transparent; padding: 9px; color: #64748b; font-weight: 800; }
+.direct-tag-modal nav button.active { background: #fff; color: #4f46e5; box-shadow: 0 2px 8px rgba(15,23,42,.08); }
+.direct-tag-search { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; }
+.direct-tag-search span { font-size: 20px; font-weight: 900; color: #4f46e5; }
+.direct-tag-search input, .direct-tag-result textarea { min-width: 0; border: 1px solid #cbd5e1; border-radius: 10px; padding: 11px; outline: none; }
+.direct-tag-search button, .direct-tag-result .primary, .direct-request-list .primary { border: 0; border-radius: 10px; background: #4f46e5; color: white; padding: 11px 15px; font-weight: 800; cursor: pointer; }
+.direct-tag-result { display: grid; grid-template-columns: 48px 1fr; gap: 12px; margin-top: 18px; padding: 16px; border: 1px solid #e2e8f0; border-radius: 14px; }
+.direct-tag-result > img, .direct-tag-result > span { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; background: #e0e7ff; color: #4338ca; font-weight: 900; }
+.direct-tag-result > div { display: grid; gap: 4px; }
+.direct-tag-result em, .direct-request-list em { color: #6366f1; font-style: normal; font-size: 12px; }
+.direct-tag-result small, .direct-request-list small { color: #64748b; }
+.direct-tag-result p, .direct-request-list p { margin: 4px 0 0; color: #475569; font-size: 13px; }
+.direct-tag-result textarea, .direct-tag-result > .primary, .direct-tag-result__safety { grid-column: 1 / -1; }
+.direct-tag-result__safety { display: flex !important; justify-content: flex-end; gap: 8px !important; }
+.direct-tag-result__safety button, .direct-request-list article span button { border: 0; background: transparent; color: #64748b; font-size: 12px; cursor: pointer; }
+.direct-request-list article span .direct-request-reject {
+  border-radius: 10px;
+  background: #ef4444;
+  color: #fff;
+  padding: 11px 15px;
+  font-weight: 800;
+}
+.direct-request-list article span .direct-request-reject:hover:not(:disabled) { background: #dc2626; }
+.direct-request-list article span .direct-request-reject:disabled { opacity: .55; cursor: not-allowed; }
+.direct-request-list { display: grid; gap: 10px; }
+.direct-request-list article { display: flex; justify-content: space-between; gap: 12px; padding: 14px; border: 1px solid #e2e8f0; border-radius: 12px; }
+.direct-request-list article > div { display: grid; gap: 4px; }
+.direct-request-list article > span { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 5px; }
+.direct-request-list__empty, .direct-tag-modal__message { text-align: center; color: #64748b; padding: 16px 4px; }

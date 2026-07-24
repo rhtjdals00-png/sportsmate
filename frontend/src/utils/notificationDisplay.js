@@ -18,6 +18,9 @@ export function isSupportNotification(item) {
 
 export function notificationLinkUrl(item) {
   if (isSupportNotification(item) && (!item.link_url || item.link_url === "/notifications")) return "/support";
+  if (item?.type === "direct_chat_request" && (!item.link_url || item.link_url === "/chats")) {
+    return "/chats?tab=direct&panel=requests";
+  }
   return item.link_url || "";
 }
 
