@@ -529,8 +529,6 @@ function MobileProfileEditPage() {
     setSaving(true);
     try {
       const data = await userApi.updateMe({
-        name: form.name.trim(),
-        phone_number: form.phone_number.trim(),
         nickname: form.nickname.trim(),
         profile_image_url: form.profile_image_url,
         bio: form.bio.trim(),
@@ -585,7 +583,7 @@ function MobileProfileEditPage() {
             <div className="profile-setup__fields">
               <label>
                 <span>{T.name}</span>
-                <input value={form.name} onChange={(event) => updateField("name", event.target.value)} placeholder={T.namePlaceholder} />
+                <span className="profile-setup__readonly-field">{form.name || "미입력"}</span>
               </label>
               <label className="profile-setup__nickname-label">
                 <span>{T.nickname}</span>
@@ -596,7 +594,7 @@ function MobileProfileEditPage() {
               </label>
               <label>
                 <span>{T.phone}</span>
-                <input value={form.phone_number} onChange={(event) => updateField("phone_number", event.target.value)} placeholder={T.optional} />
+                <span className="profile-setup__readonly-field">{form.phone_number || "미입력"}</span>
               </label>
             </div>
           </section>

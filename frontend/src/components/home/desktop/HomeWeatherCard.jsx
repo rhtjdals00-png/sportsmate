@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Cloud, CloudRain, CloudSun, LocateFixed, Snowflake, Sun, Wind } from "lucide-react";
 import { Link } from "react-router-dom";
 import { weatherApi } from "../../../api/weatherApi";
-import { getSavedWeatherLocation, requestCurrentPosition, sameWeatherArea, saveWeatherLocation } from "../../../utils/weatherLocation";
+import { getWeatherFallbackLocation, requestCurrentPosition, sameWeatherArea, saveWeatherLocation } from "../../../utils/weatherLocation";
 
 function WeatherIcon({ condition }) {
   if (["rain", "rain_snow", "shower"].includes(condition)) return <CloudRain size={40} />;
@@ -13,7 +13,7 @@ function WeatherIcon({ condition }) {
 }
 
 export default function HomeWeatherCard({ user }) {
-  const [location, setLocation] = useState(() => getSavedWeatherLocation(user));
+  const [location, setLocation] = useState(() => getWeatherFallbackLocation(user));
   const [state, setState] = useState({ loading: true, weather: null, message: "" });
 
   const load = (nextLocation) => {
@@ -25,9 +25,12 @@ export default function HomeWeatherCard({ user }) {
 
   useEffect(() => {
     let active = true;
-    const initial = getSavedWeatherLocation(user);
+    const initial = getWeatherFallbackLocation(user);
     setLocation(initial);
     load(initial);
+    if (initial.source === "profile") {
+      return () => { active = false; };
+    }
     requestCurrentPosition()
       .then((current) => {
         if (!active || sameWeatherArea(initial, current)) return;
@@ -37,7 +40,15 @@ export default function HomeWeatherCard({ user }) {
       })
       .catch(() => {});
     return () => { active = false; };
-  }, [user?.id, user?.profile?.region_latitude, user?.profile?.region_longitude]);
+  }, [
+    user?.id,
+    user?.profile?.region,
+    user?.profile?.region_latitude,
+    user?.profile?.region_longitude,
+    user?.profile?.region_2,
+    user?.profile?.region_2_latitude,
+    user?.profile?.region_2_longitude,
+  ]);
 
   const current = state.weather?.current;
   return (

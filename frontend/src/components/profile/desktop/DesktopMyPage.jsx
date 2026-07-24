@@ -231,6 +231,31 @@ function MeetingFilterChips({ value, onChange }) {
   );
 }
 
+function ParticipationStatusTabs({ value, onChange, joinedCount, pendingCount }) {
+  return (
+    <div className="profile-participation-tabs" role="tablist" aria-label="참여 및 신청 상태">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={value === "joined"}
+        className={value === "joined" ? "is-active" : ""}
+        onClick={() => onChange("joined")}
+      >
+        참여 모임 <span>{joinedCount}</span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={value === "pending"}
+        className={value === "pending" ? "is-active" : ""}
+        onClick={() => onChange("pending")}
+      >
+        승인 대기 <span>{pendingCount}</span>
+      </button>
+    </div>
+  );
+}
+
 function AttendanceHistoryContent({ data, error }) {
   const summary = data?.summary || {};
   const items = data?.items || [];
@@ -268,6 +293,7 @@ function AttendanceHistoryContent({ data, error }) {
 
 function ScheduleItem({ item, variant = "schedule" }) {
   const isHost = item.state === "host";
+  const isPending = variant === "pending";
   const showTypeTag = Boolean(item.meetingTypeLabel);
   const scheduleState = getDesktopScheduleState(item);
   const recruitment = recruitmentTag(item.status);
@@ -283,6 +309,7 @@ function ScheduleItem({ item, variant = "schedule" }) {
       <div>
         {(showTypeTag || item.sportName || recruitment) && (
           <div className="profile-schedule-tags">
+            {isPending && <ScheduleTag tone="pending">승인 대기</ScheduleTag>}
             {showTypeTag && <ScheduleTag tone={item.meetingType === "regular" ? "regular" : "one-time"}>{item.meetingTypeLabel}</ScheduleTag>}
             {item.sportName && <ScheduleTag tone="sport">{item.sportName}</ScheduleTag>}
             {recruitment && <ScheduleTag tone={recruitment.tone}>{recruitment.label}</ScheduleTag>}
@@ -297,7 +324,7 @@ function ScheduleItem({ item, variant = "schedule" }) {
         <p>{item.place} · {item.member}</p>
         <footer>
           <Link className="ghost-btn" to={`/meetings/${item.id}`}><FileText size={14} />상세</Link>
-          <Link className="ghost-btn" to={item.chatRoomId ? `/chats/${item.chatRoomId}` : "/chats"}><MessageCircle size={14} />채팅</Link>
+          {!isPending && <Link className="ghost-btn" to={item.chatRoomId ? `/chats/${item.chatRoomId}` : "/chats"}><MessageCircle size={14} />채팅</Link>}
         </footer>
       </div>
     </article>
@@ -322,6 +349,7 @@ function DesktopMyPage() {
   const [scheduleActionError, setScheduleActionError] = useState("");
   const [createdMeetingFilter, setCreatedMeetingFilter] = useState("all");
   const [joinedMeetingFilter, setJoinedMeetingFilter] = useState("all");
+  const [participationSubTab, setParticipationSubTab] = useState("joined");
 
   const [reviewSubTab, setReviewSubTab] = useState("written"); // "written" | "received"
   const [writingReview, setWritingReview] = useState(null); // { meetingId, peerId, peerNickname, meetingTitle }
@@ -465,19 +493,27 @@ function DesktopMyPage() {
   const user = profileState.data?.user || authUser;
   const profile = user?.profile || {};
   const displayTag = tagLabel(user);
+  const preferredRegions = [profile.region, profile.region_2].filter(Boolean);
   const preferredSports = splitPreferredSports(profile.preferred_sports);
   const savedIntro = profile.bio || "";
   const hostedMeetings = (meetingsState.data?.hosted || []).map((meeting) => normalizeDesktopScheduleMeeting(meeting, "host"));
   const joinedMeetings = (meetingsState.data?.joined || []).map((meeting) => normalizeDesktopScheduleMeeting(meeting, "joined"));
+  const pendingMeetings = (meetingsState.data?.pending || []).map((meeting) => normalizeDesktopScheduleMeeting(meeting, "pending"));
   const attendanceCount = Number(meetingsState.data?.attendance_count || 0);
   const filteredHostedMeetings = useMemo(
     () => moveEndedScheduleItemsLast(filterMeetingItems(hostedMeetings, createdMeetingFilter)),
     [createdMeetingFilter, hostedMeetings]
   );
   const filteredJoinedMeetings = useMemo(
-    () => filterMeetingItems(joinedMeetings, joinedMeetingFilter),
+    () => moveEndedScheduleItemsLast(filterMeetingItems(joinedMeetings, joinedMeetingFilter)),
     [joinedMeetingFilter, joinedMeetings]
   );
+  const filteredPendingMeetings = useMemo(
+    () => filterMeetingItems(pendingMeetings, joinedMeetingFilter),
+    [joinedMeetingFilter, pendingMeetings]
+  );
+  const participationMeetings = participationSubTab === "pending" ? filteredPendingMeetings : filteredJoinedMeetings;
+  const participationSourceCount = participationSubTab === "pending" ? pendingMeetings.length : joinedMeetings.length;
   const calendarHostedMeetings = (calendarMeetings?.hosted || []).map((meeting) => normalizeDesktopScheduleMeeting(meeting, "host"));
   const calendarJoinedMeetings = (calendarMeetings?.joined || []).map((meeting) => normalizeDesktopScheduleMeeting(meeting, "joined"));
   const scheduled = useMemo(
@@ -536,14 +572,21 @@ function DesktopMyPage() {
   const activityPanels = {
     schedule: { label: "다가오는 일정", count: scheduled.length, items: scheduled },
     hosted: { label: "내가 관리하는 모임", count: filteredHostedMeetings.length, items: filteredHostedMeetings, sourceCount: hostedMeetings.length, filter: createdMeetingFilter, setFilter: setCreatedMeetingFilter },
-    joined: { label: "참여 중인 모임", count: filteredJoinedMeetings.length, items: filteredJoinedMeetings, sourceCount: joinedMeetings.length, filter: joinedMeetingFilter, setFilter: setJoinedMeetingFilter },
+    joined: {
+      label: participationSubTab === "pending" ? "승인 대기 모임" : "참여 모임",
+      count: participationMeetings.length,
+      items: participationMeetings,
+      sourceCount: participationSourceCount,
+      filter: joinedMeetingFilter,
+      setFilter: setJoinedMeetingFilter
+    },
     reviews: { label: reviewSubTab === "written" ? "내가 작성한 후기" : "내가 받은 후기", count: reviewSubTab === "written" ? writtenReviews.length : receivedReviews.length, items: [] },
     attendance: { label: "참여 기록", count: attendanceState.data?.summary?.total_count || 0, unit: "회", items: [] }
   };
   const activityMenu = [
     { key: "schedule", label: "다가오는 일정", icon: CalendarDays },
     { key: "hosted", label: "내가 관리하는 모임", icon: Crown },
-    { key: "joined", label: "참여 중인 모임", icon: Users },
+    { key: "joined", label: "내 모임 / 신청내역", icon: Users },
     { key: "reviews", label: "후기 관리", icon: FileText },
     { key: "attendance", label: "참여 기록", icon: CheckCircle2 }
   ];
@@ -701,7 +744,7 @@ function DesktopMyPage() {
           <section className="page-card profile-preference-card">
             <h3>기본 정보 및 운동 성향</h3>
             <div className="preference-list">
-              <p><b>선호 지역</b><span>{profile.region || "미설정"}</span></p>
+              <p><b>선호 지역</b><span>{preferredRegions.length ? preferredRegions.join(", ") : "미설정"}</span></p>
               <p><b>관심 종목</b><span>{preferredSports.length ? preferredSports.join(", ") : "미설정"}</span></p>
               <p><b>운동 수준</b><span>{levelLabels[profile.exercise_level] || "미설정"}</span></p>
             </div>
@@ -724,10 +767,21 @@ function DesktopMyPage() {
           </div>
           <div className="section-head profile-schedule-head">
             <div>
-              <h2>{activePanel.label} <span className="schedule-count-inline">{activePanel.count}{activePanel.unit || "개"}</span></h2>
+              {activeActivity === "joined" ? (
+                <ParticipationStatusTabs
+                  value={participationSubTab}
+                  onChange={setParticipationSubTab}
+                  joinedCount={joinedMeetings.length}
+                  pendingCount={pendingMeetings.length}
+                />
+              ) : (
+                <h2>{activePanel.label} <span className="schedule-count-inline">{activePanel.count}{activePanel.unit || "개"}</span></h2>
+              )}
             </div>
             <div className={`profile-schedule-actions ${!["schedule", "hosted", "joined"].includes(activeActivity) ? "is-placeholder" : ""}`}>
-              {["hosted", "joined"].includes(activeActivity) ? (
+              {activeActivity === "joined" ? (
+                <MeetingFilterChips value={activePanel.filter} onChange={activePanel.setFilter} />
+              ) : activeActivity === "hosted" ? (
                 <MeetingFilterChips value={activePanel.filter} onChange={activePanel.setFilter} />
               ) : activeActivity === "schedule" ? (
                 <button className="calendar-expand-btn" type="button" onClick={() => { setCalendarHighlight((current) => ({ ...current, source: "", autoOpen: false })); setCalendarOpen(true); }}><CalendarDays size={15} />달력으로 보기</button>
@@ -882,14 +936,22 @@ function DesktopMyPage() {
             )}
             {!meetingsState.loading && !reviewsLoading && !["reviews", "attendance"].includes(activeActivity) && (
               activePanel.items.length
-                ? activePanel.items.map((item) => <ScheduleItem key={`${item.state}-${item.id}`} item={item} variant={activeActivity} />)
+                ? activePanel.items.map((item) => (
+                  <ScheduleItem
+                    key={`${item.state}-${item.id}`}
+                    item={item}
+                    variant={activeActivity === "joined" && participationSubTab === "pending" ? "pending" : activeActivity}
+                  />
+                ))
                 : <p className="empty-schedule">
                     {["hosted", "joined"].includes(activeActivity) && activePanel.sourceCount > 0
                       ? "해당 조건의 모임이 없습니다."
                       : activeActivity === "hosted"
                         ? "아직 관리하는 모임이 없습니다."
                         : activeActivity === "joined"
-                          ? "아직 참여 중인 모임이 없습니다."
+                          ? participationSubTab === "pending"
+                            ? "승인 대기 중인 모임이 없습니다."
+                            : "아직 참여한 모임이 없습니다."
                           : "표시할 항목이 없습니다."}
                   </p>
             )}

@@ -27,7 +27,7 @@ const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
 
 function formatMessageTime(value) {
   if (!value) return "";
-  return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul" }).format(new Date(value));
+  return new Intl.DateTimeFormat("ko-KR", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Seoul" }).format(new Date(value));
 }
 
 function formatMessageDate(value) {
@@ -61,7 +61,7 @@ function formatVoteDateTimeOption(date, time) {
     timeZone: "Asia/Seoul"
   };
   if (time) {
-    options.hour = "2-digit";
+    options.hour = "numeric";
     options.minute = "2-digit";
   }
   return new Intl.DateTimeFormat("ko-KR", options).format(new Date(value));
@@ -73,7 +73,7 @@ function formatVoteDeadline(value) {
     month: "long",
     day: "numeric",
     weekday: "short",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
     timeZone: "Asia/Seoul"
   }).format(new Date(value));
@@ -1078,6 +1078,7 @@ function MobileChatRoom() {
   };
 
   const openRoomReport = () => {
+    if (!isDirectChat && isRoomHost) return;
     if (!room?.id) return;
     setReportTarget({
       target_type: "chat_room",
@@ -2181,6 +2182,8 @@ function MobileChatRoom() {
                         borderRadius: '10px',
                         border: '1px solid #e2e8f0',
                         background: '#fff',
+                        fontSize: '12px',
+                        fontWeight: '700',
                         color: '#334155',
                         display: 'flex',
                         alignItems: 'center',
@@ -2379,27 +2382,29 @@ function MobileChatRoom() {
                 </>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    onClick={openRoomReport}
-                    style={{
-                      width: '100%',
-                      minHeight: '42px',
-                      borderRadius: '10px',
-                      border: '1px solid #e2e8f0',
-                      background: '#fff',
-                      color: '#ef4444',
-                      fontSize: '13px',
-                      fontWeight: '800',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <span>이 모임 채팅방 신고하기</span>
-                  </button>
+                  {!isRoomHost ? (
+                    <button
+                      type="button"
+                      onClick={openRoomReport}
+                      style={{
+                        width: '100%',
+                        minHeight: '42px',
+                        borderRadius: '10px',
+                        border: '1px solid #e2e8f0',
+                        background: '#fff',
+                        color: '#ef4444',
+                        fontSize: '13px',
+                        fontWeight: '800',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <span>이 모임 채팅방 신고하기</span>
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={leaveRoom}

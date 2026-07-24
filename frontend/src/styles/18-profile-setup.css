@@ -162,6 +162,20 @@
   padding: 0 16px;
 }
 
+.profile-setup label .profile-setup__readonly-field {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  margin: 0;
+  padding: 0 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
 .profile-setup textarea {
   padding: 12px 14px;
   resize: vertical;

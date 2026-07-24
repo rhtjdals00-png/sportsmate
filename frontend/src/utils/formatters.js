@@ -6,7 +6,7 @@ export function formatDateTime(value) {
     month: "short",
     day: "numeric",
     weekday: "short",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit"
   }).format(date);
 }
@@ -35,7 +35,7 @@ function timeParts(value) {
   const hour24 = date.getHours();
   return {
     period: hour24 < 12 ? "오전" : "오후",
-    time: `${String(hour24 % 12 || 12).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`,
+    time: `${hour24 % 12 || 12}:${String(date.getMinutes()).padStart(2, "0")}`,
   };
 }
 

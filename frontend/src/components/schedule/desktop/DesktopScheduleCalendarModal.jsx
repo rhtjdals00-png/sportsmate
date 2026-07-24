@@ -57,8 +57,8 @@ export function normalizeDesktopScheduleMeeting(meeting, participantStatus = "jo
     const end = validScheduleDate(session.end_at);
     return start && end && start <= now && now < end;
   });
-  const fallbackNextSession = currentSession || scheduledSessions.find((session) => isUpcoming(session.start_at));
-  const nextSession = isRegular ? meeting.next_session || fallbackNextSession || null : null;
+  const fallbackNextSession = scheduledSessions.find((session) => isUpcoming(session.start_at));
+  const nextSession = isRegular ? currentSession || meeting.next_session || fallbackNextSession || null : null;
   const lastSession = isRegular ? [...scheduledSessions].reverse().find((session) => validScheduleDate(session.start_at)) : null;
   const operationEndAt = getMeetingOperationEndAt(meeting);
   const useLastSession = isRegular && !nextSession && operationEndAt && validScheduleDate(operationEndAt) < now;

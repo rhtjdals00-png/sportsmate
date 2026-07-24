@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Bike, CalendarClock, CircleAlert, CircleDot, Dumbbell, Eye, Footprints, LocateFixed, Map, MapPin, MessageSquareText, Mountain, Navigation, Pin, Route, Search, Star, Trophy, UserRound, UsersRound, X } from "lucide-react";
+import { Bike, CalendarClock, CircleAlert, CircleDot, Dumbbell, Eye, Footprints, LocateFixed, Map, MapPin, MessageSquareText, Mountain, Navigation, Pin, Route, Search, Share2, Star, Trophy, UserRound, UsersRound, X } from "lucide-react";
 import EmptyState from "../../common/EmptyState.jsx";
 import LoadingCards from "../../common/LoadingCards.jsx";
 import { meetingApi } from "../../../api/meetingApi";
@@ -603,6 +603,30 @@ function DesktopMeetingDetail({ recordedViewCount = null }) {
   const hostSummary = meeting.host_summary || {};
   const coverImage = getMeetingCoverImage(meeting);
 
+  const handleShare = async () => {
+    const shareData = {
+      title: meeting.title,
+      text: `[SportsMate] ${meeting.title} 모임에 함께해요!`,
+      url: window.location.href
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareData.url);
+      setMessage({ text: "모임 링크가 클립보드에 복사되었습니다.", tone: "notice" });
+    } catch {
+      setMessage({ text: "링크를 복사하지 못했습니다.", tone: "error" });
+    }
+  };
+
   return (
     <div className="desktop-meeting-detail">
       <div className="screen-title desktop-meeting-detail__title">
@@ -611,7 +635,13 @@ function DesktopMeetingDetail({ recordedViewCount = null }) {
           <h1>{meeting.title}</h1>
           <p>{meeting.location_name || meeting.address}</p>
         </div>
-        <Link className="ghost-btn" to="/meetings">목록으로</Link>
+        <div className="desktop-meeting-detail__title-actions">
+          <button className="ghost-btn" type="button" onClick={handleShare}>
+            <Share2 size={15} />
+            공유
+          </button>
+          <Link className="ghost-btn" to="/meetings">목록으로</Link>
+        </div>
       </div>
 
       <div className="desktop-meeting-detail__grid">
@@ -659,43 +689,45 @@ function DesktopMeetingDetail({ recordedViewCount = null }) {
             </div>
           </section>
 
-          <section className="desktop-section desktop-meeting-detail__report">
-            <div className="desktop-section__head">
-              <div>
-                <h2>모임 신고</h2>
-                <p>운영 정책에 어긋나는 모임이라면 관리자에게 알려주세요.</p>
+          {!isHost ? (
+            <section className="desktop-section desktop-meeting-detail__report">
+              <div className="desktop-section__head">
+                <div>
+                  <h2>모임 신고</h2>
+                  <p>운영 정책에 어긋나는 모임이라면 관리자에게 알려주세요.</p>
+                </div>
               </div>
-            </div>
-            <form onSubmit={submitReport}>
-              <label htmlFor="desktop-meeting-report-reason">신고 사유</label>
-              <textarea
-                id="desktop-meeting-report-reason"
-                required
-                minLength={5}
-                maxLength={2000}
-                rows={5}
-                value={reportReason}
-                onChange={(event) => {
-                  setReportReason(event.target.value);
-                  if (reportFeedback.text) setReportFeedback({ text: "", tone: "notice" });
-                }}
-                placeholder="신고 사유를 자세히 입력해 주세요. (최소 5자)"
-                disabled={reporting}
-              />
-              <div className="desktop-meeting-detail__report-meta">
-                <small>입력한 내용은 모임 운영 확인을 위해 관리자에게 전달됩니다.</small>
-                <span>{reportReason.length} / 2000</span>
-              </div>
-              {reportFeedback.text ? (
-                <p className={`desktop-meeting-detail__report-feedback is-${reportFeedback.tone}`} role="status">
-                  {reportFeedback.text}
-                </p>
-              ) : null}
-              <button type="submit" disabled={reporting || reportReason.trim().length < 5}>
-                {reporting ? "접수 중..." : "신고 접수"}
-              </button>
-            </form>
-          </section>
+              <form onSubmit={submitReport}>
+                <label htmlFor="desktop-meeting-report-reason">신고 사유</label>
+                <textarea
+                  id="desktop-meeting-report-reason"
+                  required
+                  minLength={5}
+                  maxLength={2000}
+                  rows={5}
+                  value={reportReason}
+                  onChange={(event) => {
+                    setReportReason(event.target.value);
+                    if (reportFeedback.text) setReportFeedback({ text: "", tone: "notice" });
+                  }}
+                  placeholder="신고 사유를 자세히 입력해 주세요. (최소 5자)"
+                  disabled={reporting}
+                />
+                <div className="desktop-meeting-detail__report-meta">
+                  <small>입력한 내용은 모임 운영 확인을 위해 관리자에게 전달됩니다.</small>
+                  <span>{reportReason.length} / 2000</span>
+                </div>
+                {reportFeedback.text ? (
+                  <p className={`desktop-meeting-detail__report-feedback is-${reportFeedback.tone}`} role="status">
+                    {reportFeedback.text}
+                  </p>
+                ) : null}
+                <button type="submit" disabled={reporting || reportReason.trim().length < 5}>
+                  {reporting ? "접수 중..." : "신고 접수"}
+                </button>
+              </form>
+            </section>
+          ) : null}
         </main>
 
         <aside className="desktop-meeting-detail__side">

@@ -11,7 +11,7 @@ import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
 function formatChatTime(value) {
   if (!value) return "방금";
   return new Intl.DateTimeFormat("ko-KR", {
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
     timeZone: "Asia/Seoul"
   }).format(new Date(value));

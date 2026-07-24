@@ -27,7 +27,7 @@ function formatTime(value) {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
     timeZone: "Asia/Seoul"
   }).format(new Date(value));

@@ -128,7 +128,7 @@ function getDateLabel(value) {
     month: "2-digit",
     day: "2-digit",
     weekday: "short",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
   }).format(date);
 }

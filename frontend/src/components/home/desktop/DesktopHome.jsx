@@ -210,7 +210,7 @@ function DesktopHome() {
         </div>
       </section>
 
-      {isAuthenticated && <HomeWeatherCard user={user} />}
+      <HomeWeatherCard user={user} />
 
       <section className="home-categories-wrap">
         <div className="section-head" style={{ marginBottom: "26px" }}>

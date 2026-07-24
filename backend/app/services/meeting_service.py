@@ -591,12 +591,32 @@ def list_meeting_sessions(meeting_id, include_cancelled=True):
     return query.order_by(MeetingSession.start_at.asc()).all()
 
 
+def select_current_or_next_session(sessions, now=None):
+    now = now or kst_now()
+    return next((
+        session
+        for session in sessions
+        if session.status == "scheduled"
+        and (
+            session.end_at > now
+            if session.end_at
+            else session.start_at >= now
+        )
+    ), None)
+
+
 def get_next_meeting_session(meeting_id, now=None):
     now = now or kst_now()
     return (
         MeetingSession.query
         .filter_by(meeting_id=meeting_id, status="scheduled")
-        .filter(MeetingSession.start_at >= now)
+        .filter(or_(
+            MeetingSession.end_at > now,
+            and_(
+                MeetingSession.end_at.is_(None),
+                MeetingSession.start_at >= now,
+            ),
+        ))
         .order_by(MeetingSession.start_at.asc())
         .first()
     )

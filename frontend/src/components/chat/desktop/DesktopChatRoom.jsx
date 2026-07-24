@@ -54,7 +54,7 @@ let naverMapClientIdPromise;
 function formatMessageTime(value) {
   if (!value) return "";
   return new Intl.DateTimeFormat("ko-KR", {
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
     timeZone: "Asia/Seoul"
   }).format(new Date(value));
@@ -90,7 +90,7 @@ function formatVoteDateTimeOption(date, time) {
     timeZone: "Asia/Seoul"
   };
   if (time) {
-    options.hour = "2-digit";
+    options.hour = "numeric";
     options.minute = "2-digit";
   }
   return new Intl.DateTimeFormat("ko-KR", options).format(new Date(value));
@@ -102,7 +102,7 @@ function formatVoteDeadline(value) {
     month: "long",
     day: "numeric",
     weekday: "short",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
     timeZone: "Asia/Seoul"
   }).format(new Date(value));
@@ -1403,6 +1403,7 @@ function DesktopChatRoom() {
   const canUseMessageMenu = (message) => canReplyToMessage(message) || canNoticeMessage(message);
 
   const openRoomReport = () => {
+    if (!isDirectChat && isRoomHost) return;
     if (!room?.id) return;
     setReportTarget({
       target_type: "chat_room",
@@ -1816,10 +1817,12 @@ function DesktopChatRoom() {
                         <UsersRound size={15} />
                         <b>멤버</b>
                       </button>
-                      <button className="talk-tool-btn is-danger-text" type="button" onClick={openRoomReport}>
-                        <Flag size={15} />
-                        <b>방 신고</b>
-                      </button>
+                      {!isRoomHost ? (
+                        <button className="talk-tool-btn is-danger-text" type="button" onClick={openRoomReport}>
+                          <Flag size={15} />
+                          <b>방 신고</b>
+                        </button>
+                      ) : null}
                       {canManageRoom && meeting?.id ? (
                         <>
                           <Link className="talk-tool-btn is-gray-text" to={`/host/meetings/${meeting.id}`}>

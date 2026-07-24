@@ -1267,6 +1267,16 @@
   align-items: end;
 }
 
+.desktop-meeting-detail__title-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.desktop-meeting-detail__title-actions .ghost-btn {
+  min-height: 38px;
+}
+
 .desktop-meeting-detail__title p {
   margin-top: 8px;
 }

@@ -48,11 +48,17 @@ def create_report():
         if not User.query.get(target_id):
             return jsonify({"message": "신고할 회원을 찾지 못했습니다."}), 404
     elif target_type == "meeting":
-        if not Meeting.query.get(target_id):
+        meeting = Meeting.query.get(target_id)
+        if not meeting:
             return jsonify({"message": "신고할 모임을 찾지 못했습니다."}), 404
+        if meeting.host_id == reporter_id:
+            return jsonify({"message": "본인이 만든 모임은 신고할 수 없습니다."}), 400
     elif target_type == "chat_room":
-        if not ChatRoom.query.get(target_id):
+        room = ChatRoom.query.get(target_id)
+        if not room:
             return jsonify({"message": "신고할 채팅방을 찾지 못했습니다."}), 404
+        if room.meeting and room.meeting.host_id == reporter_id:
+            return jsonify({"message": "본인이 만든 모임의 채팅방은 신고할 수 없습니다."}), 400
         try:
             ensure_chat_access(target_id, reporter_id)
         except PermissionError as error:

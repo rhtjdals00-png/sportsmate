@@ -612,7 +612,11 @@
   font-size: 11px;
 }
 
-.mobile-shell .badge--success,
+.mobile-shell .badge--success {
+  background: #dcfce7;
+  color: #15803d;
+}
+
 .mobile-shell .badge--primary {
   background: #eef2ff;
   color: var(--mobile-primary);
@@ -2582,6 +2586,27 @@
   color: var(--mobile-text);
   font-size: 13px;
   font-weight: 900;
+}
+
+.mobile-shell .mobile-profile-summary .mobile-profile-summary__regions {
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 8px;
+  padding: 14px;
+}
+
+.mobile-shell .mobile-profile-summary__regions > strong {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mobile-shell .mobile-profile-summary__regions > strong > span {
+  color: var(--mobile-text);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .mobile-shell .mobile-my-calendar {
@@ -7149,10 +7174,11 @@
   padding: 4px 0;
 }
 
-/* 마이페이지 카드 닉네임 옆 고유 해시태그 */
-.mobile-shell .profile-card__nickname-row {
+/* 마이페이지 카드 닉네임과 고유 태그 */
+.mobile-shell .profile-card__nickname-block {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
+  align-items: center;
   gap: 6px;
   width: 100%;
 }
@@ -7243,6 +7269,69 @@
 
 .mobile-shell .mobile-mypage-theme .profile-card.profile-card--stitch .profile-card__sport-grid-item span {
   color: #31557e;
+}
+
+/* PC 프로필 미리보기와 같은 순서로 아바타, 닉네임, 태그, 소개를 배치합니다. */
+.mobile-shell .mobile-mypage-theme .profile-card__main-row {
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.mobile-shell .mobile-mypage-theme .profile-card__info {
+  width: 100%;
+  align-items: center;
+  text-align: center;
+}
+
+.mobile-shell .mobile-mypage-theme .profile-card.profile-card--stitch .profile-card__nickname {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.mobile-shell .mobile-mypage-theme .profile-card__user-tag {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #b8cdea;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+  padding: 0 10px;
+  color: #24558a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mobile-shell .mobile-mypage-theme .mobile-profile-intro-slot {
+  align-items: center;
+  margin: 4px 0 2px;
+}
+
+.mobile-shell .mobile-mypage-theme .mobile-profile-intro-quick {
+  max-width: min(100%, 300px);
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  padding: 2px 4px;
+  color: #48688d;
+}
+
+.mobile-shell .mobile-mypage-theme .mobile-profile-intro-quick:hover {
+  border: 0;
+  background: transparent;
+  color: #24558a;
+}
+
+.mobile-shell .mobile-mypage-theme .mobile-profile-intro-quick .mobile-profile-intro-text {
+  color: #48688d;
+  text-align: center;
+}
+
+.mobile-shell .mobile-mypage-theme .profile-card.profile-card--stitch .profile-card__meta-text {
+  max-width: 100%;
+  text-align: center;
 }
 
 .mobile-shell .mobile-mypage-theme .profile-card.profile-card--stitch .profile-card__sport-grid-item svg {

@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models import Attendance, Meeting, MeetingSession, Participant, Review, Sport, User, UserProfile
-from app.services.meeting_service import ensure_regular_meeting_sessions
+from app.services.meeting_service import ensure_regular_meeting_sessions, select_current_or_next_session
 from app.utils.timezone import kst_now
 
 user_bp = Blueprint("users", __name__)
@@ -247,7 +247,7 @@ def attach_schedule_sessions(meetings, include_cancelled=False):
         data = meeting.to_dict()
         sessions = sessions_by_meeting.get(meeting.id, [])
         session_dicts = [session.to_dict() for session in sessions]
-        next_session = next((session for session in sessions if session.start_at >= now), None)
+        next_session = select_current_or_next_session(sessions, now)
         data["repeat_rule"] = meeting.repeat_rule
         data["sessions"] = session_dicts
         data["next_session"] = next_session.to_dict() if next_session else None

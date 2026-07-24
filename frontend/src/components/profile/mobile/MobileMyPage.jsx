@@ -9,6 +9,7 @@ import { userApi } from "../../../api/userApi";
 import { useAsync } from "../../../hooks/useAsync";
 import { getSportIcon } from "../../../utils/sportIcons.jsx";
 import { meetingApi } from "../../../api/meetingApi.js";
+import { isMeetingLifecycleEnded } from "../../../utils/meetingLifecycle.js";
 import MobileMyMeetings from "./MobileMyMeetings.jsx";
 
 const levelLabels = {
@@ -47,7 +48,7 @@ function formatAttendanceDate(value) {
   if (!value) return "일정 정보 없음";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" }).format(date);
+  return new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "short", hour: "numeric", minute: "2-digit" }).format(date);
 }
 
 function isAdminUser(user) {
@@ -64,9 +65,12 @@ function MobileMyPage() {
   const attendance = useAsync(() => (user ? userApi.myAttendanceHistory() : Promise.resolve({ summary: {}, items: [] })), [user?.id]);
 
   const profile = user?.profile || {};
+  const preferredRegions = [profile.region, profile.region_2].filter(Boolean);
   const preferredSports = splitPreferredSports(profile.preferred_sports);
   const hostedCount = meetings.data?.hosted?.length || 0;
-  const joinedCount = meetings.data?.joined?.length || 0;
+  const joinedMeetings = meetings.data?.joined || [];
+  const activeJoinedCount = joinedMeetings.filter((meeting) => !isMeetingLifecycleEnded(meeting)).length;
+  const endedJoinedCount = joinedMeetings.filter((meeting) => isMeetingLifecycleEnded(meeting)).length;
   const attendanceCount = Number(meetings.data?.attendance_count || 0);
   const pendingCount = meetings.data?.pending?.length || 0;
   const reviewCount = reviews.data?.items?.length || 0;
@@ -80,7 +84,6 @@ function MobileMyPage() {
     return receivedReviewsCount > lastCount;
   }, [user, reviews.data, receivedReviewsCount]);
 
-  const exerciseLevel = levelLabels[profile.exercise_level] || "입문";
   const showAdminEntry = isAdminUser(user);
   const introStorageKey = user?.id ? `sportsmate_profile_extra_${user.id}` : "sportsmate_profile_extra_guest";
   const initialIntro = useMemo(() => profile.bio || (() => {
@@ -96,7 +99,11 @@ function MobileMyPage() {
   const [introMessage, setIntroMessage] = useState("");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
-  const [attendanceOpen, setAttendanceOpen] = useState(false);
+  const [attendancePanelSource, setAttendancePanelSource] = useState(null);
+  const attendanceOpen = Boolean(attendancePanelSource);
+  const toggleAttendancePanel = (source) => {
+    setAttendancePanelSource((current) => current === source ? null : source);
+  };
 
   const promptLogout = () => {
     setLogoutConfirmOpen(true);
@@ -153,10 +160,10 @@ function MobileMyPage() {
         <div className="profile-card__main-row">
           <img src={user?.profile_image_url || "/images/logo.png"} alt="프로필" />
           <div className="profile-card__info">
-            <strong className="profile-card__nickname-row">
-              <span className="profile-card__nickname">{user.nickname || user.name || "스포츠메이트"}</span>
+            <div className="profile-card__nickname-block">
+              <strong className="profile-card__nickname">{user.nickname || user.name || "스포츠메이트"}</strong>
               {user?.user_tag && <span className="profile-card__user-tag">#{user.user_tag}</span>}
-            </strong>
+            </div>
             
             <div className="mobile-profile-intro-slot">
               {introEdit ? (
@@ -180,14 +187,12 @@ function MobileMyPage() {
                 </div>
               ) : (
                 <button className="mobile-profile-intro-quick" type="button" onClick={() => setIntroEdit(true)}>
-                  <span className="mobile-profile-intro-text">{initialIntro || "상태메시지 입력"}</span>
-                  <Pencil size={12} />
+                  <span className="mobile-profile-intro-text">{initialIntro || "한 줄 소개를 입력해주세요."}</span>
+                  <Pencil size={12} aria-hidden="true" />
                 </button>
               )}
               {introMessage ? <em className="mobile-profile-intro-error">{introMessage}</em> : null}
             </div>
-
-            <p className="profile-card__meta-text">{profile.region || "활동 지역 미설정"} / {exerciseLevel}</p>
           </div>
         </div>
         
@@ -213,13 +218,13 @@ function MobileMyPage() {
         </div>
       </section>
       <div className="stats-grid">
-        <button type="button" onClick={() => setAttendanceOpen((open) => !open)}><Trophy size={18} /><small>누적 참여</small><strong>{attendanceCount}회</strong></button>
-        <button type="button" onClick={() => setAttendanceOpen((open) => !open)}><CalendarCheck size={18} /><small>참여율</small><strong>{formatAttendanceRate(profile.attendance_rate)}</strong></button>
+        <button type="button" onClick={() => toggleAttendancePanel("count")}><Trophy size={18} /><small>누적 참여</small><strong>{attendanceCount}회</strong></button>
+        <button type="button" onClick={() => toggleAttendancePanel("rate")}><CalendarCheck size={18} /><small>참여율</small><strong>{formatAttendanceRate(profile.attendance_rate)}</strong></button>
         <button type="button" onClick={() => navigate("/mypage/reviews?tab=received")}><Star size={18} /><small>평점</small><strong>{formatRating(profile.rating_average)}</strong></button>
       </div>
       {attendanceOpen ? (
         <section className="mobile-attendance-inline">
-          <header><strong>참여 기록</strong><button type="button" onClick={() => setAttendanceOpen(false)} aria-label="참여 기록 닫기"><X size={16} /></button></header>
+          <header><strong>참여 기록</strong><button type="button" onClick={() => setAttendancePanelSource(null)} aria-label="참여 기록 닫기"><X size={16} /></button></header>
           <div className="mobile-attendance-inline__summary">
             <span>참여 <b>{attendance.data?.summary?.present_count || 0}회</b></span>
             <span>불참 <b>{attendance.data?.summary?.absent_count || 0}회</b></span>
@@ -238,10 +243,14 @@ function MobileMyPage() {
         </section>
       ) : null}
       <section className="mobile-profile-summary" aria-label="활동 요약">
-        <div>
+        <div className="mobile-profile-summary__regions">
           <MapPin size={18} />
           <span>활동 지역</span>
-          <strong>{profile.region || "지역 미설정"}</strong>
+          <strong>
+            {preferredRegions.length
+              ? preferredRegions.map((region) => <span key={region}>{region}</span>)
+              : <span>지역 미설정</span>}
+          </strong>
         </div>
         <Link to="/mypage/reviews" style={{ position: 'relative' }}>
           <MessageCircle size={18} />
@@ -279,7 +288,7 @@ function MobileMyPage() {
         <Link to="/mypage/profile">프로필 수정</Link>
         <Link to="/mypage/meetings" style={{ fontWeight: 'bold', color: '#4f46e5' }}>📝 내 전체 모임 목록 보기</Link>
         <Link to="/mypage/meetings?tab=hosted">내가 관리하는 모임 <span>{hostedCount}</span></Link>
-        <Link to="/mypage/meetings?tab=joined">참여 중인 모임 <span>{joinedCount}</span></Link>
+        <Link to="/mypage/meetings?tab=joined">참여 중 / 종료된 모임 <span>{activeJoinedCount}/{endedJoinedCount}</span></Link>
 
         <Link to="/support" className="mobile-my-support-link" style={{ borderTop: '1px solid #f1f5f9', marginTop: '4px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
